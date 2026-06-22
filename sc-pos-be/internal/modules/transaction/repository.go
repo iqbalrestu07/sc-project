@@ -236,6 +236,16 @@ func (r *Repository) Items(transactionID string) ([]TransactionItemWithRelations
 	return items, nil
 }
 
+type paidItemRow struct {
+	itemID, itemType                   string
+	productID, serviceID               sql.NullString
+	doctorID, therapistID              sql.NullString
+	quantity                           int
+	totalPrice                         float64
+	doctorType, therapistType          string
+	doctorValue, therapistValue        float64
+}
+
 func (r *Repository) MarkPaidEffects(transactionID string) error {
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -243,6 +253,9 @@ func (r *Repository) MarkPaidEffects(transactionID string) error {
 	}
 	defer tx.Rollback()
 
+	// Step 1: collect all item rows first, then close the cursor before
+	// issuing any further DML. Running additional queries (commission check)
+	// while a pq Rows cursor is still open causes "unexpected Parse response 'C'".
 	rows, err := tx.Query(`
 		SELECT ti.id, ti.item_type, ti.product_id, ti.service_id, ti.quantity, ti.total_price,
 		       ti.doctor_id, ti.therapist_id,
@@ -255,37 +268,41 @@ func (r *Repository) MarkPaidEffects(transactionID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load payment items: %w", err)
 	}
-	defer rows.Close()
 
+	var items []paidItemRow
 	for rows.Next() {
-		var itemID, itemType string
-		var productID, serviceID, doctorID, therapistID sql.NullString
-		var quantity int
-		var totalPrice float64
-		var doctorType, therapistType string
-		var doctorValue, therapistValue float64
-		if err := rows.Scan(&itemID, &itemType, &productID, &serviceID, &quantity, &totalPrice,
-			&doctorID, &therapistID, &doctorType, &doctorValue, &therapistType, &therapistValue); err != nil {
+		var row paidItemRow
+		if err := rows.Scan(&row.itemID, &row.itemType, &row.productID, &row.serviceID,
+			&row.quantity, &row.totalPrice, &row.doctorID, &row.therapistID,
+			&row.doctorType, &row.doctorValue, &row.therapistType, &row.therapistValue); err != nil {
+			rows.Close()
 			return fmt.Errorf("failed to scan payment item: %w", err)
 		}
-		if itemType == "product" && productID.Valid {
-			if _, err := tx.Exec(`UPDATE products SET current_stock = GREATEST(COALESCE(current_stock, 0) - $1, 0), updated_at = CURRENT_TIMESTAMP WHERE id = $2`, quantity, productID.String); err != nil {
+		items = append(items, row)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("failed to read payment items: %w", err)
+	}
+	rows.Close() // explicitly close before issuing DML inside the same tx
+
+	// Step 2: apply side-effects now that the cursor is closed
+	for _, row := range items {
+		if row.itemType == "product" && row.productID.Valid {
+			if _, err := tx.Exec(`UPDATE products SET current_stock = GREATEST(COALESCE(current_stock, 0) - $1, 0), updated_at = CURRENT_TIMESTAMP WHERE id = $2`, row.quantity, row.productID.String); err != nil {
 				return fmt.Errorf("failed to decrease stock: %w", err)
 			}
 		}
-		if serviceID.Valid && doctorID.Valid {
-			if err := r.insertCommission(tx, doctorID.String, "doctor", transactionID, itemID, totalPrice, doctorType, doctorValue); err != nil {
+		if row.serviceID.Valid && row.doctorID.Valid {
+			if err := r.insertCommission(tx, row.doctorID.String, "doctor", transactionID, row.itemID, row.totalPrice, row.doctorType, row.doctorValue); err != nil {
 				return err
 			}
 		}
-		if serviceID.Valid && therapistID.Valid {
-			if err := r.insertCommission(tx, therapistID.String, "therapist", transactionID, itemID, totalPrice, therapistType, therapistValue); err != nil {
+		if row.serviceID.Valid && row.therapistID.Valid {
+			if err := r.insertCommission(tx, row.therapistID.String, "therapist", transactionID, row.itemID, row.totalPrice, row.therapistType, row.therapistValue); err != nil {
 				return err
 			}
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("failed to read payment items: %w", err)
 	}
 	return tx.Commit()
 }
