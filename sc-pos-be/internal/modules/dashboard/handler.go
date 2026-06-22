@@ -21,18 +21,21 @@ func NewModule() *Handler {
 }
 
 // parseDateRange reads ?from=YYYY-MM-DD&to=YYYY-MM-DD query params.
+// Dates are interpreted as midnight in Asia/Jakarta (UTC+7) so they align
+// correctly with paid_at values which are stored as UTC.
 // Returns a zero DateRange (nil pointers) when params are absent or invalid.
 func parseDateRange(c *gin.Context) DateRange {
 	var dr DateRange
 	if fromStr := c.Query("from"); fromStr != "" {
-		if t, err := time.Parse("2006-01-02", fromStr); err == nil {
-			dr.From = &t
+		if t, err := time.ParseInLocation("2006-01-02", fromStr, jakartaLoc); err == nil {
+			utc := t.UTC()
+			dr.From = &utc
 		}
 	}
 	if toStr := c.Query("to"); toStr != "" {
-		if t, err := time.Parse("2006-01-02", toStr); err == nil {
-			// include the entire "to" day
-			end := t.Add(24 * time.Hour)
+		if t, err := time.ParseInLocation("2006-01-02", toStr, jakartaLoc); err == nil {
+			// include entire "to" day (midnight Jakarta next day = 17:00 UTC)
+			end := t.Add(24 * time.Hour).UTC()
 			dr.To = &end
 		}
 	}

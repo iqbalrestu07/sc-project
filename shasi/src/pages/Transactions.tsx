@@ -97,16 +97,18 @@ export default function Transactions() {
       // Payment method filter
       const matchesMethod = methodFilter === "all" || tx.payment_method === methodFilter;
       
-      // Date filter
+      // Date filter — use paid_at for paid transactions, fallback to created_at
       let matchesDate = true;
-      if (dateFilter.from && dateFilter.to && tx.created_at) {
-        const txDate = new Date(tx.created_at);
-        matchesDate = isWithinInterval(txDate, { start: dateFilter.from, end: dateFilter.to });
-      } else if (dateFilter.preset !== "all" && tx.created_at) {
-        const range = getDateRangeFromPreset(dateFilter.preset);
-        if (range.from && range.to) {
-          const txDate = new Date(tx.created_at);
-          matchesDate = isWithinInterval(txDate, { start: range.from, end: range.to });
+      const txDateRaw = tx.paid_at || tx.created_at;
+      if (txDateRaw) {
+        const txDate = new Date(txDateRaw);
+        if (dateFilter.from && dateFilter.to) {
+          matchesDate = isWithinInterval(txDate, { start: dateFilter.from, end: dateFilter.to });
+        } else if (dateFilter.preset !== "all") {
+          const range = getDateRangeFromPreset(dateFilter.preset);
+          if (range.from && range.to) {
+            matchesDate = isWithinInterval(txDate, { start: range.from, end: range.to });
+          }
         }
       }
       
@@ -232,7 +234,7 @@ export default function Transactions() {
           <div style="display:flex;justify-content:space-between;">
             <span>No: ${tx.transaction_code}</span>
           </div>
-          <div>${tx.created_at ? format(new Date(tx.created_at), "dd/MM/yyyy HH:mm", { locale: idLocale }) : "-"}</div>
+          <div>${(tx.paid_at || tx.created_at) ? format(new Date(tx.paid_at || tx.created_at), "dd/MM/yyyy HH:mm", { locale: idLocale }) : "-"}</div>
           <div>Pasien: ${tx.patient?.full_name || "Walk-in"}</div>
         </div>
         <div class="divider"></div>
@@ -426,8 +428,8 @@ export default function Transactions() {
                           {tx.transaction_code}
                         </TableCell>
                         <TableCell>
-                          {tx.created_at
-                            ? format(new Date(tx.created_at), "dd MMM yyyy HH:mm", { locale: idLocale })
+                          {tx.paid_at || tx.created_at
+                            ? format(new Date(tx.paid_at || tx.created_at!), "dd MMM yyyy HH:mm", { locale: idLocale })
                             : "-"}
                         </TableCell>
                         <TableCell>
@@ -518,7 +520,7 @@ export default function Transactions() {
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Tanggal</Label>
-                  <p>{selectedTransaction.created_at ? format(new Date(selectedTransaction.created_at), "dd MMM yyyy HH:mm", { locale: idLocale }) : "-"}</p>
+                  <p>{(selectedTransaction.paid_at || selectedTransaction.created_at) ? format(new Date(selectedTransaction.paid_at || selectedTransaction.created_at!), "dd MMM yyyy HH:mm", { locale: idLocale }) : "-"}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Pasien</Label>

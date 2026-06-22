@@ -2,7 +2,7 @@ import { useState } from "react";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Calendar, Sparkles, Package, ShoppingCart, DollarSign, UserCog, Settings, Menu, X, LogOut, ChevronLeft, Globe, MessageCircle } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, Sparkles, Package, Tag, ShoppingCart, DollarSign, UserCog, Settings, Menu, X, LogOut, ChevronLeft, Globe, MessageCircle } from "lucide-react";
 const navItems = [{
   to: "/dashboard",
   icon: LayoutDashboard,
@@ -23,6 +23,10 @@ const navItems = [{
   to: "/products",
   icon: Package,
   label: "Products"
+}, {
+  to: "/categories",
+  icon: Tag,
+  label: "Categories"
 }, {
   to: "/pos",
   icon: ShoppingCart,

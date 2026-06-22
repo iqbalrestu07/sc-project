@@ -8,6 +8,15 @@ import (
 	"github.com/sc-pos/backend/internal/database"
 )
 
+// jakartaLoc is the canonical Asia/Jakarta timezone (UTC+7) for this package.
+var jakartaLoc = func() *time.Location {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		loc = time.FixedZone("WIB", 7*60*60)
+	}
+	return loc
+}()
+
 type Repository struct {
 	db *sql.DB
 }
@@ -45,13 +54,19 @@ func (r *Repository) Stats(dr DateRange) (map[string]interface{}, error) {
 			return nil, fmt.Errorf("failed to calculate revenue: %w", err)
 		}
 	} else {
+		// No filter: use "today" in Asia/Jakarta.
+		// We compute today's boundaries in UTC and pass them as params to avoid
+		// relying on the PostgreSQL server's local timezone.
+		now := time.Now().In(jakartaLoc)
+		todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, jakartaLoc).UTC()
+		todayEnd := todayStart.Add(24 * time.Hour)
 		if err := r.db.QueryRow(`
 			SELECT COUNT(*), COALESCE(SUM(total_amount), 0)
 			FROM transactions
 			WHERE payment_status = 'paid'
-			  AND COALESCE(paid_at, updated_at) AT TIME ZONE 'Asia/Jakarta' >= CURRENT_DATE
-			  AND COALESCE(paid_at, updated_at) AT TIME ZONE 'Asia/Jakarta' < CURRENT_DATE + INTERVAL '1 day'
-		`).Scan(&paidTransactionsToday, &revenueToday); err != nil {
+			  AND COALESCE(paid_at, updated_at) >= $1
+			  AND COALESCE(paid_at, updated_at) < $2
+		`, todayStart, todayEnd).Scan(&paidTransactionsToday, &revenueToday); err != nil {
 			return nil, fmt.Errorf("failed to calculate revenue: %w", err)
 		}
 	}

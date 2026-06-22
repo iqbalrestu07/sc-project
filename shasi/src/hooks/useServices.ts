@@ -4,7 +4,9 @@ import { Service, ServiceFormData, ServiceCategory } from "@/types/service";
 import { toast } from "sonner";
 
 export function useServiceCategories() {
-  return useQuery({
+  const queryClient = useQueryClient();
+
+  const categoriesQuery = useQuery({
     queryKey: ["service-categories"],
     queryFn: async () => {
       try {
@@ -18,6 +20,55 @@ export function useServiceCategories() {
       }
     },
   });
+
+  const createCategory = useMutation({
+    mutationFn: async (category: { name: string; description?: string }) => {
+      const data = await apiClient.post<{ data: ServiceCategory }>(
+        API_ENDPOINTS.SERVICES.CATEGORY_CREATE,
+        category
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["service-categories"] });
+      toast.success("Category created successfully");
+    },
+    onError: (error) => {
+      toast.error(`Failed to create category: ${(error as Error).message}`);
+    },
+  });
+
+  const updateCategory = useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; name: string; description?: string }) => {
+      const data = await apiClient.put<{ data: ServiceCategory }>(
+        API_ENDPOINTS.SERVICES.CATEGORY_UPDATE(id),
+        updates
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["service-categories"] });
+      toast.success("Category updated successfully");
+    },
+    onError: (error) => {
+      toast.error(`Failed to update category: ${(error as Error).message}`);
+    },
+  });
+
+  const deleteCategory = useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.delete(API_ENDPOINTS.SERVICES.CATEGORY_DELETE(id));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["service-categories"] });
+      toast.success("Category deleted successfully");
+    },
+    onError: (error) => {
+      toast.error(`Failed to delete category: ${(error as Error).message}`);
+    },
+  });
+
+  return { ...categoriesQuery, createCategory, updateCategory, deleteCategory };
 }
 
 export function useServices(searchQuery?: string) {

@@ -27,6 +27,7 @@ import WhatsAppMessaging from "./pages/WhatsAppMessaging";
 import Staff from "./pages/Staff";
 import SettingsPage from "./pages/Settings";
 import CmsManagement from "./pages/CmsManagement";
+import Categories from "./pages/Categories";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -172,6 +173,16 @@ function AppRoutes() {
           <ProtectedRoute allowedRoles={["admin"]}>
             <MainLayout onSignOut={signOut}>
               <CmsManagement />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/categories"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <MainLayout onSignOut={signOut}>
+              <Categories />
             </MainLayout>
           </ProtectedRoute>
         }
