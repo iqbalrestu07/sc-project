@@ -1,0 +1,6 @@
+id;name;description;is_active;created_at;updated_at
+6c867702-abca-4e2a-b9b6-f3d2407d84aa;Facial;Facial treatments and skincare services;true;2026-02-05 14:28:37.885086+00;2026-02-05 14:28:37.885086+00
+b99efd12-74a4-4649-a155-0edec699b0c6;Laser;Laser treatments and procedures;true;2026-02-05 14:28:37.885086+00;2026-02-05 14:28:37.885086+00
+586a5e7a-bf9c-4575-a295-39e5e62ce17d;Injection;Injectable treatments like filler and botox;true;2026-02-05 14:28:37.885086+00;2026-02-05 14:28:37.885086+00
+d8c24498-40a8-4463-99dc-5dca9452733f;Body Treatment;Body contouring and wellness treatments;true;2026-02-05 14:28:37.885086+00;2026-02-05 14:28:37.885086+00
+8ec23bd5-151a-4c7c-809a-d32b48c10e7f;Consultation;Medical consultations and skin analysis;true;2026-02-05 14:28:37.885086+00;2026-02-05 14:28:37.885086+00

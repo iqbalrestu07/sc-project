@@ -1,0 +1,32 @@
+package dashboard
+
+type Service struct {
+	repo *Repository
+}
+
+func NewService(repo ...*Repository) *Service {
+	if len(repo) > 0 {
+		return &Service{repo: repo[0]}
+	}
+	return &Service{repo: NewRepository()}
+}
+
+func (s *Service) Stats() (map[string]interface{}, error) {
+	return s.repo.Stats()
+}
+
+func (s *Service) Revenue() ([]map[string]interface{}, error) {
+	return s.repo.Revenue()
+}
+
+func (s *Service) TopServices() ([]map[string]interface{}, error) {
+	return s.repo.TopServices()
+}
+
+func (s *Service) TopProducts() ([]map[string]interface{}, error) {
+	return s.repo.TopProducts()
+}
+
+func (s *Service) AppointmentsToday() ([]map[string]interface{}, error) {
+	return s.repo.AppointmentsToday()
+}

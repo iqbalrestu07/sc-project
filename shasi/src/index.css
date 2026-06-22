@@ -1,0 +1,176 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 
+ * Enterprise Aesthetic Clinic Management System
+ * Design Theme: Elegant Clinic Aesthetic
+ * Palette: Soft white, warm beige, blush pink accents
+ */
+
+@layer base {
+  :root {
+    /* Core backgrounds */
+    --background: 30 20% 99%;
+    --foreground: 20 15% 15%;
+
+    /* Cards & elevated surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 20 15% 15%;
+
+    /* Popovers & dropdowns */
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 15% 15%;
+
+    /* Primary: Warm rose/blush for CTAs */
+    --primary: 350 60% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary: Warm beige */
+    --secondary: 30 30% 95%;
+    --secondary-foreground: 20 15% 25%;
+
+    /* Muted: Soft warm gray */
+    --muted: 30 15% 94%;
+    --muted-foreground: 20 10% 45%;
+
+    /* Accent: Soft blush pink */
+    --accent: 350 45% 95%;
+    --accent-foreground: 350 60% 40%;
+
+    /* Destructive: Soft red */
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Success: Soft green */
+    --success: 150 50% 45%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning: Warm amber */
+    --warning: 38 90% 55%;
+    --warning-foreground: 20 15% 15%;
+
+    /* Borders & inputs */
+    --border: 30 20% 90%;
+    --input: 30 20% 90%;
+    --ring: 350 60% 60%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar: Elegant off-white */
+    --sidebar-background: 30 25% 97%;
+    --sidebar-foreground: 20 15% 30%;
+    --sidebar-primary: 350 60% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 350 40% 94%;
+    --sidebar-accent-foreground: 350 60% 40%;
+    --sidebar-border: 30 20% 90%;
+    --sidebar-ring: 350 60% 60%;
+
+    /* Clinic-specific tokens */
+    --clinic-rose: 350 60% 60%;
+    --clinic-rose-light: 350 45% 95%;
+    --clinic-beige: 30 30% 95%;
+    --clinic-cream: 30 20% 99%;
+    --clinic-gold: 38 70% 55%;
+  }
+
+  .dark {
+    --background: 20 15% 10%;
+    --foreground: 30 15% 95%;
+
+    --card: 20 15% 12%;
+    --card-foreground: 30 15% 95%;
+
+    --popover: 20 15% 12%;
+    --popover-foreground: 30 15% 95%;
+
+    --primary: 350 55% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 20 15% 18%;
+    --secondary-foreground: 30 15% 90%;
+
+    --muted: 20 15% 18%;
+    --muted-foreground: 30 10% 60%;
+
+    --accent: 350 40% 20%;
+    --accent-foreground: 350 45% 80%;
+
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 150 45% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 80% 50%;
+    --warning-foreground: 20 15% 10%;
+
+    --border: 20 15% 20%;
+    --input: 20 15% 20%;
+    --ring: 350 55% 55%;
+
+    --sidebar-background: 20 15% 8%;
+    --sidebar-foreground: 30 15% 90%;
+    --sidebar-primary: 350 55% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 350 40% 18%;
+    --sidebar-accent-foreground: 350 45% 80%;
+    --sidebar-border: 20 15% 18%;
+    --sidebar-ring: 350 55% 55%;
+
+    --clinic-rose: 350 55% 55%;
+    --clinic-rose-light: 350 40% 20%;
+    --clinic-beige: 20 15% 18%;
+    --clinic-cream: 20 15% 10%;
+    --clinic-gold: 38 70% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Elegant scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-muted/50;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+}
+
+@layer utilities {
+  /* Clinic-specific utility classes */
+  .gradient-clinic {
+    background: linear-gradient(135deg, hsl(var(--clinic-rose-light)) 0%, hsl(var(--clinic-beige)) 100%);
+  }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(350 50% 50%) 100%);
+  }
+
+  .shadow-clinic {
+    box-shadow: 0 4px 20px -4px hsl(var(--primary) / 0.15);
+  }
+
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-sm border border-border/50;
+  }
+}

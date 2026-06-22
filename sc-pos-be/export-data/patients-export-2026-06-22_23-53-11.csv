@@ -1,0 +1,5 @@
+id;patient_code;full_name;photo_url;date_of_birth;gender;phone;whatsapp;email;address;allergy_history;medical_conditions;skin_type;notes;tags;is_active;created_by;created_at;updated_at;reminder_opt_in
+1e96bdae-a829-498b-9761-772e0213f457;PT266600;Benang sari;;2000-02-14;female;085157943349;085157943349;restupurnamasari009@gmail.com;Citra indah city, bukit menteng blok B5 no.17 kel. Sukamaju kec. Jonggol kab. Bogor;;;dry;;[];true;;2026-02-05 14:34:04.364259+00;2026-02-05 14:34:04.364259+00;true
+ea3b558a-69fb-4812-bdaa-d7f5a55a60eb;PT266000;Budi Santoso kerjono;;2016-02-02;female;;;iqbal.restu07@gmail.com;"bukit mahoni t3 no.10
+citra indah city";alergi;bagus;;notes;[];true;;2026-02-05 14:29:34.70714+00;2026-02-05 14:35:11.383532+00;true
+59f9f7c4-0e73-4b5a-86fb-7864e73e05de;PT260001;Siti Rahayu;;;;081234567890;;;;;;;;[];false;;2026-02-05 14:23:47.453561+00;2026-02-05 14:35:34.449223+00;true

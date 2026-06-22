@@ -1,0 +1,5 @@
+id;product_id;movement_type;quantity;reason;reference_id;reference_type;notes;created_by;created_at
+a0b71e87-2acd-4b77-8d38-a96b2f72a8c8;c423bf41-87e7-418d-9814-84a745cee9d0;out;1;POS Sale;5d487a94-3e67-44b4-98de-2c2e742bad1d;transaction;;;2026-02-05 15:10:22.787426+00
+32916984-70eb-4835-a846-9bc6e4ee5fa9;d9365a64-42c2-488e-8f83-93879331e253;out;1;POS Sale;5d487a94-3e67-44b4-98de-2c2e742bad1d;transaction;;;2026-02-05 15:10:22.787426+00
+3a2c78ed-d847-4737-8e72-b446895b102e;c423bf41-87e7-418d-9814-84a745cee9d0;out;1;POS Sale;a45ac8ff-ce07-402e-94d2-ab704fd8d503;transaction;;;2026-02-11 03:03:36.004133+00
+dfe2f8cb-91f3-438d-95d5-ca565cfd18ec;c423bf41-87e7-418d-9814-84a745cee9d0;out;1;POS Sale;a45ac8ff-ce07-402e-94d2-ab704fd8d503;transaction;;;2026-02-11 03:03:36.004133+00

@@ -1,0 +1,2 @@
+id;clinic_name;address;phone;email;tax_rate;tax_inclusive;low_stock_alerts;appointment_reminders;expiry_warnings;reminder_hours_before;whatsapp_reminder_enabled;email_reminder_enabled;whatsapp_business_phone_id;created_at;updated_at;invoice_header_title;invoice_header_description;invoice_footer_text
+c32ef09f-0836-4994-8112-3c27d9a8c266;Shasi Beauty Care;;;;11;false;true;true;true;1;true;true;;2026-02-05 16:11:08.789146+00;2026-02-05 16:21:06.315149+00;;;

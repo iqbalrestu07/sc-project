@@ -1,0 +1,3 @@
+id;name;category_id;description;duration_minutes;base_price;doctor_commission_type;doctor_commission_value;therapist_commission_type;therapist_commission_value;is_active;requires_doctor;created_at;updated_at
+955b627f-dd33-4cd0-ae98-58935a24fd0c;Facial Hydrating Glow;6c867702-abca-4e2a-b9b6-f3d2407d84aa;;30;250000.00;percentage;10.00;percentage;15.00;true;false;2026-02-05 14:33:02.104459+00;2026-02-05 14:33:02.104459+00
+e3c5757e-656b-4a71-95ff-40a5f0dd8ec5;Laser Blackdool;b99efd12-74a4-4649-a155-0edec699b0c6;;30;200000.00;percentage;0.00;percentage;0.00;true;false;2026-02-06 12:13:56.484838+00;2026-02-06 12:13:56.484838+00

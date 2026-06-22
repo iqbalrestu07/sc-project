@@ -1,0 +1,4 @@
+id;name;category;sku;supplier;purchase_price;selling_price;current_stock;minimum_stock;unit;expiry_date;is_active;created_at;updated_at
+b6cac8d1-d2f6-497b-a550-b78eb67b88fa;Vitamin C Serum;other;SKU-VC-002;;0.00;85000.00;2;10;pcs;;false;2026-02-05 14:41:29.444858+00;2026-02-05 14:42:54.564582+00
+d9365a64-42c2-488e-8f83-93879331e253;Hyaluronic Acid Serum;other;SKU-HA-0012;;90000.00;95000.00;23;5;pcs;;true;2026-02-05 14:40:18.358558+00;2026-02-05 15:10:22.787426+00
+c423bf41-87e7-418d-9814-84a745cee9d0;Vitamin E;other;SKU-HA-002;;100000.00;150000.00;5;15;pcs;;true;2026-02-05 14:46:44.068651+00;2026-02-11 03:03:36.004133+00
