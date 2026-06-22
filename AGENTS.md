@@ -163,6 +163,12 @@ Semua endpoint menggunakan `utils.SuccessResponse` / `utils.ErrorResponse`:
 | PUT | `/patients/:id` | Semua | |
 | DELETE | `/patients/:id` | Semua | soft delete (`is_active=false`) |
 
+#### Patients (tambahan)
+| Method | Path | Role | Notes |
+|--------|------|------|-------|
+| GET | `/patients/:id/visits` | Semua | Riwayat kunjungan (JOIN appointments + services + staff) |
+| GET | `/patients/:id/transactions` | Semua | Riwayat transaksi pasien |
+
 #### Services
 | Method | Path | Role |
 |--------|------|------|
@@ -173,6 +179,8 @@ Semua endpoint menggunakan `utils.SuccessResponse` / `utils.ErrorResponse`:
 | DELETE | `/services/:id` | Admin |
 | GET | `/service-categories` | Semua |
 | POST | `/service-categories` | Admin |
+| PUT | `/service-categories/:id` | Admin |
+| DELETE | `/service-categories/:id` | Admin |
 
 #### Products
 | Method | Path | Role |
@@ -182,6 +190,10 @@ Semua endpoint menggunakan `utils.SuccessResponse` / `utils.ErrorResponse`:
 | GET | `/products/:id` | Semua |
 | PUT | `/products/:id` | Admin |
 | DELETE | `/products/:id` | Admin |
+| GET | `/product-categories` | Semua |
+| POST | `/product-categories` | Admin |
+| PUT | `/product-categories/:id` | Admin |
+| DELETE | `/product-categories/:id` | Admin |
 
 #### Staff
 | Method | Path | Role |
@@ -226,13 +238,17 @@ Request body update-status:
 ```
 
 #### Dashboard
-| Method | Path | Auth |
-|--------|------|------|
-| GET | `/dashboard/stats` | Ya |
-| GET | `/dashboard/revenue` | Ya (30 hari terakhir) |
-| GET | `/dashboard/top-services` | Ya |
-| GET | `/dashboard/top-products` | Ya |
-| GET | `/dashboard/appointments-today` | Ya |
+| Method | Path | Auth | Notes |
+|--------|------|------|-------|
+| GET | `/dashboard/stats` | Ya | `?from=YYYY-MM-DD&to=YYYY-MM-DD` opsional |
+| GET | `/dashboard/revenue` | Ya | `?from=&to=` opsional; default 30 hari terakhir |
+| GET | `/dashboard/top-services` | Ya | `?from=&to=` opsional |
+| GET | `/dashboard/top-products` | Ya | `?from=&to=` opsional |
+| GET | `/dashboard/appointments-today` | Ya | selalu hari ini, tidak ada filter |
+
+**Timezone:** Semua filter date range diinterpretasikan sebagai `Asia/Jakarta (UTC+7)`.
+`parseDateRange()` menggunakan `time.ParseInLocation("Asia/Jakarta")`.
+Query stats "hari ini" juga dihitung dalam WIB, bukan UTC server.
 
 #### CMS (public)
 | Method | Path |
@@ -302,21 +318,25 @@ users              -- akun login (id, email, password_hash, role, created_at, up
 patients           -- data pasien (id, patient_code, full_name, phone, whatsapp, email,
                    --   gender, date_of_birth, photo_url, allergy_history, medical_conditions,
                    --   skin_type, notes, tags[], is_active, reminder_opt_in, created_by)
-service_categories -- (id, name, description, is_active)
-services           -- (id, name, category_id, base_price, duration_minutes, requires_doctor,
-                   --   doctor_commission_type, doctor_commission_value,
+service_categories -- (id, name, description, is_active, created_at, updated_at)
+services           -- (id, name, category_id FK→service_categories, base_price, duration_minutes,
+                   --   requires_doctor, doctor_commission_type, doctor_commission_value,
                    --   therapist_commission_type, therapist_commission_value, is_active)
-products           -- (id, name, category, sku, supplier, purchase_price, selling_price,
-                   --   current_stock, minimum_stock, unit, expiry_date, is_active)
+product_categories -- (id, name, description, is_active, created_at, updated_at)  ← BARU
+products           -- (id, name, category_id FK→product_categories, sku, supplier,
+                   --   purchase_price, selling_price, current_stock, minimum_stock,
+                   --   unit, expiry_date, is_active)
 staff              -- (id, user_id, full_name, role, specialization, phone, is_active)
 appointments       -- (id, patient_id, service_id, staff_id, scheduled_at, duration_minutes,
                    --   status, notes, created_by)
 transactions       -- (id, patient_id, staff_id, appointment_id, subtotal, discount_amount,
-                   --   discount_type, total_amount, payment_method, payment_status, notes, created_by)
+                   --   discount_type, total_amount, payment_method, payment_status,
+                   --   paid_at, notes, created_by)
 transaction_items  -- (id, transaction_id, service_id, product_id, item_type, quantity,
-                   --   unit_price, discount_amount, total_price)
-commissions        -- (id, transaction_id, staff_id, staff_role, base_amount, commission_type,
-                   --   commission_value, commission_amount, status, created_at)
+                   --   unit_price, discount_amount, total_price, doctor_id, therapist_id)
+commissions        -- (id, transaction_id, transaction_item_id, staff_id, staff_role,
+                   --   base_amount, commission_type, commission_value, commission_amount,
+                   --   status, created_at, updated_at)
 clinic_settings    -- (id, clinic_name, address, phone, email, logo_url, ...)
 cms_pages          -- (id, page_id varchar unique, content jsonb, updated_at)
 stock_movements    -- (id, product_id, movement_type, quantity, reason, reference_id,
@@ -464,6 +484,7 @@ Jika refresh gagal → redirect ke `/admin/login`.
 | `/appointments` | Appointments | Semua |
 | `/services` | Services | admin |
 | `/products` | Products | admin |
+| `/categories` | Categories | admin ← BARU |
 | `/pos` | POS | Semua |
 | `/transactions` | Transactions | admin, cashier |
 | `/commissions` | Commissions | admin, doctor, therapist |
@@ -563,6 +584,11 @@ User klik "Bayar" di POS.tsx
 - Supabase client (`shasi/src/integrations/supabase/`) masih ada di codebase. Sudah tidak dipakai tapi belum dihapus — aman dibiarkan, tidak di-import oleh kode aktif.
 - `useTransactionStats` hook masih fetch dari endpoint yang mungkin belum optimal (fetch semua transaksi lalu filter client-side untuk stats)
 
+### Bug yang sudah diperbaiki (untuk referensi)
+- **`pq: unexpected Parse response 'C'`** saat mark transaction as paid → `MarkPaidEffects()` di `transaction/repository.go` memanggil query baru di dalam loop `rows.Next()` saat cursor masih terbuka. Fix: collect semua rows ke slice, `rows.Close()` eksplisit, baru lakukan DML.
+- **Dashboard stats = 0 saat filter hari ini** → `parseDateRange` menggunakan UTC midnight (`time.Parse`), bukan WIB. Fix: `time.ParseInLocation("Asia/Jakarta")`. Query no-filter juga diperbaiki dari `CURRENT_DATE` PostgreSQL ke batas waktu WIB yang dihitung di Go.
+- **Backend binary lama tidak di-restart** → routes baru tidak aktif setelah deploy. Selalu `pkill -f "go run main.go" && go run main.go` atau `make kill && make run` setelah perubahan Go.
+
 ---
 
 ## 8. Cara Menambah Module Baru (Pola Standar)
@@ -612,15 +638,41 @@ psql -U postgres -d sc_pos        # connect
 ## 10. Git History Ringkas
 
 ```
+0706431 - chore: add Makefile kill target + update frontend dist build
+
+72587c3 - fix: close rows cursor before DML in MarkPaidEffects
+          Root cause: pq error "unexpected Parse response 'C'" karena QueryRow
+          dipanggil di dalam loop rows.Next() di MarkPaidEffects().
+          Fix: collect rows ke slice → rows.Close() → lalu DML.
+
+109edca - fix(timezone) + feat(categories)
+          Backend: parseDateRange pakai ParseInLocation(Asia/Jakarta).
+                   Dashboard no-filter hitung batas hari ini di Go (WIB), bukan CURRENT_DATE.
+          Frontend: Transactions filter & display pakai paid_at bukan created_at.
+                    Halaman /categories baru (CRUD service & product categories).
+                    Sidebar: tambah menu Categories.
+                    useServiceCategories diperluas dengan create/update/delete mutations.
+
+5bb4583 - feat: patient history, product/service category CRUD, dashboard filter, POS search
+          Backend:  GET /patients/:id/visits, /patients/:id/transactions
+                    Tabel product_categories + full CRUD /product-categories
+                    PUT/DELETE /service-categories/:id
+                    Dashboard endpoints terima ?from=&to= date range filter
+          Frontend: PatientDetail tab Visit History & Transactions (data real dari backend)
+                    ProductFormDialog fetch categories dari API
+                    useDashboard hooks terima DateRangeParams
+                    POSInterface patient dropdown → searchable Popover+Command combobox
+                    PatientFormDialog tambah field Tags (chip input)
+
+149bb81 - Fix end-to-end bugs: auth redirect, transaction, dashboard
+
+a07cf80 - Fix router conflict: rename service-consumables route path
+
+ca2cdde - Add AGENTS.md
+
 29fc79d - Migrate backend integrations from Supabase to self-managed service
-          (WhatsApp, image upload, stock_movements, service_consumables,
-           reminder_opt_in, dashboard backend, type cleanup, AGENTS.md)
-
-0db4688 - init (patient search fix)
-
-9ac8eb4 - Initial commit (full project scaffold)
 ```
 
 ---
 
-*Terakhir diupdate: setelah sesi migrasi Supabase → self-managed backend*
+*Terakhir diupdate: commit 0706431 — timezone fix, categories CRUD, commission bug fix*
