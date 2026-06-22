@@ -29,9 +29,11 @@ type TransactionItemWithRelations struct {
 }
 
 type PatientSummary struct {
-	ID          string `json:"id"`
-	FullName    string `json:"full_name"`
-	PatientCode string `json:"patient_code"`
+	ID          string  `json:"id"`
+	FullName    string  `json:"full_name"`
+	PatientCode string  `json:"patient_code"`
+	Phone       *string `json:"phone,omitempty"`
+	WhatsApp    *string `json:"whatsapp,omitempty"`
 }
 
 type NamedSummary struct {
@@ -54,7 +56,7 @@ func (r *Repository) List() ([]TransactionWithRelations, error) {
 		SELECT t.id, t.transaction_code, t.appointment_id, t.patient_id, t.subtotal,
 		       t.discount_amount, t.discount_type, t.total_amount, COALESCE(t.tax_amount, 0),
 		       t.payment_method, t.payment_status, t.notes, t.created_by, t.paid_at,
-		       t.created_at, t.updated_at, p.id, p.full_name, p.patient_code
+		       t.created_at, t.updated_at, p.id, p.full_name, p.patient_code, p.phone, p.whatsapp
 		FROM transactions t
 		LEFT JOIN patients p ON p.id = t.patient_id
 		ORDER BY t.created_at DESC
@@ -93,7 +95,7 @@ func (r *Repository) Get(id string) (*TransactionWithRelations, error) {
 		SELECT t.id, t.transaction_code, t.appointment_id, t.patient_id, t.subtotal,
 		       t.discount_amount, t.discount_type, t.total_amount, COALESCE(t.tax_amount, 0),
 		       t.payment_method, t.payment_status, t.notes, t.created_by, t.paid_at,
-		       t.created_at, t.updated_at, p.id, p.full_name, p.patient_code
+		       t.created_at, t.updated_at, p.id, p.full_name, p.patient_code, p.phone, p.whatsapp
 		FROM transactions t
 		LEFT JOIN patients p ON p.id = t.patient_id
 		WHERE t.id = $1
@@ -160,8 +162,11 @@ func (r *Repository) Update(id string, updates models.Transaction) error {
 	result, err := r.db.Exec(`
 		UPDATE transactions
 		SET payment_status = COALESCE(NULLIF($1, ''), payment_status),
-		    payment_method = $2,
-		    paid_at = $3,
+		    payment_method = COALESCE($2, payment_method),
+		    paid_at = CASE
+		        WHEN $1 = 'paid' AND paid_at IS NULL THEN COALESCE($3, CURRENT_TIMESTAMP)
+		        ELSE COALESCE($3, paid_at)
+		    END,
 		    notes = COALESCE($4, notes),
 		    updated_at = CURRENT_TIMESTAMP
 		WHERE id = $5
@@ -316,19 +321,25 @@ type txScanner interface {
 
 func scanTransaction(scanner txScanner) (TransactionWithRelations, error) {
 	var result TransactionWithRelations
-	var patientID, patientName, patientCode sql.NullString
+	var patientID, patientName, patientCode, patientPhone, patientWhatsApp sql.NullString
 	err := scanner.Scan(
 		&result.ID, &result.TransactionCode, &result.AppointmentID, &result.PatientID,
 		&result.Subtotal, &result.DiscountAmount, &result.DiscountType, &result.TotalAmount,
 		&result.TaxAmount, &result.PaymentMethod, &result.PaymentStatus, &result.Notes,
 		&result.CreatedBy, &result.PaidAt, &result.CreatedAt, &result.UpdatedAt,
-		&patientID, &patientName, &patientCode,
+		&patientID, &patientName, &patientCode, &patientPhone, &patientWhatsApp,
 	)
 	if err != nil {
 		return TransactionWithRelations{}, err
 	}
 	if patientID.Valid {
 		result.Patient = &PatientSummary{ID: patientID.String, FullName: patientName.String, PatientCode: patientCode.String}
+		if patientPhone.Valid {
+			result.Patient.Phone = &patientPhone.String
+		}
+		if patientWhatsApp.Valid {
+			result.Patient.WhatsApp = &patientWhatsApp.String
+		}
 	}
 	return result, nil
 }

@@ -13,6 +13,7 @@ interface AuthContextType {
   user: AuthUser | null;
   role: AppRole | null;
   isLoading: boolean;
+  signIn: (user: AuthUser) => void;
   signOut: () => Promise<void>;
 }
 
@@ -52,6 +53,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeAuth();
   }, []);
 
+  const signIn = (authUser: AuthUser) => {
+    setUser(authUser);
+    setRole(authUser.role);
+  };
+
   const signOut = async () => {
     try {
       await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT);
@@ -65,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, isLoading, signOut }}>
+    <AuthContext.Provider value={{ user, role, isLoading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -98,7 +98,6 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 func authResponse(c *gin.Context, statusCode int, payload *AuthPayload) {
 	c.JSON(statusCode, gin.H{
 		"success":       true,
-		"data":          payload,
 		"access_token":  payload.AccessToken,
 		"refresh_token": payload.RefreshToken,
 		"user":          payload.User,

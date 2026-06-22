@@ -1,15 +1,40 @@
-import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+// Manual types aligned with Go backend models (not Supabase-generated)
 
-export type Transaction = Tables<"transactions">;
-export type TransactionInsert = TablesInsert<"transactions">;
-export type TransactionUpdate = TablesUpdate<"transactions">;
+export interface Transaction {
+  id: string;
+  transaction_code: string;
+  appointment_id: string | null;
+  patient_id: string | null;
+  subtotal: number;
+  discount_amount: number | null;
+  discount_type: string | null;
+  total_amount: number;
+  tax_amount: number;
+  payment_method: string | null;
+  payment_status: string;
+  notes: string | null;
+  created_by: string | null;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
-export type TransactionItem = Tables<"transaction_items">;
-export type TransactionItemInsert = TablesInsert<"transaction_items">;
+export interface TransactionItem {
+  id: string;
+  transaction_id: string;
+  item_type: string;
+  service_id: string | null;
+  product_id: string | null;
+  quantity: number;
+  unit_price: number;
+  discount_amount: number | null;
+  total_price: number;
+  doctor_id: string | null;
+  therapist_id: string | null;
+  created_at: string;
+}
 
-export type Commission = Tables<"commissions">;
-
-export type TransactionWithRelations = Transaction & {
+export interface TransactionWithRelations extends Transaction {
   patient?: { id: string; full_name: string; patient_code: string } | null;
   items?: (TransactionItem & {
     service?: { id: string; name: string } | null;
@@ -17,7 +42,11 @@ export type TransactionWithRelations = Transaction & {
     doctor?: { id: string; full_name: string } | null;
     therapist?: { id: string; full_name: string } | null;
   })[];
-};
+}
+
+export type TransactionInsert = Omit<Transaction, "id" | "transaction_code" | "created_at" | "updated_at" | "paid_at">;
+export type TransactionUpdate = Partial<Pick<Transaction, "payment_status" | "payment_method" | "paid_at" | "notes">>;
+export type TransactionItemInsert = Omit<TransactionItem, "id" | "created_at">;
 
 export const PAYMENT_METHODS = [
   { value: "cash", label: "Cash" },

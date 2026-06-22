@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sparkles, Mail, Lock, Loader2 } from "lucide-react";
 import { apiClient, API_ENDPOINTS, AuthResponse } from "@/integrations/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Auth() {
@@ -14,7 +15,27 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
+  const { signIn } = useAuth();
   const { toast } = useToast();
+
+  const handleAuthSuccess = (response: AuthResponse) => {
+    const accessToken = response.access_token || response.data?.access_token;
+    const refreshToken = response.refresh_token || response.data?.refresh_token;
+    const user = response.user || response.data?.user;
+
+    if (accessToken) apiClient.setAccessToken(accessToken);
+    if (refreshToken) apiClient.setRefreshToken(refreshToken);
+
+    if (user) {
+      signIn({
+        id: user.id,
+        email: user.email,
+        role: user.role as "admin" | "doctor" | "therapist" | "cashier",
+      });
+    }
+
+    navigate("/dashboard");
+  };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,23 +51,17 @@ export default function Auth() {
         toast({
           variant: "destructive",
           title: "Sign in failed",
-          description: response.error || "Unable to sign in",
+          description: response.error || "Email atau password salah",
         });
         return;
       }
 
-      const accessToken = response.access_token || response.data?.access_token;
-      const refreshToken = response.refresh_token || response.data?.refresh_token;
-
-      if (accessToken) apiClient.setAccessToken(accessToken);
-      if (refreshToken) apiClient.setRefreshToken(refreshToken);
-
-      navigate("/dashboard");
-    } catch (error) {
+      handleAuthSuccess(response);
+    } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "An unexpected error occurred",
+        title: "Sign in failed",
+        description: error?.message || "Email atau password salah",
       });
     } finally {
       setIsLoading(false);
@@ -65,34 +80,29 @@ export default function Auth() {
 
       if (!response.success) {
         const message = response.error || "Unable to register";
-        if (message.toLowerCase().includes("already registered")) {
-          toast({
-            variant: "destructive",
-            title: "Account exists",
-            description: "This email is already registered. Please sign in instead.",
-          });
-        } else {
-          toast({
-            variant: "destructive",
-            title: "Sign up failed",
-            description: message,
-          });
-        }
+        toast({
+          variant: "destructive",
+          title: message.toLowerCase().includes("already registered")
+            ? "Akun sudah ada"
+            : "Sign up failed",
+          description: message.toLowerCase().includes("already registered")
+            ? "Email ini sudah terdaftar. Silakan sign in."
+            : message,
+        });
         return;
       }
 
-      const accessToken = response.access_token || response.data?.access_token;
-      const refreshToken = response.refresh_token || response.data?.refresh_token;
-
-      if (accessToken) apiClient.setAccessToken(accessToken);
-      if (refreshToken) apiClient.setRefreshToken(refreshToken);
-
-      navigate("/dashboard");
-    } catch (error) {
+      handleAuthSuccess(response);
+    } catch (error: any) {
+      const message: string = error?.message || "";
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "An unexpected error occurred",
+        title: message.toLowerCase().includes("already registered")
+          ? "Akun sudah ada"
+          : "Sign up failed",
+        description: message.toLowerCase().includes("already registered")
+          ? "Email ini sudah terdaftar. Silakan sign in."
+          : message || "Terjadi kesalahan",
       });
     } finally {
       setIsLoading(false);
