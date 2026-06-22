@@ -277,11 +277,11 @@ Request body POST:
 ```
 
 #### Service Consumables
-| Method | Path | Role |
-|--------|------|------|
-| GET | `/services/:serviceId/consumables` | Semua |
-| POST | `/services/:serviceId/consumables` | Admin |
-| DELETE | `/service-consumables/:id` | Admin |
+| Method | Path | Role | Notes |
+|--------|------|------|-------|
+| GET | `/service-consumables` | Semua | `?service_id=uuid` opsional |
+| POST | `/service-consumables` | Admin | body: `{ service_id, product_id, quantity_used }` |
+| DELETE | `/service-consumables/:id` | Admin | |
 
 #### WhatsApp
 | Method | Path | Notes |

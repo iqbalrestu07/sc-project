@@ -19,7 +19,8 @@ func NewModule() *Handler {
 }
 
 func (h *Handler) ListByService(c *gin.Context) {
-	items, err := h.repo.ListByService(c.Param("serviceId"))
+	serviceID := c.Query("service_id")
+	items, err := h.repo.ListByService(serviceID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -33,7 +34,10 @@ func (h *Handler) Upsert(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	req.ServiceID = c.Param("serviceId")
+	if req.ServiceID == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "service_id is required")
+		return
+	}
 	if err := h.repo.Upsert(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return

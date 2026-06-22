@@ -112,8 +112,8 @@ export const API_ENDPOINTS = {
 
     // Service Consumables
     SERVICE_CONSUMABLES: {
-        LIST: (serviceId: string) => `/services/${serviceId}/consumables`,
-        UPSERT: (serviceId: string) => `/services/${serviceId}/consumables`,
+        LIST: "/service-consumables",                         // ?service_id=uuid
+        UPSERT: "/service-consumables",                       // body: { service_id, product_id, quantity_used }
         DELETE: (id: string) => `/service-consumables/${id}`,
     },
 

@@ -26,14 +26,19 @@ type ConsumableWithProduct struct {
 }
 
 func (r *Repository) ListByService(serviceID string) ([]ConsumableWithProduct, error) {
-	rows, err := r.db.Query(`
+	query := `
 		SELECT sc.id, sc.service_id, sc.product_id, sc.quantity_used, sc.created_at,
 		       p.name, p.unit, p.current_stock
 		FROM service_consumables sc
-		JOIN products p ON p.id = sc.product_id
-		WHERE sc.service_id = $1
-		ORDER BY sc.created_at ASC
-	`, serviceID)
+		JOIN products p ON p.id = sc.product_id`
+	args := []interface{}{}
+	if serviceID != "" {
+		query += " WHERE sc.service_id = $1"
+		args = append(args, serviceID)
+	}
+	query += " ORDER BY sc.created_at ASC"
+
+	rows, err := r.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query consumables: %w", err)
 	}
