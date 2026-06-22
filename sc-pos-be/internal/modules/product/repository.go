@@ -107,6 +107,72 @@ func (r *Repository) Delete(id string) error {
 	return checkRows(result)
 }
 
+// ──── Product Categories ────
+
+func (r *Repository) ListCategories() ([]models.ProductCategory, error) {
+	rows, err := r.db.Query(`
+		SELECT id, name, description, COALESCE(is_active, true), created_at, updated_at
+		FROM product_categories
+		WHERE COALESCE(is_active, true) = true
+		ORDER BY name ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query product categories: %w", err)
+	}
+	defer rows.Close()
+
+	var categories []models.ProductCategory
+	for rows.Next() {
+		var c models.ProductCategory
+		var desc sql.NullString
+		if err := rows.Scan(&c.ID, &c.Name, &desc, &c.IsActive, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan product category: %w", err)
+		}
+		if desc.Valid {
+			c.Description = &desc.String
+		}
+		categories = append(categories, c)
+	}
+	if categories == nil {
+		categories = []models.ProductCategory{}
+	}
+	return categories, nil
+}
+
+func (r *Repository) CreateCategory(c *models.ProductCategory) error {
+	_, err := r.db.Exec(`
+		INSERT INTO product_categories (id, name, description, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, c.ID, c.Name, c.Description, c.IsActive, c.CreatedAt, c.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("failed to create product category: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) UpdateCategory(id string, c *models.ProductCategory) error {
+	result, err := r.db.Exec(`
+		UPDATE product_categories
+		SET name = $1, description = $2, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $3 AND COALESCE(is_active, true) = true
+	`, c.Name, c.Description, id)
+	if err != nil {
+		return fmt.Errorf("failed to update product category: %w", err)
+	}
+	return checkRows(result)
+}
+
+func (r *Repository) DeleteCategory(id string) error {
+	result, err := r.db.Exec(`
+		UPDATE product_categories SET is_active = false, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1 AND COALESCE(is_active, true) = true
+	`, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete product category: %w", err)
+	}
+	return checkRows(result)
+}
+
 func (r *Repository) DecreaseStock(tx *sql.Tx, id string, quantity int) error {
 	result, err := tx.Exec(`
 		UPDATE products

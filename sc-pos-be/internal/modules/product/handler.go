@@ -75,6 +75,51 @@ func (h *Handler) Delete(c *gin.Context) {
 	utils.SuccessResponseWithMessage(c, http.StatusOK, "Product deleted successfully", nil)
 }
 
+func (h *Handler) ListCategories(c *gin.Context) {
+	categories, err := h.service.ListCategories()
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, categories)
+}
+
+func (h *Handler) CreateCategory(c *gin.Context) {
+	var req models.ProductCategory
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	category, err := h.service.CreateCategory(req)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	utils.SuccessResponseWithMessage(c, http.StatusCreated, "Product category created successfully", category)
+}
+
+func (h *Handler) UpdateCategory(c *gin.Context) {
+	var req models.ProductCategory
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	category, err := h.service.UpdateCategory(c.Param("id"), req)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	utils.SuccessResponseWithMessage(c, http.StatusOK, "Product category updated successfully", category)
+}
+
+func (h *Handler) DeleteCategory(c *gin.Context) {
+	if err := h.service.DeleteCategory(c.Param("id")); err != nil {
+		h.handleError(c, err)
+		return
+	}
+	utils.SuccessResponseWithMessage(c, http.StatusOK, "Product category deleted successfully", nil)
+}
+
 func (h *Handler) handleError(c *gin.Context, err error) {
 	if errors.Is(err, ErrNotFound) {
 		utils.ErrorResponse(c, http.StatusNotFound, err.Error())

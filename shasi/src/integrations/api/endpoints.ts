@@ -21,6 +21,8 @@ export const API_ENDPOINTS = {
         UPDATE: (id: string) => `/patients/${id}`,
         DELETE: (id: string) => `/patients/${id}`,
         SEARCH: "/patients/search",
+        VISITS: (id: string) => `/patients/${id}/visits`,
+        TRANSACTIONS: (id: string) => `/patients/${id}/transactions`,
     },
 
     // Services
@@ -32,6 +34,8 @@ export const API_ENDPOINTS = {
         DELETE: (id: string) => `/services/${id}`,
         CATEGORIES: "/service-categories",
         CATEGORY_CREATE: "/service-categories",
+        CATEGORY_UPDATE: (id: string) => `/service-categories/${id}`,
+        CATEGORY_DELETE: (id: string) => `/service-categories/${id}`,
     },
 
     // Products
@@ -41,6 +45,10 @@ export const API_ENDPOINTS = {
         DETAIL: (id: string) => `/products/${id}`,
         UPDATE: (id: string) => `/products/${id}`,
         DELETE: (id: string) => `/products/${id}`,
+        CATEGORIES: "/product-categories",
+        CATEGORY_CREATE: "/product-categories",
+        CATEGORY_UPDATE: (id: string) => `/product-categories/${id}`,
+        CATEGORY_DELETE: (id: string) => `/product-categories/${id}`,
     },
 
     // Appointments

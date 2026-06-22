@@ -2,6 +2,16 @@ package models
 
 import "time"
 
+// ProductCategory represents product categories
+type ProductCategory struct {
+	ID          string    `json:"id" db:"id"`
+	Name        string    `json:"name" db:"name"`
+	Description *string   `json:"description" db:"description"`
+	IsActive    bool      `json:"is_active" db:"is_active"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+}
+
 // Product represents sellable products
 type Product struct {
 	ID            string     `json:"id" db:"id"`

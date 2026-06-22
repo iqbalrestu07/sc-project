@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, API_ENDPOINTS } from "@/integrations/api";
+import { format } from "date-fns";
 
 export interface DashboardStats {
   patients: number;
@@ -36,49 +37,66 @@ export interface AppointmentTodayItem {
   service_name: string;
 }
 
-export function useDashboardStats() {
+export interface DateRangeParams {
+  from?: Date;
+  to?: Date;
+}
+
+function buildDateParams(dr?: DateRangeParams): Record<string, string> {
+  if (!dr?.from || !dr?.to) return {};
+  return {
+    from: format(dr.from, "yyyy-MM-dd"),
+    to: format(dr.to, "yyyy-MM-dd"),
+  };
+}
+
+export function useDashboardStats(dr?: DateRangeParams) {
   return useQuery({
-    queryKey: ["dashboard-stats"],
+    queryKey: ["dashboard-stats", dr?.from?.toISOString(), dr?.to?.toISOString()],
     queryFn: async (): Promise<DashboardStats> => {
       const data = await apiClient.get<{ data: DashboardStats }>(
-        API_ENDPOINTS.DASHBOARD.STATS
+        API_ENDPOINTS.DASHBOARD.STATS,
+        buildDateParams(dr)
       );
       return data.data;
     },
-    refetchInterval: 60_000, // auto-refresh every 60s
+    refetchInterval: 60_000,
   });
 }
 
-export function useDashboardRevenue() {
+export function useDashboardRevenue(dr?: DateRangeParams) {
   return useQuery({
-    queryKey: ["dashboard-revenue"],
+    queryKey: ["dashboard-revenue", dr?.from?.toISOString(), dr?.to?.toISOString()],
     queryFn: async (): Promise<RevenuePoint[]> => {
       const data = await apiClient.get<{ data: RevenuePoint[] }>(
-        API_ENDPOINTS.DASHBOARD.REVENUE
+        API_ENDPOINTS.DASHBOARD.REVENUE,
+        buildDateParams(dr)
       );
       return data.data || [];
     },
   });
 }
 
-export function useDashboardTopServices() {
+export function useDashboardTopServices(dr?: DateRangeParams) {
   return useQuery({
-    queryKey: ["dashboard-top-services"],
+    queryKey: ["dashboard-top-services", dr?.from?.toISOString(), dr?.to?.toISOString()],
     queryFn: async (): Promise<TopServiceItem[]> => {
       const data = await apiClient.get<{ data: TopServiceItem[] }>(
-        API_ENDPOINTS.DASHBOARD.TOP_SERVICES
+        API_ENDPOINTS.DASHBOARD.TOP_SERVICES,
+        buildDateParams(dr)
       );
       return data.data || [];
     },
   });
 }
 
-export function useDashboardTopProducts() {
+export function useDashboardTopProducts(dr?: DateRangeParams) {
   return useQuery({
-    queryKey: ["dashboard-top-products"],
+    queryKey: ["dashboard-top-products", dr?.from?.toISOString(), dr?.to?.toISOString()],
     queryFn: async (): Promise<TopProductItem[]> => {
       const data = await apiClient.get<{ data: TopProductItem[] }>(
-        API_ENDPOINTS.DASHBOARD.TOP_PRODUCTS
+        API_ENDPOINTS.DASHBOARD.TOP_PRODUCTS,
+        buildDateParams(dr)
       );
       return data.data || [];
     },

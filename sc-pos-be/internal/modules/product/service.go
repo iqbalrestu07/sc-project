@@ -75,6 +75,44 @@ func (s *Service) Delete(id string) error {
 	return nil
 }
 
+func (s *Service) ListCategories() ([]models.ProductCategory, error) {
+	return s.repo.ListCategories()
+}
+
+func (s *Service) CreateCategory(req models.ProductCategory) (*models.ProductCategory, error) {
+	now := time.Now()
+	req.ID = uuid.New().String()
+	req.IsActive = true
+	req.CreatedAt = now
+	req.UpdatedAt = now
+	if err := s.repo.CreateCategory(&req); err != nil {
+		return nil, err
+	}
+	return &req, nil
+}
+
+func (s *Service) UpdateCategory(id string, req models.ProductCategory) (*models.ProductCategory, error) {
+	req.UpdatedAt = time.Now()
+	if err := s.repo.UpdateCategory(id, &req); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	req.ID = id
+	return &req, nil
+}
+
+func (s *Service) DeleteCategory(id string) error {
+	if err := s.repo.DeleteCategory(id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	return nil
+}
+
 func applyProductDefaults(product *models.Product) {
 	if product.MinimumStock == 0 {
 		product.MinimumStock = 5

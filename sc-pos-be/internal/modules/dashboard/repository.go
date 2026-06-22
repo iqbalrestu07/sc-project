@@ -16,7 +16,13 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) Stats() (map[string]interface{}, error) {
+// DateRange holds optional from/to filter (nil = no filter)
+type DateRange struct {
+	From *time.Time
+	To   *time.Time
+}
+
+func (r *Repository) Stats(dr DateRange) (map[string]interface{}, error) {
 	var patients, appointmentsToday, paidTransactionsToday, lowStockProducts int
 	var revenueToday float64
 
@@ -26,16 +32,30 @@ func (r *Repository) Stats() (map[string]interface{}, error) {
 	if err := r.db.QueryRow(`SELECT COUNT(*) FROM appointments WHERE scheduled_at AT TIME ZONE 'Asia/Jakarta' >= CURRENT_DATE AND scheduled_at AT TIME ZONE 'Asia/Jakarta' < CURRENT_DATE + INTERVAL '1 day'`).Scan(&appointmentsToday); err != nil {
 		return nil, fmt.Errorf("failed to count appointments: %w", err)
 	}
-	// Use paid_at for "paid today" — not created_at
-	if err := r.db.QueryRow(`
-		SELECT COUNT(*), COALESCE(SUM(total_amount), 0)
-		FROM transactions
-		WHERE payment_status = 'paid'
-		  AND COALESCE(paid_at, updated_at) AT TIME ZONE 'Asia/Jakarta' >= CURRENT_DATE
-		  AND COALESCE(paid_at, updated_at) AT TIME ZONE 'Asia/Jakarta' < CURRENT_DATE + INTERVAL '1 day'
-	`).Scan(&paidTransactionsToday, &revenueToday); err != nil {
-		return nil, fmt.Errorf("failed to calculate revenue: %w", err)
+
+	// With optional date range filter; fall back to "today" when no filter given
+	if dr.From != nil && dr.To != nil {
+		if err := r.db.QueryRow(`
+			SELECT COUNT(*), COALESCE(SUM(total_amount), 0)
+			FROM transactions
+			WHERE payment_status = 'paid'
+			  AND COALESCE(paid_at, updated_at) >= $1
+			  AND COALESCE(paid_at, updated_at) < $2
+		`, dr.From, dr.To).Scan(&paidTransactionsToday, &revenueToday); err != nil {
+			return nil, fmt.Errorf("failed to calculate revenue: %w", err)
+		}
+	} else {
+		if err := r.db.QueryRow(`
+			SELECT COUNT(*), COALESCE(SUM(total_amount), 0)
+			FROM transactions
+			WHERE payment_status = 'paid'
+			  AND COALESCE(paid_at, updated_at) AT TIME ZONE 'Asia/Jakarta' >= CURRENT_DATE
+			  AND COALESCE(paid_at, updated_at) AT TIME ZONE 'Asia/Jakarta' < CURRENT_DATE + INTERVAL '1 day'
+		`).Scan(&paidTransactionsToday, &revenueToday); err != nil {
+			return nil, fmt.Errorf("failed to calculate revenue: %w", err)
+		}
 	}
+
 	if err := r.db.QueryRow(`SELECT COUNT(*) FROM products WHERE COALESCE(is_active, true) = true AND COALESCE(current_stock, 0) <= COALESCE(minimum_stock, 5)`).Scan(&lowStockProducts); err != nil {
 		return nil, fmt.Errorf("failed to count low stock products: %w", err)
 	}
@@ -54,16 +74,30 @@ type RevenueRow struct {
 	Revenue float64 `json:"revenue"`
 }
 
-func (r *Repository) Revenue() ([]RevenueRow, error) {
-	rows, err := r.db.Query(`
-		SELECT (COALESCE(paid_at, updated_at) AT TIME ZONE 'Asia/Jakarta')::date AS date,
-		       COALESCE(SUM(total_amount), 0)::float8 AS revenue
-		FROM transactions
-		WHERE payment_status = 'paid'
-		GROUP BY 1
-		ORDER BY 1 DESC
-		LIMIT 30
-	`)
+func (r *Repository) Revenue(dr DateRange) ([]RevenueRow, error) {
+	var query string
+	var args []interface{}
+
+	if dr.From != nil && dr.To != nil {
+		query = `
+			SELECT (COALESCE(paid_at, updated_at))::date AS date,
+			       COALESCE(SUM(total_amount), 0)::float8 AS revenue
+			FROM transactions
+			WHERE payment_status = 'paid'
+			  AND COALESCE(paid_at, updated_at) >= $1
+			  AND COALESCE(paid_at, updated_at) < $2
+			GROUP BY 1 ORDER BY 1 DESC LIMIT 366`
+		args = []interface{}{dr.From, dr.To}
+	} else {
+		query = `
+			SELECT (COALESCE(paid_at, updated_at) AT TIME ZONE 'Asia/Jakarta')::date AS date,
+			       COALESCE(SUM(total_amount), 0)::float8 AS revenue
+			FROM transactions
+			WHERE payment_status = 'paid'
+			GROUP BY 1 ORDER BY 1 DESC LIMIT 30`
+	}
+
+	rows, err := r.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query revenue: %w", err)
 	}
@@ -94,15 +128,34 @@ type TopItem struct {
 	Revenue  float64 `json:"revenue"`
 }
 
-func (r *Repository) TopServices() ([]TopItem, error) {
-	rows, err := r.db.Query(`
-		SELECT s.id, s.name, COUNT(*)::float8 AS quantity, COALESCE(SUM(ti.total_price), 0)::float8 AS revenue
-		FROM transaction_items ti
-		JOIN services s ON s.id = ti.service_id
-		GROUP BY s.id, s.name
-		ORDER BY revenue DESC
-		LIMIT 10
-	`)
+func (r *Repository) TopServices(dr DateRange) ([]TopItem, error) {
+	var rows *sql.Rows
+	var err error
+	if dr.From != nil && dr.To != nil {
+		rows, err = r.db.Query(`
+			SELECT s.id, s.name, COUNT(*)::float8 AS quantity, COALESCE(SUM(ti.total_price), 0)::float8 AS revenue
+			FROM transaction_items ti
+			JOIN services s ON s.id = ti.service_id
+			JOIN transactions t ON t.id = ti.transaction_id
+			WHERE t.payment_status = 'paid'
+			  AND COALESCE(t.paid_at, t.updated_at) >= $1
+			  AND COALESCE(t.paid_at, t.updated_at) < $2
+			GROUP BY s.id, s.name
+			ORDER BY revenue DESC
+			LIMIT 10
+		`, dr.From, dr.To)
+	} else {
+		rows, err = r.db.Query(`
+			SELECT s.id, s.name, COUNT(*)::float8 AS quantity, COALESCE(SUM(ti.total_price), 0)::float8 AS revenue
+			FROM transaction_items ti
+			JOIN services s ON s.id = ti.service_id
+			JOIN transactions t ON t.id = ti.transaction_id
+			WHERE t.payment_status = 'paid'
+			GROUP BY s.id, s.name
+			ORDER BY revenue DESC
+			LIMIT 10
+		`)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query top services: %w", err)
 	}
@@ -110,15 +163,34 @@ func (r *Repository) TopServices() ([]TopItem, error) {
 	return scanTopItems(rows)
 }
 
-func (r *Repository) TopProducts() ([]TopItem, error) {
-	rows, err := r.db.Query(`
-		SELECT p.id, p.name, COALESCE(SUM(ti.quantity), 0)::float8 AS quantity, COALESCE(SUM(ti.total_price), 0)::float8 AS revenue
-		FROM transaction_items ti
-		JOIN products p ON p.id = ti.product_id
-		GROUP BY p.id, p.name
-		ORDER BY revenue DESC
-		LIMIT 10
-	`)
+func (r *Repository) TopProducts(dr DateRange) ([]TopItem, error) {
+	var rows *sql.Rows
+	var err error
+	if dr.From != nil && dr.To != nil {
+		rows, err = r.db.Query(`
+			SELECT p.id, p.name, COALESCE(SUM(ti.quantity), 0)::float8 AS quantity, COALESCE(SUM(ti.total_price), 0)::float8 AS revenue
+			FROM transaction_items ti
+			JOIN products p ON p.id = ti.product_id
+			JOIN transactions t ON t.id = ti.transaction_id
+			WHERE t.payment_status = 'paid'
+			  AND COALESCE(t.paid_at, t.updated_at) >= $1
+			  AND COALESCE(t.paid_at, t.updated_at) < $2
+			GROUP BY p.id, p.name
+			ORDER BY revenue DESC
+			LIMIT 10
+		`, dr.From, dr.To)
+	} else {
+		rows, err = r.db.Query(`
+			SELECT p.id, p.name, COALESCE(SUM(ti.quantity), 0)::float8 AS quantity, COALESCE(SUM(ti.total_price), 0)::float8 AS revenue
+			FROM transaction_items ti
+			JOIN products p ON p.id = ti.product_id
+			JOIN transactions t ON t.id = ti.transaction_id
+			WHERE t.payment_status = 'paid'
+			GROUP BY p.id, p.name
+			ORDER BY revenue DESC
+			LIMIT 10
+		`)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query top products: %w", err)
 	}

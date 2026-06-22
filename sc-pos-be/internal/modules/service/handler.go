@@ -98,6 +98,28 @@ func (h *Handler) CreateCategory(c *gin.Context) {
 	utils.SuccessResponseWithMessage(c, http.StatusCreated, "Service category created successfully", category)
 }
 
+func (h *Handler) UpdateCategory(c *gin.Context) {
+	var req models.ServiceCategory
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	category, err := h.service.UpdateCategory(c.Param("id"), req)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	utils.SuccessResponseWithMessage(c, http.StatusOK, "Service category updated successfully", category)
+}
+
+func (h *Handler) DeleteCategory(c *gin.Context) {
+	if err := h.service.DeleteCategory(c.Param("id")); err != nil {
+		h.handleError(c, err)
+		return
+	}
+	utils.SuccessResponseWithMessage(c, http.StatusOK, "Service category deleted successfully", nil)
+}
+
 func (h *Handler) handleError(c *gin.Context, err error) {
 	if errors.Is(err, ErrNotFound) {
 		utils.ErrorResponse(c, http.StatusNotFound, err.Error())

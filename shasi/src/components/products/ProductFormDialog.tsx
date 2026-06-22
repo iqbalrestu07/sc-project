@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useProducts } from "@/hooks/useProducts";
+import { useProducts, useProductCategories } from "@/hooks/useProducts";
 import type { Product } from "@/types/product";
 import { PRODUCT_CATEGORIES, PRODUCT_UNITS } from "@/types/product";
 
@@ -56,7 +56,13 @@ export function ProductFormDialog({
   product,
 }: ProductFormDialogProps) {
   const { createProduct, updateProduct } = useProducts();
+  const { categories: apiCategories } = useProductCategories();
   const isEditing = !!product;
+
+  // Use API categories if available, fall back to static list
+  const categoryOptions = apiCategories.length > 0
+    ? apiCategories.map((c) => ({ value: c.name.toLowerCase(), label: c.name }))
+    : PRODUCT_CATEGORIES;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -184,7 +190,7 @@ export function ProductFormDialog({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {PRODUCT_CATEGORIES.map((cat) => (
+                          {categoryOptions.map((cat) => (
                             <SelectItem key={cat.value} value={cat.value}>
                               {cat.label}
                             </SelectItem>

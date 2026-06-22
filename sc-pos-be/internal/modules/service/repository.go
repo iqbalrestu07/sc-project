@@ -164,6 +164,29 @@ func (r *Repository) CreateCategory(category *models.ServiceCategory) error {
 	return nil
 }
 
+func (r *Repository) UpdateCategory(id string, category *models.ServiceCategory) error {
+	result, err := r.db.Exec(`
+		UPDATE service_categories
+		SET name = $1, description = $2, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $3 AND COALESCE(is_active, true) = true
+	`, category.Name, category.Description, id)
+	if err != nil {
+		return fmt.Errorf("failed to update service category: %w", err)
+	}
+	return checkRows(result)
+}
+
+func (r *Repository) DeleteCategory(id string) error {
+	result, err := r.db.Exec(`
+		UPDATE service_categories SET is_active = false, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1 AND COALESCE(is_active, true) = true
+	`, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete service category: %w", err)
+	}
+	return checkRows(result)
+}
+
 type serviceScanner interface {
 	Scan(dest ...interface{}) error
 }

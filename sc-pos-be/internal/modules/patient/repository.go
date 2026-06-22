@@ -159,6 +159,113 @@ func (r *Repository) Search(query string) ([]models.Patient, error) {
 	return scanPatients(rows)
 }
 
+// VisitSummary is a condensed appointment record for patient history
+type VisitSummary struct {
+	ID          string  `json:"id"`
+	ScheduledAt string  `json:"scheduled_at"`
+	Status      string  `json:"status"`
+	ServiceName string  `json:"service_name"`
+	DoctorName  *string `json:"doctor_name,omitempty"`
+	Notes       *string `json:"notes,omitempty"`
+}
+
+// TransactionSummary is a condensed transaction record for patient history
+type TransactionSummary struct {
+	ID              string   `json:"id"`
+	TransactionCode string   `json:"transaction_code"`
+	TotalAmount     float64  `json:"total_amount"`
+	PaymentStatus   string   `json:"payment_status"`
+	PaymentMethod   *string  `json:"payment_method,omitempty"`
+	PaidAt          *string  `json:"paid_at,omitempty"`
+	CreatedAt       string   `json:"created_at"`
+}
+
+func (r *Repository) GetVisits(patientID string) ([]VisitSummary, error) {
+	rows, err := r.db.Query(`
+		SELECT a.id, a.scheduled_at, a.status,
+		       COALESCE(s.name, '') AS service_name,
+		       d.full_name AS doctor_name,
+		       a.notes
+		FROM appointments a
+		LEFT JOIN services s ON s.id = a.service_id
+		LEFT JOIN staff d ON d.id = a.doctor_id
+		WHERE a.patient_id = $1
+		ORDER BY a.scheduled_at DESC
+		LIMIT 100
+	`, patientID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query patient visits: %w", err)
+	}
+	defer rows.Close()
+
+	var visits []VisitSummary
+	for rows.Next() {
+		var v VisitSummary
+		var doctorName sql.NullString
+		var notes sql.NullString
+		var scheduledAt sql.NullTime
+		if err := rows.Scan(&v.ID, &scheduledAt, &v.Status, &v.ServiceName, &doctorName, &notes); err != nil {
+			return nil, fmt.Errorf("failed to scan visit: %w", err)
+		}
+		if scheduledAt.Valid {
+			v.ScheduledAt = scheduledAt.Time.Format("2006-01-02T15:04:05Z")
+		}
+		if doctorName.Valid {
+			v.DoctorName = &doctorName.String
+		}
+		if notes.Valid {
+			v.Notes = &notes.String
+		}
+		visits = append(visits, v)
+	}
+	if visits == nil {
+		visits = []VisitSummary{}
+	}
+	return visits, nil
+}
+
+func (r *Repository) GetTransactions(patientID string) ([]TransactionSummary, error) {
+	rows, err := r.db.Query(`
+		SELECT t.id, t.transaction_code, t.total_amount, t.payment_status,
+		       t.payment_method, t.paid_at, t.created_at
+		FROM transactions t
+		WHERE t.patient_id = $1
+		ORDER BY t.created_at DESC
+		LIMIT 100
+	`, patientID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query patient transactions: %w", err)
+	}
+	defer rows.Close()
+
+	var txns []TransactionSummary
+	for rows.Next() {
+		var t TransactionSummary
+		var paymentMethod sql.NullString
+		var paidAt sql.NullTime
+		var createdAt sql.NullTime
+		if err := rows.Scan(&t.ID, &t.TransactionCode, &t.TotalAmount, &t.PaymentStatus,
+			&paymentMethod, &paidAt, &createdAt); err != nil {
+			return nil, fmt.Errorf("failed to scan transaction: %w", err)
+		}
+		if paymentMethod.Valid {
+			t.PaymentMethod = &paymentMethod.String
+		}
+		if paidAt.Valid {
+			s := paidAt.Time.Format("2006-01-02T15:04:05Z")
+			t.PaidAt = &s
+		}
+		if createdAt.Valid {
+			t.CreatedAt = createdAt.Time.Format("2006-01-02T15:04:05Z")
+		}
+		txns = append(txns, t)
+	}
+	if txns == nil {
+		txns = []TransactionSummary{}
+	}
+	return txns, nil
+}
+
 func scanPatients(rows *sql.Rows) ([]models.Patient, error) {
 	var patients []models.Patient
 	for rows.Next() {

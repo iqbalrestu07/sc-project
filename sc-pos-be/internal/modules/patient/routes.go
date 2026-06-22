@@ -11,4 +11,6 @@ func RegisterRoutes(router gin.IRouter) {
 	router.GET("/patients/:id", handler.Get)
 	router.PUT("/patients/:id", handler.Update)
 	router.DELETE("/patients/:id", handler.Delete)
+	router.GET("/patients/:id/visits", handler.Visits)
+	router.GET("/patients/:id/transactions", handler.Transactions)
 }

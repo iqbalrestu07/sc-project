@@ -1,5 +1,16 @@
 // Product types — aligned with backend Go model
-export type ProductCategory = 'skincare' | 'consumable' | 'consumables' | 'equipment' | 'medication' | 'supplements' | 'other';
+
+// API model for product category (from /product-categories endpoint)
+export interface ProductCategory {
+  id: string;
+  name: string;
+  description?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProductCategorySlug = 'skincare' | 'consumable' | 'consumables' | 'equipment' | 'medication' | 'supplements' | 'other';
 
 export interface Product {
   id: string;

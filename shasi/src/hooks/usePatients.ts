@@ -94,6 +94,53 @@ export function useUpdatePatient() {
   });
 }
 
+export interface PatientVisit {
+  id: string;
+  scheduled_at: string;
+  status: string;
+  service_name: string;
+  doctor_name?: string | null;
+  notes?: string | null;
+}
+
+export interface PatientTransaction {
+  id: string;
+  transaction_code: string;
+  total_amount: number;
+  payment_status: string;
+  payment_method?: string | null;
+  paid_at?: string | null;
+  created_at: string;
+}
+
+export function usePatientVisits(patientId: string | undefined) {
+  return useQuery({
+    queryKey: ["patient-visits", patientId],
+    queryFn: async () => {
+      if (!patientId) return [];
+      const data = await apiClient.get<{ data: PatientVisit[] }>(
+        API_ENDPOINTS.PATIENTS.VISITS(patientId)
+      );
+      return data.data || [];
+    },
+    enabled: !!patientId,
+  });
+}
+
+export function usePatientTransactions(patientId: string | undefined) {
+  return useQuery({
+    queryKey: ["patient-transactions", patientId],
+    queryFn: async () => {
+      if (!patientId) return [];
+      const data = await apiClient.get<{ data: PatientTransaction[] }>(
+        API_ENDPOINTS.PATIENTS.TRANSACTIONS(patientId)
+      );
+      return data.data || [];
+    },
+    enabled: !!patientId,
+  });
+}
+
 export function useDeletePatient() {
   const queryClient = useQueryClient();
 

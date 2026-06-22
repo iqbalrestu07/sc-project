@@ -103,6 +103,14 @@ func (s *Service) Delete(id string) error {
 	return nil
 }
 
+func (s *Service) GetVisits(patientID string) ([]VisitSummary, error) {
+	return s.repo.GetVisits(patientID)
+}
+
+func (s *Service) GetTransactions(patientID string) ([]TransactionSummary, error) {
+	return s.repo.GetTransactions(patientID)
+}
+
 func (s *Service) Search(query string) ([]models.Patient, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {

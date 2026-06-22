@@ -45,9 +45,14 @@ export default function Dashboard() {
     preset: "today",
   });
   
+  // Build date range for backend filtering (only when not "all")
+  const backendDateRange = dateFilter.preset !== "all" && dateFilter.from && dateFilter.to
+    ? { from: dateFilter.from, to: dateFilter.to }
+    : undefined;
+
   // Fetch from backend dashboard endpoints
-  const { data: stats } = useDashboardStats();
-  const { data: revenuePoints } = useDashboardRevenue();
+  const { data: stats } = useDashboardStats(backendDateRange);
+  const { data: revenuePoints } = useDashboardRevenue(backendDateRange);
   const { data: appointmentsToday } = useDashboardAppointmentsToday();
   const { commissions } = useCommissions();
   const { products } = useProducts();

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, API_ENDPOINTS } from "@/integrations/api";
-import type { Product, ProductInsert, ProductUpdate, ProductFormData } from "@/types/product";
+import type { Product, ProductCategory, ProductInsert, ProductUpdate, ProductFormData } from "@/types/product";
 import { toast } from "sonner";
 
 export function useProducts() {
@@ -106,5 +106,74 @@ export function useProducts() {
     lowStockProducts,
     expiringProducts,
     totalProducts: productsQuery.data?.length || 0,
+  };
+}
+
+export function useProductCategories() {
+  const queryClient = useQueryClient();
+
+  const categoriesQuery = useQuery({
+    queryKey: ["product-categories"],
+    queryFn: async (): Promise<ProductCategory[]> => {
+      const data = await apiClient.get<{ data: ProductCategory[] }>(
+        API_ENDPOINTS.PRODUCTS.CATEGORIES
+      );
+      return data.data || [];
+    },
+  });
+
+  const createCategory = useMutation({
+    mutationFn: async (category: { name: string; description?: string }) => {
+      const data = await apiClient.post<{ data: ProductCategory }>(
+        API_ENDPOINTS.PRODUCTS.CATEGORY_CREATE,
+        category
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product-categories"] });
+      toast.success("Category created successfully");
+    },
+    onError: (error) => {
+      toast.error(`Failed to create category: ${(error as Error).message}`);
+    },
+  });
+
+  const updateCategory = useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; name: string; description?: string }) => {
+      const data = await apiClient.put<{ data: ProductCategory }>(
+        API_ENDPOINTS.PRODUCTS.CATEGORY_UPDATE(id),
+        updates
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product-categories"] });
+      toast.success("Category updated successfully");
+    },
+    onError: (error) => {
+      toast.error(`Failed to update category: ${(error as Error).message}`);
+    },
+  });
+
+  const deleteCategory = useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.delete(API_ENDPOINTS.PRODUCTS.CATEGORY_DELETE(id));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product-categories"] });
+      toast.success("Category deleted successfully");
+    },
+    onError: (error) => {
+      toast.error(`Failed to delete category: ${(error as Error).message}`);
+    },
+  });
+
+  return {
+    categories: categoriesQuery.data || [],
+    isLoading: categoriesQuery.isLoading,
+    createCategory,
+    updateCategory,
+    deleteCategory,
   };
 }

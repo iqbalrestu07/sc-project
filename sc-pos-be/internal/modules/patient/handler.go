@@ -104,6 +104,24 @@ func (h *Handler) Search(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, patients)
 }
 
+func (h *Handler) Visits(c *gin.Context) {
+	visits, err := h.service.GetVisits(c.Param("id"))
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, visits)
+}
+
+func (h *Handler) Transactions(c *gin.Context) {
+	txns, err := h.service.GetTransactions(c.Param("id"))
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, txns)
+}
+
 func (h *Handler) handleError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):

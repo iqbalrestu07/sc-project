@@ -22,6 +22,7 @@ func RunMigrations() error {
 		createStockMovementsTable,
 		createServiceConsumablesTable,
 		alterPatientsAddReminderOptIn,
+		createProductCategoriesTable,
 	}
 
 	for i, migration := range migrations {
@@ -302,4 +303,14 @@ const (
 	alterPatientsAddReminderOptIn = `
 	ALTER TABLE patients ADD COLUMN IF NOT EXISTS reminder_opt_in BOOLEAN DEFAULT true;
 	`
+
+	createProductCategoriesTable = `
+	CREATE TABLE IF NOT EXISTS product_categories (
+		id VARCHAR(36) PRIMARY KEY,
+		name VARCHAR(100) NOT NULL,
+		description TEXT,
+		is_active BOOLEAN DEFAULT true,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);`
 )

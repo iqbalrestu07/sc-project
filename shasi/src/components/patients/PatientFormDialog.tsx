@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -27,7 +28,8 @@ import {
 } from "@/components/ui/select";
 import { Patient, PatientFormData } from "@/types/patient";
 import { useCreatePatient, useUpdatePatient } from "@/hooks/usePatients";
-import { useEffect } from "react";
+import { useEffect, useState, KeyboardEvent } from "react";
+import { X } from "lucide-react";
 
 const patientSchema = z.object({
   full_name: z.string().min(1, "Name is required").max(100, "Name is too long"),
@@ -41,6 +43,7 @@ const patientSchema = z.object({
   medical_conditions: z.string().max(1000, "Too long").optional(),
   skin_type: z.enum(["normal", "dry", "oily", "combination", "sensitive"]).optional(),
   notes: z.string().max(2000, "Notes are too long").optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 interface PatientFormDialogProps {
@@ -53,6 +56,7 @@ export function PatientFormDialog({ open, onOpenChange, patient }: PatientFormDi
   const createPatient = useCreatePatient();
   const updatePatient = useUpdatePatient();
   const isEditing = !!patient;
+  const [tagInput, setTagInput] = useState("");
 
   const form = useForm<PatientFormData>({
     resolver: zodResolver(patientSchema),
@@ -68,6 +72,7 @@ export function PatientFormDialog({ open, onOpenChange, patient }: PatientFormDi
       medical_conditions: "",
       skin_type: undefined,
       notes: "",
+      tags: [],
     },
   });
 
@@ -85,6 +90,7 @@ export function PatientFormDialog({ open, onOpenChange, patient }: PatientFormDi
         medical_conditions: patient.medical_conditions || "",
         skin_type: patient.skin_type || undefined,
         notes: patient.notes || "",
+        tags: patient.tags || [],
       });
     } else {
       form.reset({
@@ -99,8 +105,10 @@ export function PatientFormDialog({ open, onOpenChange, patient }: PatientFormDi
         medical_conditions: "",
         skin_type: undefined,
         notes: "",
+        tags: [],
       });
     }
+    setTagInput("");
   }, [patient, form]);
 
   const onSubmit = async (data: PatientFormData) => {
@@ -326,6 +334,62 @@ export function PatientFormDialog({ open, onOpenChange, patient }: PatientFormDi
                     <FormMessage />
                   </FormItem>
                 )}
+              />
+
+              <FormField
+                control={form.control}
+                name="tags"
+                render={({ field }) => {
+                  const tags: string[] = field.value || [];
+                  const addTag = (value: string) => {
+                    const trimmed = value.trim();
+                    if (trimmed && !tags.includes(trimmed)) {
+                      field.onChange([...tags, trimmed]);
+                    }
+                    setTagInput("");
+                  };
+                  const removeTag = (tag: string) => {
+                    field.onChange(tags.filter((t) => t !== tag));
+                  };
+                  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      addTag(tagInput);
+                    } else if (e.key === "Backspace" && !tagInput && tags.length > 0) {
+                      removeTag(tags[tags.length - 1]);
+                    }
+                  };
+                  return (
+                    <FormItem>
+                      <FormLabel>Tags</FormLabel>
+                      <FormControl>
+                        <div className="border rounded-md px-3 py-2 flex flex-wrap gap-1 min-h-10 focus-within:ring-1 focus-within:ring-ring">
+                          {tags.map((tag) => (
+                            <Badge key={tag} variant="secondary" className="gap-1 text-xs">
+                              {tag}
+                              <button
+                                type="button"
+                                onClick={() => removeTag(tag)}
+                                className="hover:text-destructive"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                          <input
+                            value={tagInput}
+                            onChange={(e) => setTagInput(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            onBlur={() => { if (tagInput.trim()) addTag(tagInput); }}
+                            placeholder={tags.length === 0 ? "Type tag and press Enter or comma" : ""}
+                            className="flex-1 min-w-[120px] outline-none bg-transparent text-sm"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
             </div>
 

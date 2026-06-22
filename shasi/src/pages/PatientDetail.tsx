@@ -18,7 +18,7 @@ import {
   FileText,
   User
 } from "lucide-react";
-import { usePatient } from "@/hooks/usePatients";
+import { usePatient, usePatientVisits, usePatientTransactions } from "@/hooks/usePatients";
 import { PatientFormDialog } from "@/components/patients";
 import { useState } from "react";
 
@@ -26,6 +26,8 @@ export default function PatientDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: patient, isLoading } = usePatient(id);
+  const { data: visits = [] } = usePatientVisits(id);
+  const { data: patientTransactions = [] } = usePatientTransactions(id);
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   const getInitials = (name: string) => {
@@ -222,23 +224,81 @@ export default function PatientDetail() {
             </TabsContent>
 
             <TabsContent value="history" className="mt-4">
-              <Card className="shadow-clinic">
-                <CardContent className="py-12 text-center">
-                  <p className="text-muted-foreground">
-                    Visit history will be shown here once medical records are implemented.
-                  </p>
-                </CardContent>
-              </Card>
+              {visits.length === 0 ? (
+                <Card className="shadow-clinic">
+                  <CardContent className="py-12 text-center">
+                    <p className="text-muted-foreground">No visit history found.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {visits.map((visit) => (
+                    <Card key={visit.id} className="shadow-clinic">
+                      <CardContent className="py-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-1">
+                            <p className="font-medium text-sm">{visit.service_name || "—"}</p>
+                            {visit.doctor_name && (
+                              <p className="text-xs text-muted-foreground">Dr. {visit.doctor_name}</p>
+                            )}
+                            {visit.notes && (
+                              <p className="text-xs text-muted-foreground italic">{visit.notes}</p>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <Badge variant={visit.status === "completed" ? "default" : "secondary"} className="capitalize text-xs mb-1">
+                              {visit.status}
+                            </Badge>
+                            <p className="text-xs text-muted-foreground">
+                              {visit.scheduled_at ? format(new Date(visit.scheduled_at), "dd MMM yyyy, HH:mm") : "—"}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="transactions" className="mt-4">
-              <Card className="shadow-clinic">
-                <CardContent className="py-12 text-center">
-                  <p className="text-muted-foreground">
-                    Transaction history will be shown here once POS is implemented.
-                  </p>
-                </CardContent>
-              </Card>
+              {patientTransactions.length === 0 ? (
+                <Card className="shadow-clinic">
+                  <CardContent className="py-12 text-center">
+                    <p className="text-muted-foreground">No transactions found.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {patientTransactions.map((txn) => (
+                    <Card key={txn.id} className="shadow-clinic">
+                      <CardContent className="py-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-1">
+                            <p className="font-medium text-sm font-mono">{txn.transaction_code}</p>
+                            {txn.payment_method && (
+                              <p className="text-xs text-muted-foreground capitalize">{txn.payment_method}</p>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <Badge variant={txn.payment_status === "paid" ? "default" : "secondary"} className="capitalize text-xs mb-1">
+                              {txn.payment_status}
+                            </Badge>
+                            <p className="text-sm font-semibold">
+                              Rp {Number(txn.total_amount).toLocaleString("id-ID")}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {txn.paid_at
+                                ? format(new Date(txn.paid_at), "dd MMM yyyy")
+                                : format(new Date(txn.created_at), "dd MMM yyyy")}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </div>

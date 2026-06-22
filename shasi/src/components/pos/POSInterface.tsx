@@ -11,6 +11,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { 
   ShoppingCart, 
   Plus, 
@@ -19,8 +32,11 @@ import {
   Search,
   User,
   CreditCard,
-  Banknote
+  Banknote,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { usePatients } from "@/hooks/usePatients";
 import { useServices } from "@/hooks/useServices";
 import { useProducts } from "@/hooks/useProducts";
@@ -33,6 +49,7 @@ import { toast } from "sonner";
 export function POSInterface() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>("");
+  const [patientPopoverOpen, setPatientPopoverOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"services" | "products">("services");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
@@ -287,24 +304,58 @@ export function POSInterface() {
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col">
-          {/* Patient Selection */}
+          {/* Patient Selection — searchable combobox */}
           <div className="mb-4">
             <label className="text-sm font-medium mb-2 block">Patient</label>
-            <Select
-              value={selectedPatientId}
-              onValueChange={setSelectedPatientId}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select patient" />
-              </SelectTrigger>
-              <SelectContent>
-                {patients.map((patient) => (
-                  <SelectItem key={patient.id} value={patient.id}>
-                    {patient.full_name} ({patient.patient_code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={patientPopoverOpen} onOpenChange={setPatientPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={patientPopoverOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  {selectedPatientId
+                    ? (() => {
+                        const p = patients.find((p) => p.id === selectedPatientId);
+                        return p ? `${p.full_name} (${p.patient_code})` : "Select patient";
+                      })()
+                    : "Select patient"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search patient by name or code..." />
+                  <CommandList>
+                    <CommandEmpty>No patient found.</CommandEmpty>
+                    <CommandGroup>
+                      {patients.map((patient) => (
+                        <CommandItem
+                          key={patient.id}
+                          value={`${patient.full_name} ${patient.patient_code}`}
+                          onSelect={() => {
+                            setSelectedPatientId(patient.id);
+                            setPatientPopoverOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedPatientId === patient.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          <div>
+                            <p className="text-sm font-medium">{patient.full_name}</p>
+                            <p className="text-xs text-muted-foreground">{patient.patient_code}</p>
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <Separator className="my-2" />

@@ -92,6 +92,28 @@ func (s *Service) CreateCategory(req models.ServiceCategory) (*models.ServiceCat
 	return &req, nil
 }
 
+func (s *Service) UpdateCategory(id string, req models.ServiceCategory) (*models.ServiceCategory, error) {
+	req.UpdatedAt = time.Now()
+	if err := s.repo.UpdateCategory(id, &req); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	req.ID = id
+	return &req, nil
+}
+
+func (s *Service) DeleteCategory(id string) error {
+	if err := s.repo.DeleteCategory(id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	return nil
+}
+
 func applyServiceDefaults(service *models.Service) {
 	if service.DurationMinutes == 0 {
 		service.DurationMinutes = 30
