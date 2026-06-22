@@ -33,6 +33,10 @@ test:
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf bin/
+kill:
+	@echo "Killing running application..."
+	@pkill -f sc-pos-backend || true
+	@pkill -f "go run main.go" 2>/dev/null; pkill -f "/exe/main" 2>/dev/null; sleep 1; echo "killed"
 
 # Database migrations with psql
 migrate-up:
