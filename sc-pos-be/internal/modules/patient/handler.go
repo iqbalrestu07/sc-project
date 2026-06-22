@@ -22,6 +22,17 @@ func NewModule() *Handler {
 }
 
 func (h *Handler) List(c *gin.Context) {
+	// Support optional ?search= query param for inline search
+	if search := c.Query("search"); search != "" {
+		patients, err := h.service.Search(search)
+		if err != nil {
+			h.handleError(c, err)
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, patients)
+		return
+	}
+
 	patients, err := h.service.List()
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())

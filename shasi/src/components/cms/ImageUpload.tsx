@@ -1,9 +1,9 @@
 import { useState, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient, API_ENDPOINTS } from "@/integrations/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, X, Loader2, Image as ImageIcon } from "lucide-react";
+import { X, Loader2, Image as ImageIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ImageUploadProps {
@@ -52,26 +52,29 @@ export function ImageUpload({
     setIsUploading(true);
 
     try {
-      // Generate unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", folder);
 
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('cms-images')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false,
-        });
+      // Use axios directly for multipart upload since apiClient.post sets Content-Type: application/json
+      const token = apiClient.getAccessToken();
+      const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
+      const response = await fetch(`${baseURL}${API_ENDPOINTS.CMS.UPLOAD_IMAGE}`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error((errData as any)?.error || `Upload failed: ${response.status}`);
+      }
 
-      // Get public URL
-      const { data: publicUrlData } = supabase.storage
-        .from('cms-images')
-        .getPublicUrl(data.path);
+      const result = await response.json();
+      const url = result?.data?.url || result?.url;
+      if (!url) throw new Error("No URL returned from upload");
 
-      onChange(publicUrlData.publicUrl);
+      onChange(url);
       
       toast({
         title: "Image uploaded",
@@ -93,21 +96,9 @@ export function ImageUpload({
     }
   };
 
-  const handleRemove = async () => {
-    if (value) {
-      // Extract path from URL to delete from storage
-      try {
-        const url = new URL(value);
-        const pathParts = url.pathname.split('/');
-        const bucketIndex = pathParts.findIndex(p => p === 'cms-images');
-        if (bucketIndex !== -1) {
-          const filePath = pathParts.slice(bucketIndex + 1).join('/');
-          await supabase.storage.from('cms-images').remove([filePath]);
-        }
-      } catch (e) {
-        console.error("Failed to parse URL for deletion:", e);
-      }
-    }
+  const handleRemove = () => {
+    // URL deletion is handled server-side on demand or via cleanup job
+    // For now just clear from form state
     onChange(null);
   };
 

@@ -36,6 +36,9 @@ func main() {
 	// Create Gin router
 	router := gin.Default()
 
+	// Serve uploaded files as static assets
+	router.Static("/uploads", "./uploads")
+
 	// Setup routes
 	routes.SetupRoutes(router)
 

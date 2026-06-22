@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { usePatients } from "@/hooks/usePatients";
 import { useAppointments } from "@/hooks/useAppointments";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient, API_ENDPOINTS } from "@/integrations/api";
 import { toast } from "sonner";
 import { format, addDays } from "date-fns";
 
@@ -79,29 +79,24 @@ export default function WhatsAppMessaging() {
     const patient = patients.find((p) => p.id === selectedPatient);
 
     try {
-      const { data, error } = await supabase.functions.invoke("send-whatsapp", {
-        body: { to: phoneNumber, message },
+      await apiClient.post(API_ENDPOINTS.WHATSAPP.SEND_MESSAGE, {
+        to: phoneNumber,
+        message,
       });
 
-      if (error) throw error;
-
-      if (data.success) {
-        toast.success("Message sent successfully!");
-        setMessageLogs((prev) => [
-          {
-            id: Date.now().toString(),
-            to: phoneNumber,
-            patientName: patient?.full_name || "Unknown",
-            message,
-            status: "sent",
-            timestamp: new Date(),
-          },
-          ...prev,
-        ]);
-        setMessage("");
-      } else {
-        throw new Error(data.error || "Failed to send message");
-      }
+      toast.success("Message sent successfully!");
+      setMessageLogs((prev) => [
+        {
+          id: Date.now().toString(),
+          to: phoneNumber,
+          patientName: patient?.full_name || "Unknown",
+          message,
+          status: "sent",
+          timestamp: new Date(),
+        },
+        ...prev,
+      ]);
+      setMessage("");
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       toast.error(errorMessage);
@@ -128,43 +123,46 @@ export default function WhatsAppMessaging() {
     }
 
     setIsSendingBulk(true);
-    let successCount = 0;
-    let failCount = 0;
 
-    for (const apt of upcomingAppointments) {
-      const patient = apt.patient;
-      const phone = patient?.whatsapp || patient?.phone;
+    const recipients = upcomingAppointments
+      .map((apt) => {
+        const phone = apt.patient?.whatsapp || apt.patient?.phone;
+        if (!phone) return null;
+        const aptDate = new Date(apt.scheduled_at);
+        return {
+          to: phone,
+          patient_name: apt.patient?.full_name || "Pasien",
+          message: `Halo ${apt.patient?.full_name || "Pasien"},\n\nIni adalah pengingat untuk janji temu Anda:\n\n📅 Tanggal: ${format(aptDate, "dd MMMM yyyy")}\n⏰ Waktu: ${format(aptDate, "HH:mm")} WIB\n💆 Layanan: ${apt.service?.name || "Konsultasi"}\n\nMohon hadir 15 menit lebih awal.\n\nTerima kasih!`,
+        };
+      })
+      .filter(Boolean);
 
-      if (!phone) {
-        failCount++;
-        continue;
-      }
+    const noPhone = upcomingAppointments.length - recipients.length;
 
-      const aptDate = new Date(apt.scheduled_at);
-      const reminderMessage = `Halo ${patient?.full_name || "Pasien"},\n\nIni adalah pengingat untuk janji temu Anda:\n\n📅 Tanggal: ${format(aptDate, "dd MMMM yyyy")}\n⏰ Waktu: ${format(aptDate, "HH:mm")} WIB\n💆 Layanan: ${apt.service?.name || "Konsultasi"}\n\nMohon hadir 15 menit lebih awal.\n\nTerima kasih!`;
+    try {
+      // Send individually for personalized messages
+      let successCount = 0;
+      let failCount = noPhone;
 
-      try {
-        const { data, error } = await supabase.functions.invoke("send-whatsapp", {
-          body: { to: phone, message: reminderMessage },
-        });
-
-        if (error || !data.success) {
-          failCount++;
-        } else {
+      for (const r of recipients) {
+        try {
+          await apiClient.post(API_ENDPOINTS.WHATSAPP.SEND_MESSAGE, {
+            to: r!.to,
+            message: r!.message,
+          });
           successCount++;
+        } catch {
+          failCount++;
         }
-      } catch {
-        failCount++;
       }
-    }
 
-    setIsSendingBulk(false);
-
-    if (successCount > 0) {
-      toast.success(`Sent ${successCount} reminders successfully`);
-    }
-    if (failCount > 0) {
-      toast.error(`Failed to send ${failCount} reminders`);
+      if (successCount > 0) toast.success(`Berhasil mengirim ${successCount} pengingat`);
+      if (failCount > 0) toast.error(`Gagal mengirim ${failCount} pengingat`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      toast.error(errorMessage);
+    } finally {
+      setIsSendingBulk(false);
     }
   };
 

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, API_ENDPOINTS } from "@/integrations/api";
-import type { Product, ProductInsert, ProductUpdate } from "@/types/product";
+import type { Product, ProductInsert, ProductUpdate, ProductFormData } from "@/types/product";
 import { toast } from "sonner";
 
 export function useProducts() {

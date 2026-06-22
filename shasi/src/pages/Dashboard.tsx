@@ -15,11 +15,10 @@ import {
   Receipt,
 } from "lucide-react";
 import { PatientFormDialog } from "@/components/patients";
-import { useTransactionStats } from "@/hooks/useTransactionStats";
-import { useAppointments } from "@/hooks/useAppointments";
+import { useDashboardStats, useDashboardRevenue, useDashboardAppointmentsToday } from "@/hooks/useDashboard";
 import { useCommissions } from "@/hooks/useCommissions";
 import { useProducts } from "@/hooks/useProducts";
-import { DateRangeFilter, getDateRangeFromPreset, type PeriodPreset } from "@/components/filters";
+import { DateRangeFilter, type PeriodPreset } from "@/components/filters";
 import { 
   BarChart, 
   Bar, 
@@ -32,7 +31,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { format, subDays, startOfDay, endOfDay, eachDayOfInterval, isWithinInterval } from "date-fns";
+import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { id } from "date-fns/locale";
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
@@ -46,21 +45,14 @@ export default function Dashboard() {
     preset: "today",
   });
   
-  const { transactions } = useTransactionStats();
-  const { appointments } = useAppointments({ date: new Date(), view: "day" });
-  const { totalPending, commissionsByStaff, commissions } = useCommissions();
+  // Fetch from backend dashboard endpoints
+  const { data: stats } = useDashboardStats();
+  const { data: revenuePoints } = useDashboardRevenue();
+  const { data: appointmentsToday } = useDashboardAppointmentsToday();
+  const { commissions } = useCommissions();
   const { products } = useProducts();
 
-  // Filter transactions by date range
-  const filteredTransactions = transactions.filter((tx) => {
-    if (!dateFilter.from || !dateFilter.to || !tx.created_at) {
-      return dateFilter.preset === "all";
-    }
-    const txDate = new Date(tx.created_at);
-    return isWithinInterval(txDate, { start: dateFilter.from, end: dateFilter.to });
-  });
-
-  // Filter commissions by date range
+  // Filter commissions by date range (client-side for flexibility)
   const filteredCommissions = commissions.filter((c) => {
     if (!dateFilter.from || !dateFilter.to || !c.created_at) {
       return dateFilter.preset === "all";
@@ -69,87 +61,26 @@ export default function Dashboard() {
     return isWithinInterval(cDate, { start: dateFilter.from, end: dateFilter.to });
   });
 
-  // Calculate filtered revenue
-  const filteredRevenue = filteredTransactions
-    .filter((tx) => tx.payment_status === "paid")
-    .reduce((sum, tx) => sum + Number(tx.total_amount || 0), 0);
-
   // Calculate filtered pending commissions
   const filteredPendingCommissions = filteredCommissions
     .filter((c) => c.status === "pending")
     .reduce((sum, c) => sum + Number(c.commission_amount || 0), 0);
 
-  // Calculate low stock products
+  // Low stock products (client-side from products list)
   const lowStockProducts = products.filter(
     (p) => p.is_active && (p.current_stock || 0) <= (p.minimum_stock || 5)
   );
 
-  // Calculate revenue data based on date range
-  const getRevenueChartData = () => {
-    if (!dateFilter.from || !dateFilter.to) {
-      // Default to last 7 days
-      const data = [];
-      for (let i = 6; i >= 0; i--) {
-        const date = subDays(new Date(), i);
-        const dayStart = startOfDay(date);
-        const dayEnd = endOfDay(date);
-        
-        const dayRevenue = transactions
-          .filter((tx) => {
-            if (!tx.created_at || tx.payment_status !== "paid") return false;
-            const txDate = new Date(tx.created_at);
-            return txDate >= dayStart && txDate <= dayEnd;
-          })
-          .reduce((sum, tx) => sum + Number(tx.total_amount || 0), 0);
-        
-        data.push({
-          label: format(date, "EEE", { locale: id }),
-          revenue: dayRevenue,
-        });
-      }
-      return data;
-    }
+  // Revenue chart data from backend (last 30 days)
+  const revenueData = (revenuePoints || []).slice(0, 14).reverse().map((p) => ({
+    label: format(new Date(p.date), "dd MMM", { locale: id }),
+    revenue: Number(p.revenue),
+  }));
 
-    const days = eachDayOfInterval({ start: dateFilter.from, end: dateFilter.to });
-    
-    // If more than 31 days, group by week or month
-    if (days.length > 31) {
-      // Group by month
-      const monthlyData: Record<string, number> = {};
-      filteredTransactions
-        .filter((tx) => tx.payment_status === "paid")
-        .forEach((tx) => {
-          if (!tx.created_at) return;
-          const monthKey = format(new Date(tx.created_at), "MMM yyyy", { locale: id });
-          monthlyData[monthKey] = (monthlyData[monthKey] || 0) + Number(tx.total_amount || 0);
-        });
-      return Object.entries(monthlyData).map(([label, revenue]) => ({ label, revenue }));
-    }
-
-    // Daily data
-    return days.map((date) => {
-      const dayStart = startOfDay(date);
-      const dayEnd = endOfDay(date);
-      
-      const dayRevenue = filteredTransactions
-        .filter((tx) => {
-          if (!tx.created_at || tx.payment_status !== "paid") return false;
-          const txDate = new Date(tx.created_at);
-          return txDate >= dayStart && txDate <= dayEnd;
-        })
-        .reduce((sum, tx) => sum + Number(tx.total_amount || 0), 0);
-      
-      return {
-        label: days.length > 14 ? format(date, "dd", { locale: id }) : format(date, "EEE dd", { locale: id }),
-        revenue: dayRevenue,
-      };
-    });
-  };
-
-  // Calculate appointment status distribution (today only for appointments)
+  // Appointment status distribution from backend today's data
   const getAppointmentStats = () => {
     const statusCounts: Record<string, number> = {};
-    appointments.forEach((apt) => {
+    (appointmentsToday || []).forEach((apt) => {
       statusCounts[apt.status] = (statusCounts[apt.status] || 0) + 1;
     });
     return Object.entries(statusCounts).map(([name, value]) => ({
@@ -158,7 +89,7 @@ export default function Dashboard() {
     }));
   };
 
-  // Top staff by commission (filtered)
+  // Top staff by commission (filtered by date range)
   const getTopStaffCommissions = () => {
     const staffMap: Record<string, { name: string; role: string; total: number; pending: number }> = {};
     
@@ -192,34 +123,32 @@ export default function Dashboard() {
     }).format(price);
   };
 
-  const revenueData = getRevenueChartData();
   const appointmentStats = getAppointmentStats();
   const topStaff = getTopStaffCommissions();
+  const pendingAppointments = (appointmentsToday || []).filter((a) => a.status === "scheduled").length;
 
-  const pendingAppointments = appointments.filter((a) => a.status === "scheduled").length;
-
-  const stats = [
+  const statCards = [
     {
-      title: "Pendapatan",
-      value: formatPrice(filteredRevenue),
-      change: `${filteredTransactions.filter((t) => t.payment_status === "paid").length} transaksi lunas`,
+      title: "Pendapatan Hari Ini",
+      value: formatPrice(stats?.revenue_today ?? 0),
+      change: `${stats?.paid_transactions_today ?? 0} transaksi lunas`,
       icon: DollarSign,
       color: "text-success",
       bgColor: "bg-success/10",
       onClick: () => navigate("/transactions"),
     },
     {
-      title: "Total Transaksi",
-      value: filteredTransactions.length.toString(),
-      change: `${filteredTransactions.filter((t) => t.payment_status === "pending").length} pending`,
+      title: "Total Pasien",
+      value: (stats?.patients ?? 0).toString(),
+      change: "Terdaftar",
       icon: Receipt,
       color: "text-primary",
       bgColor: "bg-primary/10",
-      onClick: () => navigate("/transactions"),
+      onClick: () => navigate("/patients"),
     },
     {
       title: "Appointment Hari Ini",
-      value: appointments.length.toString(),
+      value: (stats?.appointments_today ?? (appointmentsToday?.length ?? 0)).toString(),
       change: `${pendingAppointments} terjadwal`,
       icon: Calendar,
       color: "text-primary",
@@ -237,8 +166,8 @@ export default function Dashboard() {
     },
     {
       title: "Stok Menipis",
-      value: lowStockProducts.length.toString(),
-      change: lowStockProducts.length === 0 ? "Stok aman" : "Perlu restok",
+      value: (stats?.low_stock_products ?? lowStockProducts.length).toString(),
+      change: (stats?.low_stock_products ?? lowStockProducts.length) === 0 ? "Stok aman" : "Perlu restok",
       icon: AlertTriangle,
       color: "text-destructive",
       bgColor: "bg-destructive/10",
@@ -261,7 +190,7 @@ export default function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        {stats.map((stat) => (
+        {statCards.map((stat) => (
           <Card 
             key={stat.title} 
             className="shadow-clinic cursor-pointer hover:shadow-md transition-shadow"

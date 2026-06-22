@@ -19,6 +19,9 @@ func RunMigrations() error {
 		createClinicSettingsTable,
 		createCMSPagesTable,
 		alterExistingTables,
+		createStockMovementsTable,
+		createServiceConsumablesTable,
+		alterPatientsAddReminderOptIn,
 	}
 
 	for i, migration := range migrations {
@@ -267,5 +270,36 @@ const (
 	ALTER TABLE commissions ADD COLUMN IF NOT EXISTS base_amount DECIMAL(10, 2) NOT NULL DEFAULT 0;
 	ALTER TABLE commissions ADD COLUMN IF NOT EXISTS commission_type VARCHAR(20) NOT NULL DEFAULT 'fixed';
 	ALTER TABLE commissions ADD COLUMN IF NOT EXISTS commission_value DECIMAL(10, 2) NOT NULL DEFAULT 0;
+	`
+
+	createStockMovementsTable = `
+	CREATE TABLE IF NOT EXISTS stock_movements (
+		id VARCHAR(36) PRIMARY KEY,
+		product_id VARCHAR(36) NOT NULL,
+		movement_type VARCHAR(20) NOT NULL,
+		quantity INTEGER NOT NULL,
+		reason VARCHAR(255),
+		reference_id VARCHAR(36),
+		reference_type VARCHAR(50),
+		notes TEXT,
+		created_by VARCHAR(36),
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (product_id) REFERENCES products(id)
+	);`
+
+	createServiceConsumablesTable = `
+	CREATE TABLE IF NOT EXISTS service_consumables (
+		id VARCHAR(36) PRIMARY KEY,
+		service_id VARCHAR(36) NOT NULL,
+		product_id VARCHAR(36) NOT NULL,
+		quantity_used DECIMAL(10, 3) NOT NULL DEFAULT 1,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (service_id) REFERENCES services(id),
+		FOREIGN KEY (product_id) REFERENCES products(id),
+		UNIQUE (service_id, product_id)
+	);`
+
+	alterPatientsAddReminderOptIn = `
+	ALTER TABLE patients ADD COLUMN IF NOT EXISTS reminder_opt_in BOOLEAN DEFAULT true;
 	`
 )

@@ -1,5 +1,7 @@
+// Re-export product types to avoid duplication
+export type { Product, ProductCategory, ProductFormData } from "./product";
+
 export type CommissionType = 'fixed' | 'percentage';
-export type ProductCategory = 'skincare' | 'consumable' | 'equipment' | 'other';
 
 export interface ServiceCategory {
   id: string;
@@ -42,43 +44,12 @@ export interface ServiceFormData {
   requires_doctor?: boolean;
 }
 
-export interface Product {
-  id: string;
-  name: string;
-  category: ProductCategory;
-  sku: string | null;
-  supplier: string | null;
-  purchase_price: number;
-  selling_price: number;
-  current_stock: number;
-  minimum_stock: number;
-  unit: string;
-  expiry_date: string | null;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ProductFormData {
-  name: string;
-  category?: ProductCategory;
-  sku?: string;
-  supplier?: string;
-  purchase_price?: number;
-  selling_price?: number;
-  current_stock?: number;
-  minimum_stock?: number;
-  unit?: string;
-  expiry_date?: string;
-}
-
 export interface ServiceConsumable {
   id: string;
   service_id: string;
   product_id: string;
   quantity_used: number;
   created_at: string;
-  product?: Product;
 }
 
 export interface StockMovement {

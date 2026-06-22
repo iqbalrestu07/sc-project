@@ -7,12 +7,14 @@ import (
 	authModule "github.com/sc-pos/backend/internal/modules/auth"
 	"github.com/sc-pos/backend/internal/modules/cms"
 	"github.com/sc-pos/backend/internal/modules/commission"
+	"github.com/sc-pos/backend/internal/modules/consumable"
 	"github.com/sc-pos/backend/internal/modules/dashboard"
 	"github.com/sc-pos/backend/internal/modules/patient"
 	"github.com/sc-pos/backend/internal/modules/product"
 	serviceModule "github.com/sc-pos/backend/internal/modules/service"
 	"github.com/sc-pos/backend/internal/modules/settings"
 	"github.com/sc-pos/backend/internal/modules/staff"
+	"github.com/sc-pos/backend/internal/modules/stock"
 	"github.com/sc-pos/backend/internal/modules/transaction"
 	"github.com/sc-pos/backend/internal/modules/whatsapp"
 )
@@ -50,6 +52,8 @@ func SetupRoutes(router *gin.Engine) {
 		settings.RegisterRoutes(protectedAPI, adminOnly)
 		dashboard.RegisterRoutes(protectedAPI)
 		cms.RegisterRoutes(protectedAPI, adminOnly)
+		stock.RegisterRoutes(protectedAPI, adminOnly)
+		consumable.RegisterRoutes(protectedAPI, adminOnly)
 		whatsapp.RegisterRoutes(protectedAPI)
 		authModule.RegisterProtectedRoutes(protectedAPI)
 	}

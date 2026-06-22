@@ -18,9 +18,10 @@ type Patient struct {
 	MedicalConditions *string    `json:"medical_conditions" db:"medical_conditions"`
 	SkinType          *string    `json:"skin_type" db:"skin_type"`
 	Notes             *string    `json:"notes" db:"notes"`
-	Tags              []string   `json:"tags" db:"tags"`
-	IsActive          bool       `json:"is_active" db:"is_active"`
-	CreatedBy         *string    `json:"created_by" db:"created_by"`
-	CreatedAt         time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`
+	Tags            []string   `json:"tags" db:"tags"`
+	IsActive        bool       `json:"is_active" db:"is_active"`
+	ReminderOptIn   *bool      `json:"reminder_opt_in" db:"reminder_opt_in"`
+	CreatedBy       *string    `json:"created_by" db:"created_by"`
+	CreatedAt       time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at" db:"updated_at"`
 }

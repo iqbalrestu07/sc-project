@@ -77,6 +77,7 @@ export const API_ENDPOINTS = {
     COMMISSIONS: {
         LIST: "/commissions",
         STAFF: (staffId: string) => `/commissions/staff/${staffId}`,
+        UPDATE_STATUS: "/commissions/update-status",
     },
 
     // Dashboard
@@ -103,9 +104,23 @@ export const API_ENDPOINTS = {
         CLINIC_LOGO: "/settings/clinic/logo",
     },
 
+    // Stock Movements
+    STOCK_MOVEMENTS: {
+        LIST: "/stock-movements",
+        CREATE: "/stock-movements",
+    },
+
+    // Service Consumables
+    SERVICE_CONSUMABLES: {
+        LIST: (serviceId: string) => `/services/${serviceId}/consumables`,
+        UPSERT: (serviceId: string) => `/services/${serviceId}/consumables`,
+        DELETE: (id: string) => `/service-consumables/${id}`,
+    },
+
     // WhatsApp
     WHATSAPP: {
         SEND_MESSAGE: "/whatsapp/send",
+        SEND_BULK: "/whatsapp/send-bulk",
         TEMPLATES: "/whatsapp/templates",
     },
 };
