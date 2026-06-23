@@ -37,24 +37,30 @@ func (s *Service) Get(id, orgID string) (*models.Staff, error) {
 	return staff, nil
 }
 
-func (s *Service) Create(req models.Staff, orgID string) (*models.Staff, error) {
+func (s *Service) Create(req models.Staff, userID, orgID string) (*models.Staff, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.CreatedAt = now
 	req.UpdatedAt = now
 	req.IsActive = true
+	if userID != "" {
+		req.CreatedBy = &userID
+	}
 	if err := s.repo.Create(&req, orgID); err != nil {
 		return nil, err
 	}
 	return &req, nil
 }
 
-func (s *Service) Update(id, orgID string, req models.Staff) (*models.Staff, error) {
+func (s *Service) Update(id, orgID, userID string, req models.Staff) (*models.Staff, error) {
 	_, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.repo.Update(id, &req); err != nil {
+	if userID != "" {
+		req.UpdatedBy = &userID
+	}
+	if err := s.repo.Update(id, &req, orgID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -63,8 +69,8 @@ func (s *Service) Update(id, orgID string, req models.Staff) (*models.Staff, err
 	return s.Get(id, orgID)
 }
 
-func (s *Service) Delete(id string) error {
-	if err := s.repo.Delete(id); err != nil {
+func (s *Service) Delete(id, orgID, userID string) error {
+	if err := s.repo.Delete(id, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}

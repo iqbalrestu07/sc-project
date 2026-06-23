@@ -61,6 +61,7 @@ func (s *Service) Create(req CreateRequest, userID *string, orgID string) (*Tran
 	for i := range req.Items {
 		req.Items[i].ID = uuid.New().String()
 		req.Items[i].TransactionID = req.Transaction.ID
+		req.Items[i].CreatedBy = userID
 		req.Items[i].CreatedAt = now
 		if req.Items[i].Quantity == 0 {
 			req.Items[i].Quantity = 1
@@ -79,7 +80,7 @@ func (s *Service) Create(req CreateRequest, userID *string, orgID string) (*Tran
 	return s.repo.Create(req, orgID)
 }
 
-func (s *Service) Update(id, orgID string, req models.Transaction) (*TransactionWithRelations, error) {
+func (s *Service) Update(id, orgID, userID string, req models.Transaction) (*TransactionWithRelations, error) {
 	current, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
@@ -88,22 +89,22 @@ func (s *Service) Update(id, orgID string, req models.Transaction) (*Transaction
 	if req.PaymentStatus == "" {
 		req.PaymentStatus = current.PaymentStatus
 	}
-	if err := s.repo.Update(id, req); err != nil {
+	if err := s.repo.Update(id, orgID, userID, req); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
 	if req.PaymentStatus == "paid" && !wasPaid {
-		if err := s.repo.MarkPaidEffects(id); err != nil {
+		if err := s.repo.MarkPaidEffects(id, userID); err != nil {
 			return nil, err
 		}
 	}
 	return s.Get(id, orgID)
 }
 
-func (s *Service) Delete(id string) error {
-	if err := s.repo.Delete(id); err != nil {
+func (s *Service) Delete(id, orgID, userID string) error {
+	if err := s.repo.Delete(id, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}

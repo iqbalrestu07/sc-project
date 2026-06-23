@@ -38,12 +38,15 @@ func (s *Service) Get(id, orgID string) (*models.Service, error) {
 	return service, nil
 }
 
-func (s *Service) Create(req models.Service, orgID string) (*models.Service, error) {
+func (s *Service) Create(req models.Service, orgID, userID string) (*models.Service, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.CreatedAt = now
 	req.UpdatedAt = now
 	req.IsActive = true
+	if userID != "" {
+		req.CreatedBy = &userID
+	}
 	applyServiceDefaults(&req)
 	if err := s.repo.Create(&req, orgID); err != nil {
 		return nil, err
@@ -51,13 +54,16 @@ func (s *Service) Create(req models.Service, orgID string) (*models.Service, err
 	return &req, nil
 }
 
-func (s *Service) Update(id string, req models.Service, orgID string) (*models.Service, error) {
+func (s *Service) Update(id string, req models.Service, orgID, userID string) (*models.Service, error) {
 	_, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
 	}
 	applyServiceDefaults(&req)
-	if err := s.repo.Update(id, &req); err != nil {
+	if userID != "" {
+		req.UpdatedBy = &userID
+	}
+	if err := s.repo.Update(id, &req, orgID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -66,8 +72,8 @@ func (s *Service) Update(id string, req models.Service, orgID string) (*models.S
 	return s.Get(id, orgID)
 }
 
-func (s *Service) Delete(id string) error {
-	if err := s.repo.Delete(id); err != nil {
+func (s *Service) Delete(id, orgID, userID string) error {
+	if err := s.repo.Delete(id, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -80,21 +86,27 @@ func (s *Service) ListCategories(orgID string) ([]models.ServiceCategory, error)
 	return s.repo.ListCategories(orgID)
 }
 
-func (s *Service) CreateCategory(req models.ServiceCategory, orgID string) (*models.ServiceCategory, error) {
+func (s *Service) CreateCategory(req models.ServiceCategory, orgID, userID string) (*models.ServiceCategory, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.CreatedAt = now
 	req.UpdatedAt = now
 	req.IsActive = true
+	if userID != "" {
+		req.CreatedBy = &userID
+	}
 	if err := s.repo.CreateCategory(&req, orgID); err != nil {
 		return nil, err
 	}
 	return &req, nil
 }
 
-func (s *Service) UpdateCategory(id string, req models.ServiceCategory) (*models.ServiceCategory, error) {
+func (s *Service) UpdateCategory(id string, req models.ServiceCategory, orgID, userID string) (*models.ServiceCategory, error) {
 	req.UpdatedAt = time.Now()
-	if err := s.repo.UpdateCategory(id, &req); err != nil {
+	if userID != "" {
+		req.UpdatedBy = &userID
+	}
+	if err := s.repo.UpdateCategory(id, &req, orgID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -104,8 +116,8 @@ func (s *Service) UpdateCategory(id string, req models.ServiceCategory) (*models
 	return &req, nil
 }
 
-func (s *Service) DeleteCategory(id string) error {
-	if err := s.repo.DeleteCategory(id); err != nil {
+func (s *Service) DeleteCategory(id, orgID, userID string) error {
+	if err := s.repo.DeleteCategory(id, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}

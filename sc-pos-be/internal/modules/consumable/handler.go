@@ -31,6 +31,7 @@ func (h *Handler) ListByService(c *gin.Context) {
 
 func (h *Handler) Upsert(c *gin.Context) {
 	orgID := c.GetString("org_id")
+	userID := c.GetString("user_id")
 	var req models.ServiceConsumable
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
@@ -40,7 +41,7 @@ func (h *Handler) Upsert(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusBadRequest, "service_id is required")
 		return
 	}
-	if err := h.repo.Upsert(&req, orgID); err != nil {
+	if err := h.repo.Upsert(&req, orgID, userID); err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -48,7 +49,9 @@ func (h *Handler) Upsert(c *gin.Context) {
 }
 
 func (h *Handler) Delete(c *gin.Context) {
-	if err := h.repo.Delete(c.Param("id")); err != nil {
+	orgID := c.GetString("org_id")
+	userID := c.GetString("user_id")
+	if err := h.repo.Delete(c.Param("id"), orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			utils.ErrorResponse(c, http.StatusNotFound, "consumable not found")
 			return

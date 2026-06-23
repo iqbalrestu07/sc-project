@@ -52,7 +52,7 @@ func (s *Service) Create(req models.Appointment, userID *string, orgID string) (
 	return s.Get(req.ID, orgID)
 }
 
-func (s *Service) Update(id, orgID string, req models.Appointment) (*AppointmentWithRelations, error) {
+func (s *Service) Update(id, orgID, userID string, req models.Appointment) (*AppointmentWithRelations, error) {
 	current, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,10 @@ func (s *Service) Update(id, orgID string, req models.Appointment) (*Appointment
 	if req.Notes == nil {
 		req.Notes = current.Notes
 	}
-	if err := s.repo.Update(id, &req); err != nil {
+	if userID != "" {
+		req.UpdatedBy = &userID
+	}
+	if err := s.repo.Update(id, &req, orgID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -90,8 +93,8 @@ func (s *Service) Update(id, orgID string, req models.Appointment) (*Appointment
 	return s.Get(id, orgID)
 }
 
-func (s *Service) Delete(id string) error {
-	if err := s.repo.Delete(id); err != nil {
+func (s *Service) Delete(id, orgID, userID string) error {
+	if err := s.repo.Delete(id, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}

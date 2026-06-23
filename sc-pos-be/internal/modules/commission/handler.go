@@ -60,12 +60,13 @@ func (h *Handler) ListByStaff(c *gin.Context) {
 }
 
 func (h *Handler) UpdateStatus(c *gin.Context) {
+	userID := c.GetString("user_id")
 	var req UpdateStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := h.service.UpdateStatus(req.IDs, req.Status); err != nil {
+	if err := h.service.UpdateStatus(req.IDs, req.Status, userID); err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}

@@ -65,7 +65,7 @@ func (s *Service) GetByID(id string) (*models.Organization, error) {
 	return org, nil
 }
 
-func (s *Service) Update(org *models.Organization) error {
+func (s *Service) Update(org *models.Organization, userByID string) error {
 	existing, err := s.repo.GetByID(org.ID)
 	if err != nil {
 		return err
@@ -73,10 +73,10 @@ func (s *Service) Update(org *models.Organization) error {
 	if existing == nil {
 		return ErrOrgNotFound
 	}
-	return s.repo.Update(org)
+	return s.repo.Update(org, userByID)
 }
 
-func (s *Service) Delete(orgID string) error {
+func (s *Service) Delete(orgID, userByID string) error {
 	existing, err := s.repo.GetByID(orgID)
 	if err != nil {
 		return err
@@ -84,7 +84,7 @@ func (s *Service) Delete(orgID string) error {
 	if existing == nil {
 		return ErrOrgNotFound
 	}
-	return s.repo.Delete(orgID)
+	return s.repo.Delete(orgID, userByID)
 }
 
 func (s *Service) GetUserOrganizations(userID string) ([]models.OrganizationWithRole, error) {
@@ -102,13 +102,13 @@ func (s *Service) AddMember(orgID, userID, role, addedBy string) error {
 	return s.repo.AddMember(orgID, userID, role, addedBy)
 }
 
-func (s *Service) UpdateMemberRole(orgID, userID, role string) error {
+func (s *Service) UpdateMemberRole(orgID, userID, role, userByID string) error {
 	if !middleware.IsValidRole(role) {
 		return errors.New("invalid role")
 	}
-	return s.repo.UpdateMemberRole(orgID, userID, role)
+	return s.repo.UpdateMemberRole(orgID, userID, role, userByID)
 }
 
-func (s *Service) RemoveMember(orgID, userID string) error {
-	return s.repo.RemoveMember(orgID, userID)
+func (s *Service) RemoveMember(orgID, userID, userByID string) error {
+	return s.repo.RemoveMember(orgID, userID, userByID)
 }

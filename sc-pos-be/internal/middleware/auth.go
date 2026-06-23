@@ -84,11 +84,11 @@ func OrgMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Validate user is an active member of this org
+		// Validate user is an active member of this org (and not soft-deleted)
 		var role string
 		err := database.DB.QueryRow(`
 			SELECT role FROM organization_members
-			WHERE org_id = $1 AND user_id = $2 AND is_active = true`,
+			WHERE org_id = $1 AND user_id = $2 AND is_active = true AND deleted_at IS NULL`,
 			orgID, userID.(string),
 		).Scan(&role)
 
@@ -180,14 +180,16 @@ func RequirePermission(permissionID string) gin.HandlerFunc {
 	}
 }
 
-// checkPermission queries role_permissions + user_permissions for a specific permission
+// checkPermission queries role_permissions + user_permissions for a specific permission.
+// user_permissions are also soft-deleted (deleted_at IS NULL).
 func checkPermission(userID, orgID, role, permissionID string) (bool, error) {
 	var exists bool
 	err := database.DB.QueryRow(`
 		SELECT EXISTS (
 			SELECT 1 FROM role_permissions WHERE role = $1 AND permission_id = $4
 			UNION ALL
-			SELECT 1 FROM user_permissions WHERE user_id = $2 AND org_id = $3 AND permission_id = $4
+			SELECT 1 FROM user_permissions
+			WHERE user_id = $2 AND org_id = $3 AND permission_id = $4 AND deleted_at IS NULL
 		)`, role, userID, orgID, permissionID,
 	).Scan(&exists)
 	return exists, err

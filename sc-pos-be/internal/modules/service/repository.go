@@ -31,6 +31,7 @@ func (r *Repository) List(search, orgID string) ([]models.Service, error) {
 		WHERE COALESCE(s.is_active, true) = true
 		  AND ($1 = '' OR s.name ILIKE '%' || $1 || '%' OR COALESCE(s.description, '') ILIKE '%' || $1 || '%')
 		  AND (s.organization_id = $2 OR ($2::text = '' AND s.organization_id IS NULL))
+		  AND s.deleted_at IS NULL
 		ORDER BY s.name ASC
 	`
 	rows, err := r.db.Query(query, search, orgID)
@@ -67,6 +68,7 @@ func (r *Repository) Get(id, orgID string) (*models.Service, error) {
 		LEFT JOIN service_categories c ON c.id = s.category_id
 		WHERE s.id = $1 AND COALESCE(s.is_active, true) = true
 		  AND (s.organization_id = $2 OR ($2::text = '' AND s.organization_id IS NULL))
+		  AND s.deleted_at IS NULL
 	`
 	row := r.db.QueryRow(query, id, orgID)
 	service, err := scanService(row)
@@ -80,47 +82,66 @@ func (r *Repository) Get(id, orgID string) (*models.Service, error) {
 }
 
 func (r *Repository) Create(service *models.Service, orgID string) error {
+	var createdByVal interface{}
+	if service.CreatedBy != nil && *service.CreatedBy != "" {
+		createdByVal = *service.CreatedBy
+	}
 	query := `
 		INSERT INTO services (
 			id, name, category_id, description, duration_minutes, base_price,
 			doctor_commission_type, doctor_commission_value,
 			therapist_commission_type, therapist_commission_value,
 			requires_doctor, is_active, created_at, updated_at,
-			organization_id
+			organization_id, created_by
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 	if _, err := r.db.Exec(query, service.ID, service.Name, service.CategoryID, service.Description,
 		service.DurationMinutes, service.BasePrice, service.DoctorCommissionType,
 		service.DoctorCommissionValue, service.TherapistCommissionType,
 		service.TherapistCommissionValue, service.RequiresDoctor, service.IsActive,
-		service.CreatedAt, service.UpdatedAt, nullableString(orgID)); err != nil {
+		service.CreatedAt, service.UpdatedAt, nullableString(orgID), createdByVal); err != nil {
 		return fmt.Errorf("failed to create service: %w", err)
 	}
 	return nil
 }
 
-func (r *Repository) Update(id string, service *models.Service) error {
-	query := `
+func (r *Repository) Update(id string, service *models.Service, orgID string) error {
+	var updatedByVal interface{}
+	if service.UpdatedBy != nil && *service.UpdatedBy != "" {
+		updatedByVal = *service.UpdatedBy
+	}
+	result, err := r.db.Exec(`
 		UPDATE services
 		SET name = $1, category_id = $2, description = $3, duration_minutes = $4,
 		    base_price = $5, doctor_commission_type = $6, doctor_commission_value = $7,
 		    therapist_commission_type = $8, therapist_commission_value = $9,
-		    requires_doctor = $10, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $11 AND COALESCE(is_active, true) = true
-	`
-	result, err := r.db.Exec(query, service.Name, service.CategoryID, service.Description,
+		    requires_doctor = $10, updated_by = $11, updated_at = NOW()
+		WHERE id = $12 AND COALESCE(is_active, true) = true
+		  AND (organization_id = $13 OR ($13::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL`,
+		service.Name, service.CategoryID, service.Description,
 		service.DurationMinutes, service.BasePrice, service.DoctorCommissionType,
 		service.DoctorCommissionValue, service.TherapistCommissionType,
-		service.TherapistCommissionValue, service.RequiresDoctor, id)
+		service.TherapistCommissionValue, service.RequiresDoctor, updatedByVal, id, orgID)
 	if err != nil {
 		return fmt.Errorf("failed to update service: %w", err)
 	}
 	return checkRows(result)
 }
 
-func (r *Repository) Delete(id string) error {
-	result, err := r.db.Exec(`UPDATE services SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND COALESCE(is_active, true) = true`, id)
+func (r *Repository) Delete(id, orgID, userByID string) error {
+	var userVal interface{}
+	if userByID != "" {
+		userVal = userByID
+	}
+	result, err := r.db.Exec(`
+		UPDATE services
+		SET deleted_at = NOW(), is_active = false, updated_by = $3
+		WHERE id = $1
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL`,
+		id, orgID, userVal)
 	if err != nil {
 		return fmt.Errorf("failed to delete service: %w", err)
 	}
@@ -133,6 +154,7 @@ func (r *Repository) ListCategories(orgID string) ([]models.ServiceCategory, err
 		FROM service_categories
 		WHERE COALESCE(is_active, true) = true
 		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL
 		ORDER BY name ASC
 	`, orgID)
 	if err != nil {
@@ -158,33 +180,50 @@ func (r *Repository) ListCategories(orgID string) ([]models.ServiceCategory, err
 }
 
 func (r *Repository) CreateCategory(category *models.ServiceCategory, orgID string) error {
+	var createdByVal interface{}
+	if category.CreatedBy != nil && *category.CreatedBy != "" {
+		createdByVal = *category.CreatedBy
+	}
 	_, err := r.db.Exec(`
-		INSERT INTO service_categories (id, name, description, is_active, created_at, updated_at, organization_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, category.ID, category.Name, category.Description, category.IsActive, category.CreatedAt, category.UpdatedAt, nullableString(orgID))
+		INSERT INTO service_categories (id, name, description, is_active, created_at, updated_at, organization_id, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, category.ID, category.Name, category.Description, category.IsActive, category.CreatedAt, category.UpdatedAt, nullableString(orgID), createdByVal)
 	if err != nil {
 		return fmt.Errorf("failed to create service category: %w", err)
 	}
 	return nil
 }
 
-func (r *Repository) UpdateCategory(id string, category *models.ServiceCategory) error {
+func (r *Repository) UpdateCategory(id string, category *models.ServiceCategory, orgID string) error {
+	var updatedByVal interface{}
+	if category.UpdatedBy != nil && *category.UpdatedBy != "" {
+		updatedByVal = *category.UpdatedBy
+	}
 	result, err := r.db.Exec(`
 		UPDATE service_categories
-		SET name = $1, description = $2, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $3 AND COALESCE(is_active, true) = true
-	`, category.Name, category.Description, id)
+		SET name = $1, description = $2, updated_by = $3, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $4 AND COALESCE(is_active, true) = true
+		  AND (organization_id = $5 OR ($5::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL`,
+		category.Name, category.Description, updatedByVal, id, orgID)
 	if err != nil {
 		return fmt.Errorf("failed to update service category: %w", err)
 	}
 	return checkRows(result)
 }
 
-func (r *Repository) DeleteCategory(id string) error {
+func (r *Repository) DeleteCategory(id, orgID, userByID string) error {
+	var userVal interface{}
+	if userByID != "" {
+		userVal = userByID
+	}
 	result, err := r.db.Exec(`
-		UPDATE service_categories SET is_active = false, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1 AND COALESCE(is_active, true) = true
-	`, id)
+		UPDATE service_categories
+		SET deleted_at = NOW(), is_active = false, updated_by = $3
+		WHERE id = $1
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL`,
+		id, orgID, userVal)
 	if err != nil {
 		return fmt.Errorf("failed to delete service category: %w", err)
 	}

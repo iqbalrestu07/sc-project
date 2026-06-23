@@ -44,6 +44,7 @@ func (r *Repository) List(orgID, staffID string) ([]CommissionWithRelations, err
 		LEFT JOIN transactions t ON t.id = c.transaction_id
 		WHERE ($2 = '' OR c.staff_id = $2)
 		  AND (c.organization_id = $1 OR ($1::text = '' AND c.organization_id IS NULL))
+		  AND c.deleted_at IS NULL
 		ORDER BY c.created_at DESC
 	`
 	rows, err := r.db.Query(query, orgID, staffID)
@@ -69,16 +70,23 @@ func (r *Repository) List(orgID, staffID string) ([]CommissionWithRelations, err
 	return commissions, nil
 }
 
-func (r *Repository) UpdateStatus(ids []string, status string) error {
+func (r *Repository) UpdateStatus(ids []string, status, userByID string) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	for _, id := range ids {
-		if _, err := r.db.Exec(`UPDATE commissions SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, status, id); err != nil {
+		if _, err := r.db.Exec(`UPDATE commissions SET status = $1, updated_by = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, status, id, nullableString(userByID)); err != nil {
 			return fmt.Errorf("failed to update commission status: %w", err)
 		}
 	}
 	return nil
+}
+
+func nullableString(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 type commissionScanner interface {

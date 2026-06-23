@@ -62,6 +62,7 @@ func (r *Repository) List(orgID string, start, end *time.Time) ([]AppointmentWit
 		WHERE ($2::timestamp IS NULL OR a.scheduled_at >= $2)
 		  AND ($3::timestamp IS NULL OR a.scheduled_at <= $3)
 		  AND (a.organization_id = $1 OR ($1::text = '' AND a.organization_id IS NULL))
+		  AND a.deleted_at IS NULL
 		ORDER BY a.scheduled_at ASC
 	`
 	rows, err := r.db.Query(query, orgID, start, end)
@@ -103,6 +104,7 @@ func (r *Repository) Get(id, orgID string) (*AppointmentWithRelations, error) {
 		LEFT JOIN staff t ON t.id = a.therapist_id
 		WHERE a.id = $1
 		  AND (a.organization_id = $2 OR ($2::text = '' AND a.organization_id IS NULL))
+		  AND a.deleted_at IS NULL
 	`, id, orgID)
 	appointment, err := scanAppointmentWithRelations(row)
 	if err == sql.ErrNoRows {
@@ -135,7 +137,15 @@ func (r *Repository) Create(appointment *models.Appointment, orgID string) error
 	return nil
 }
 
-func (r *Repository) Update(id string, appointment *models.Appointment) error {
+func (r *Repository) Update(id string, appointment *models.Appointment, orgID string) error {
+	var updatedByVal interface{}
+	if appointment.UpdatedBy != nil {
+		updatedByVal = *appointment.UpdatedBy
+	}
+	var orgVal interface{}
+	if orgID != "" {
+		orgVal = orgID
+	}
 	result, err := r.db.Exec(`
 		UPDATE appointments
 		SET patient_id = COALESCE(NULLIF($1, ''), patient_id),
@@ -146,19 +156,36 @@ func (r *Repository) Update(id string, appointment *models.Appointment) error {
 		    duration_minutes = $6,
 		    status = COALESCE(NULLIF($7, ''), status),
 		    notes = $8,
-		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $9
+		    updated_by = $9,
+		    updated_at = NOW()
+		WHERE id = $10
+		  AND (organization_id = $11 OR ($11::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL
 	`, appointment.PatientID, appointment.ServiceID, appointment.DoctorID,
 		appointment.TherapistID, appointment.ScheduledAt, appointment.DurationMinutes,
-		appointment.Status, appointment.Notes, id)
+		appointment.Status, appointment.Notes, updatedByVal, id, orgVal)
 	if err != nil {
 		return fmt.Errorf("failed to update appointment: %w", err)
 	}
 	return checkRows(result)
 }
 
-func (r *Repository) Delete(id string) error {
-	result, err := r.db.Exec(`DELETE FROM appointments WHERE id = $1`, id)
+func (r *Repository) Delete(id, orgID, userByID string) error {
+	var userVal interface{}
+	if userByID != "" {
+		userVal = userByID
+	}
+	var orgVal interface{}
+	if orgID != "" {
+		orgVal = orgID
+	}
+	result, err := r.db.Exec(`
+		UPDATE appointments
+		SET deleted_at = NOW(), status = 'cancelled', updated_by = $3
+		WHERE id = $1
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL`,
+		id, orgVal, userVal)
 	if err != nil {
 		return fmt.Errorf("failed to delete appointment: %w", err)
 	}

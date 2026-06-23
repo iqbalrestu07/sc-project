@@ -35,9 +35,9 @@ func (s *Service) ListByStaff(orgID, staffID string) ([]CommissionWithRelations,
 	return s.repo.List(orgID, staffID)
 }
 
-func (s *Service) UpdateStatus(ids []string, status string) error {
+func (s *Service) UpdateStatus(ids []string, status, userID string) error {
 	if status == "" {
 		status = "paid"
 	}
-	return s.repo.UpdateStatus(ids, status)
+	return s.repo.UpdateStatus(ids, status, userID)
 }

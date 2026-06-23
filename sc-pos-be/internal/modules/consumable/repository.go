@@ -44,6 +44,7 @@ func (r *Repository) ListByService(serviceID, orgID string) ([]ConsumableWithPro
 		where = fmt.Sprintf(" WHERE (sc.organization_id = $%d OR ($%d::text = '' AND sc.organization_id IS NULL))", argIdx, argIdx)
 		args = append(args, orgID)
 	}
+	where += " AND sc.deleted_at IS NULL"
 	query := baseQuery + where + " ORDER BY sc.created_at ASC"
 
 	rows, err := r.db.Query(query, args...)
@@ -70,25 +71,31 @@ func (r *Repository) ListByService(serviceID, orgID string) ([]ConsumableWithPro
 	return result, nil
 }
 
-func (r *Repository) Upsert(c *models.ServiceConsumable, orgID string) error {
+func (r *Repository) Upsert(c *models.ServiceConsumable, orgID, userByID string) error {
 	if c.ID == "" {
 		c.ID = uuid.New().String()
 	}
 	c.CreatedAt = time.Now()
 	_, err := r.db.Exec(`
-		INSERT INTO service_consumables (id, service_id, product_id, quantity_used, created_at, organization_id)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO service_consumables (id, service_id, product_id, quantity_used, created_at, organization_id, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (service_id, product_id)
-		DO UPDATE SET quantity_used = EXCLUDED.quantity_used
-	`, c.ID, c.ServiceID, c.ProductID, c.QuantityUsed, c.CreatedAt, orgID)
+		DO UPDATE SET quantity_used = EXCLUDED.quantity_used, updated_by = $7
+	`, c.ID, c.ServiceID, c.ProductID, c.QuantityUsed, c.CreatedAt, orgID, nullableString(userByID))
 	if err != nil {
 		return fmt.Errorf("failed to upsert consumable: %w", err)
 	}
 	return nil
 }
 
-func (r *Repository) Delete(id string) error {
-	result, err := r.db.Exec(`DELETE FROM service_consumables WHERE id = $1`, id)
+func (r *Repository) Delete(id, orgID, userByID string) error {
+	result, err := r.db.Exec(`
+		UPDATE service_consumables
+		SET deleted_at = NOW(), updated_by = $3
+		WHERE id = $1
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL`,
+		id, orgID, nullableString(userByID))
 	if err != nil {
 		return fmt.Errorf("failed to delete consumable: %w", err)
 	}
@@ -97,4 +104,11 @@ func (r *Repository) Delete(id string) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func nullableString(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }

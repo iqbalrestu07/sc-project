@@ -37,7 +37,7 @@ func (r *Repository) Create(org *models.Organization) error {
 
 func (r *Repository) GetByID(id string) (*models.Organization, error) {
 	query := `SELECT id, name, slug, description, logo_url, is_active, created_by, created_at, updated_at
-		FROM organizations WHERE id = $1 AND is_active = true`
+		FROM organizations WHERE id = $1 AND is_active = true AND deleted_at IS NULL`
 	var org models.Organization
 	err := r.db.QueryRow(query, id).Scan(
 		&org.ID, &org.Name, &org.Slug, &org.Description, &org.LogoURL,
@@ -54,7 +54,7 @@ func (r *Repository) GetByID(id string) (*models.Organization, error) {
 
 func (r *Repository) GetBySlug(slug string) (*models.Organization, error) {
 	query := `SELECT id, name, slug, description, logo_url, is_active, created_by, created_at, updated_at
-		FROM organizations WHERE slug = $1`
+		FROM organizations WHERE slug = $1 AND deleted_at IS NULL`
 	var org models.Organization
 	err := r.db.QueryRow(query, slug).Scan(
 		&org.ID, &org.Name, &org.Slug, &org.Description, &org.LogoURL,
@@ -69,20 +69,22 @@ func (r *Repository) GetBySlug(slug string) (*models.Organization, error) {
 	return &org, nil
 }
 
-func (r *Repository) Update(org *models.Organization) error {
+func (r *Repository) Update(org *models.Organization, userByID string) error {
 	query := `UPDATE organizations
-		SET name = $1, description = $2, logo_url = $3, updated_at = $4
-		WHERE id = $5`
-	_, err := r.db.Exec(query, org.Name, org.Description, org.LogoURL, time.Now(), org.ID)
+		SET name = $1, description = $2, logo_url = $3, updated_at = NOW(), updated_by = $4
+		WHERE id = $5 AND deleted_at IS NULL`
+	_, err := r.db.Exec(query, org.Name, org.Description, org.LogoURL, nullableString(userByID), org.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update organization: %w", err)
 	}
 	return nil
 }
 
-func (r *Repository) Delete(id string) error {
-	query := `UPDATE organizations SET is_active = false, updated_at = $1 WHERE id = $2`
-	_, err := r.db.Exec(query, time.Now(), id)
+func (r *Repository) Delete(id, userByID string) error {
+	query := `UPDATE organizations
+		SET is_active = false, deleted_at = NOW(), updated_by = $2, updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL`
+	_, err := r.db.Exec(query, id, nullableString(userByID))
 	if err != nil {
 		return fmt.Errorf("failed to delete organization: %w", err)
 	}
@@ -97,6 +99,7 @@ func (r *Repository) GetUserOrganizations(userID string) ([]models.OrganizationW
 		FROM organizations o
 		JOIN organization_members om ON om.org_id = o.id
 		WHERE om.user_id = $1 AND om.is_active = true AND o.is_active = true
+		  AND o.deleted_at IS NULL AND om.deleted_at IS NULL
 		ORDER BY om.joined_at ASC`
 
 	rows, err := r.db.Query(query, userID)
@@ -124,10 +127,10 @@ func (r *Repository) GetUserOrganizations(userID string) ([]models.OrganizationW
 func (r *Repository) AddMember(orgID, userID, role, addedBy string) error {
 	now := time.Now()
 	query := `
-		INSERT INTO organization_members (id, org_id, user_id, role, is_active, joined_at, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, true, $5, $5, $5)
-		ON CONFLICT (org_id, user_id) DO UPDATE SET role = $4, is_active = true, updated_at = $5`
-	_, err := r.db.Exec(query, uuid.New().String(), orgID, userID, role, now)
+		INSERT INTO organization_members (id, org_id, user_id, role, is_active, joined_at, created_at, updated_at, created_by)
+		VALUES ($1, $2, $3, $4, true, $5, $5, $5, $6)
+		ON CONFLICT (org_id, user_id) DO UPDATE SET role = $4, is_active = true, updated_at = $5, updated_by = $6`
+	_, err := r.db.Exec(query, uuid.New().String(), orgID, userID, role, now, nullableString(addedBy))
 	if err != nil {
 		return fmt.Errorf("failed to add member: %w", err)
 	}
@@ -140,7 +143,7 @@ func (r *Repository) GetMember(orgID, userID string) (*models.OrganizationMember
 			   u.email, COALESCE(u.full_name, '') as full_name
 		FROM organization_members om
 		JOIN users u ON u.id = om.user_id
-		WHERE om.org_id = $1 AND om.user_id = $2 AND om.is_active = true`
+		WHERE om.org_id = $1 AND om.user_id = $2 AND om.is_active = true AND om.deleted_at IS NULL`
 
 	var m models.OrganizationMember
 	err := r.db.QueryRow(query, orgID, userID).Scan(
@@ -162,7 +165,7 @@ func (r *Repository) ListMembers(orgID string) ([]models.OrganizationMember, err
 			   u.email, COALESCE(u.full_name, '') as full_name
 		FROM organization_members om
 		JOIN users u ON u.id = om.user_id
-		WHERE om.org_id = $1 AND om.is_active = true
+		WHERE om.org_id = $1 AND om.is_active = true AND om.deleted_at IS NULL
 		ORDER BY om.joined_at ASC`
 
 	rows, err := r.db.Query(query, orgID)
@@ -185,22 +188,33 @@ func (r *Repository) ListMembers(orgID string) ([]models.OrganizationMember, err
 	return members, nil
 }
 
-func (r *Repository) UpdateMemberRole(orgID, userID, role string) error {
-	query := `UPDATE organization_members SET role = $1, updated_at = $2 WHERE org_id = $3 AND user_id = $4`
-	_, err := r.db.Exec(query, role, time.Now(), orgID, userID)
+func (r *Repository) UpdateMemberRole(orgID, userID, role, userByID string) error {
+	query := `UPDATE organization_members
+		SET role = $1, updated_at = NOW(), updated_by = $2
+		WHERE org_id = $3 AND user_id = $4 AND deleted_at IS NULL`
+	_, err := r.db.Exec(query, role, nullableString(userByID), orgID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to update member role: %w", err)
 	}
 	return nil
 }
 
-func (r *Repository) RemoveMember(orgID, userID string) error {
-	query := `UPDATE organization_members SET is_active = false, updated_at = $1 WHERE org_id = $2 AND user_id = $3`
-	_, err := r.db.Exec(query, time.Now(), orgID, userID)
+func (r *Repository) RemoveMember(orgID, userID, userByID string) error {
+	query := `UPDATE organization_members
+		SET is_active = false, deleted_at = NOW(), updated_by = $3, updated_at = NOW()
+		WHERE org_id = $1 AND user_id = $2 AND deleted_at IS NULL`
+	_, err := r.db.Exec(query, orgID, userID, nullableString(userByID))
 	if err != nil {
 		return fmt.Errorf("failed to remove member: %w", err)
 	}
 	return nil
+}
+
+func nullableString(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // GenerateUniqueSlug generates a URL-safe slug from org name, appending a suffix if taken

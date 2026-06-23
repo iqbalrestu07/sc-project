@@ -26,8 +26,8 @@ func (s *Service) GetPage(pageID, orgID string) (interface{}, error) {
 	return page.Data, nil
 }
 
-func (s *Service) UpsertPage(pageID, orgID string, data interface{}) (interface{}, error) {
-	page, err := s.repo.UpsertPage(pageID, orgID, data)
+func (s *Service) UpsertPage(pageID, orgID string, data interface{}, userID string) (interface{}, error) {
+	page, err := s.repo.UpsertPage(pageID, orgID, data, userID)
 	if err != nil {
 		return nil, err
 	}

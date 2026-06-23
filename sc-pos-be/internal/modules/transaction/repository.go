@@ -60,6 +60,7 @@ func (r *Repository) List(orgID string) ([]TransactionWithRelations, error) {
 		FROM transactions t
 		LEFT JOIN patients p ON p.id = t.patient_id
 		WHERE (t.organization_id = $1 OR ($1::text = '' AND t.organization_id IS NULL))
+		  AND t.deleted_at IS NULL
 		ORDER BY t.created_at DESC
 	`, orgID)
 	if err != nil {
@@ -101,6 +102,7 @@ func (r *Repository) Get(id, orgID string) (*TransactionWithRelations, error) {
 		LEFT JOIN patients p ON p.id = t.patient_id
 		WHERE t.id = $1
 		  AND (t.organization_id = $2 OR ($2::text = '' AND t.organization_id IS NULL))
+		  AND t.deleted_at IS NULL
 	`, id, orgID)
 	transaction, err := scanTransaction(row)
 	if err == sql.ErrNoRows {
@@ -149,12 +151,12 @@ func (r *Repository) Create(req CreateRequest, orgID string) (*TransactionWithRe
 		if _, err := tx.Exec(`
 			INSERT INTO transaction_items (
 				id, transaction_id, item_type, service_id, product_id, quantity,
-				unit_price, discount_amount, total_price, doctor_id, therapist_id, created_at
+				unit_price, discount_amount, total_price, doctor_id, therapist_id, created_at, created_by
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		`, item.ID, req.Transaction.ID, item.ItemType, item.ServiceID, item.ProductID,
 			item.Quantity, item.UnitPrice, item.DiscountAmount, item.TotalPrice,
-			item.DoctorID, item.TherapistID, item.CreatedAt); err != nil {
+			item.DoctorID, item.TherapistID, item.CreatedAt, item.CreatedBy); err != nil {
 			return nil, fmt.Errorf("failed to create transaction item: %w", err)
 		}
 	}
@@ -165,7 +167,7 @@ func (r *Repository) Create(req CreateRequest, orgID string) (*TransactionWithRe
 	return r.Get(req.Transaction.ID, orgID)
 }
 
-func (r *Repository) Update(id string, updates models.Transaction) error {
+func (r *Repository) Update(id, orgID, userByID string, updates models.Transaction) error {
 	result, err := r.db.Exec(`
 		UPDATE transactions
 		SET payment_status = COALESCE(NULLIF($1, ''), payment_status),
@@ -175,36 +177,30 @@ func (r *Repository) Update(id string, updates models.Transaction) error {
 		        ELSE COALESCE($3, paid_at)
 		    END,
 		    notes = COALESCE($4, notes),
+		    updated_by = $6,
 		    updated_at = CURRENT_TIMESTAMP
 		WHERE id = $5
-	`, updates.PaymentStatus, updates.PaymentMethod, updates.PaidAt, updates.Notes, id)
+		  AND (organization_id = $7 OR ($7::text = '' AND organization_id IS NULL))
+	`, updates.PaymentStatus, updates.PaymentMethod, updates.PaidAt, updates.Notes, id,
+		nullableString(userByID), orgID)
 	if err != nil {
 		return fmt.Errorf("failed to update transaction: %w", err)
 	}
 	return checkRows(result)
 }
 
-func (r *Repository) Delete(id string) error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin delete transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.Exec(`DELETE FROM commissions WHERE transaction_id = $1`, id); err != nil {
-		return fmt.Errorf("failed to delete commissions: %w", err)
-	}
-	if _, err := tx.Exec(`DELETE FROM transaction_items WHERE transaction_id = $1`, id); err != nil {
-		return fmt.Errorf("failed to delete transaction items: %w", err)
-	}
-	result, err := tx.Exec(`DELETE FROM transactions WHERE id = $1`, id)
+func (r *Repository) Delete(id, orgID, userByID string) error {
+	result, err := r.db.Exec(`
+		UPDATE transactions
+		SET deleted_at = NOW(), payment_status = 'cancelled', updated_by = $3
+		WHERE id = $1
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL`,
+		id, orgID, nullableString(userByID))
 	if err != nil {
 		return fmt.Errorf("failed to delete transaction: %w", err)
 	}
-	if err := checkRows(result); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return checkRows(result)
 }
 
 func (r *Repository) Items(transactionID string) ([]TransactionItemWithRelations, error) {
@@ -253,7 +249,7 @@ type paidItemRow struct {
 	doctorValue, therapistValue float64
 }
 
-func (r *Repository) MarkPaidEffects(transactionID string) error {
+func (r *Repository) MarkPaidEffects(transactionID, userByID string) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin payment effects: %w", err)
@@ -301,12 +297,12 @@ func (r *Repository) MarkPaidEffects(transactionID string) error {
 			}
 		}
 		if row.serviceID.Valid && row.doctorID.Valid {
-			if err := r.insertCommission(tx, row.doctorID.String, "doctor", transactionID, row.itemID, row.totalPrice, row.doctorType, row.doctorValue); err != nil {
+			if err := r.insertCommission(tx, row.doctorID.String, "doctor", transactionID, row.itemID, userByID, row.totalPrice, row.doctorType, row.doctorValue); err != nil {
 				return err
 			}
 		}
 		if row.serviceID.Valid && row.therapistID.Valid {
-			if err := r.insertCommission(tx, row.therapistID.String, "therapist", transactionID, row.itemID, row.totalPrice, row.therapistType, row.therapistValue); err != nil {
+			if err := r.insertCommission(tx, row.therapistID.String, "therapist", transactionID, row.itemID, userByID, row.totalPrice, row.therapistType, row.therapistValue); err != nil {
 				return err
 			}
 		}
@@ -314,7 +310,7 @@ func (r *Repository) MarkPaidEffects(transactionID string) error {
 	return tx.Commit()
 }
 
-func (r *Repository) insertCommission(tx *sql.Tx, staffID, staffRole, transactionID, itemID string, baseAmount float64, commissionType string, commissionValue float64) error {
+func (r *Repository) insertCommission(tx *sql.Tx, staffID, staffRole, transactionID, itemID, createdBy string, baseAmount float64, commissionType string, commissionValue float64) error {
 	var exists bool
 	if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM commissions WHERE staff_id = $1 AND transaction_item_id = $2)`, staffID, itemID).Scan(&exists); err != nil {
 		return fmt.Errorf("failed to check commission: %w", err)
@@ -329,10 +325,10 @@ func (r *Repository) insertCommission(tx *sql.Tx, staffID, staffRole, transactio
 	_, err := tx.Exec(`
 		INSERT INTO commissions (
 			id, staff_id, staff_role, transaction_id, transaction_item_id, base_amount,
-			commission_type, commission_value, commission_amount, status, created_at, updated_at
+			commission_type, commission_value, commission_amount, status, created_by, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, uuid.New().String(), staffID, staffRole, transactionID, itemID, baseAmount, commissionType, commissionValue, amount)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, uuid.New().String(), staffID, staffRole, transactionID, itemID, baseAmount, commissionType, commissionValue, amount, nullableString(createdBy))
 	if err != nil {
 		return fmt.Errorf("failed to insert commission: %w", err)
 	}
@@ -410,4 +406,11 @@ func checkRows(result sql.Result) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func nullableString(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }

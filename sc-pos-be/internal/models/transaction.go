@@ -17,6 +17,8 @@ type Transaction struct {
 	PaymentStatus   string     `json:"payment_status" db:"payment_status"` // pending, paid, partial, refunded
 	Notes           *string    `json:"notes" db:"notes"`
 	CreatedBy       *string    `json:"created_by" db:"created_by"`
+	UpdatedBy       *string    `json:"updated_by,omitempty" db:"updated_by"`
+	DeletedAt       *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
 	PaidAt          *time.Time `json:"paid_at" db:"paid_at"`
 	CreatedAt       time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at" db:"updated_at"`
@@ -24,16 +26,19 @@ type Transaction struct {
 
 // TransactionItem represents items in a transaction
 type TransactionItem struct {
-	ID             string    `json:"id" db:"id"`
-	TransactionID  string    `json:"transaction_id" db:"transaction_id"`
-	ItemType       string    `json:"item_type" db:"item_type"`
-	ServiceID      *string   `json:"service_id" db:"service_id"`
-	ProductID      *string   `json:"product_id" db:"product_id"`
-	Quantity       int       `json:"quantity" db:"quantity"`
-	UnitPrice      float64   `json:"unit_price" db:"unit_price"`
-	DiscountAmount *float64  `json:"discount_amount" db:"discount_amount"`
-	TotalPrice     float64   `json:"total_price" db:"total_price"`
-	DoctorID       *string   `json:"doctor_id" db:"doctor_id"`
-	TherapistID    *string   `json:"therapist_id" db:"therapist_id"`
-	CreatedAt      time.Time `json:"created_at" db:"created_at"`
+	ID             string     `json:"id" db:"id"`
+	TransactionID  string     `json:"transaction_id" db:"transaction_id"`
+	ItemType       string     `json:"item_type" db:"item_type"`
+	ServiceID      *string    `json:"service_id" db:"service_id"`
+	ProductID      *string    `json:"product_id" db:"product_id"`
+	Quantity       int        `json:"quantity" db:"quantity"`
+	UnitPrice      float64    `json:"unit_price" db:"unit_price"`
+	DiscountAmount *float64   `json:"discount_amount" db:"discount_amount"`
+	TotalPrice     float64    `json:"total_price" db:"total_price"`
+	DoctorID       *string    `json:"doctor_id" db:"doctor_id"`
+	TherapistID    *string    `json:"therapist_id" db:"therapist_id"`
+	CreatedBy      *string    `json:"created_by,omitempty" db:"created_by"`
+	UpdatedBy      *string    `json:"updated_by,omitempty" db:"updated_by"`
+	DeletedAt      *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
+	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
 }

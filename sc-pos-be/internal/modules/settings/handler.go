@@ -32,12 +32,13 @@ func (h *Handler) GetClinic(c *gin.Context) {
 
 func (h *Handler) UpdateClinic(c *gin.Context) {
 	orgID := c.GetString("org_id")
+	userID := c.GetString("user_id")
 	var req models.ClinicSettings
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	settings, err := h.service.UpdateClinic(req, orgID)
+	settings, err := h.service.UpdateClinic(req, orgID, userID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return

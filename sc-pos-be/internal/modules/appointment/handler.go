@@ -84,12 +84,13 @@ func (h *Handler) Create(c *gin.Context) {
 
 func (h *Handler) Update(c *gin.Context) {
 	orgID := c.GetString("org_id")
+	userID := c.GetString("user_id")
 	var req models.Appointment
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	appointment, err := h.service.Update(c.Param("id"), orgID, req)
+	appointment, err := h.service.Update(c.Param("id"), orgID, userID, req)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -98,7 +99,9 @@ func (h *Handler) Update(c *gin.Context) {
 }
 
 func (h *Handler) Delete(c *gin.Context) {
-	if err := h.service.Delete(c.Param("id")); err != nil {
+	orgID := c.GetString("org_id")
+	userID := c.GetString("user_id")
+	if err := h.service.Delete(c.Param("id"), orgID, userID); err != nil {
 		h.handleError(c, err)
 		return
 	}

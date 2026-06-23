@@ -24,6 +24,7 @@ func (r *Repository) List(orgID string) ([]models.Product, error) {
 		FROM products
 		WHERE COALESCE(is_active, true) = true
 		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL
 		ORDER BY name ASC
 	`, orgID)
 	if err != nil {
@@ -56,6 +57,7 @@ func (r *Repository) Get(id, orgID string) (*models.Product, error) {
 		FROM products
 		WHERE id = $1 AND COALESCE(is_active, true) = true
 		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL
 	`, id, orgID)
 	product, err := scanProduct(row)
 	if err == sql.ErrNoRows {
@@ -68,42 +70,62 @@ func (r *Repository) Get(id, orgID string) (*models.Product, error) {
 }
 
 func (r *Repository) Create(product *models.Product, orgID string) error {
+	var createdByVal interface{}
+	if product.CreatedBy != nil && *product.CreatedBy != "" {
+		createdByVal = *product.CreatedBy
+	}
 	_, err := r.db.Exec(`
 		INSERT INTO products (
 			id, name, category, sku, supplier, purchase_price, selling_price,
 			current_stock, minimum_stock, unit, expiry_date, is_active, created_at, updated_at,
-			organization_id
+			organization_id, created_by
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`, product.ID, product.Name, product.Category, product.Sku, product.Supplier,
 		product.PurchasePrice, product.SellingPrice, product.CurrentStock,
 		product.MinimumStock, product.Unit, product.ExpiryDate, product.IsActive,
-		product.CreatedAt, product.UpdatedAt, nullableString(orgID))
+		product.CreatedAt, product.UpdatedAt, nullableString(orgID), createdByVal)
 	if err != nil {
 		return fmt.Errorf("failed to create product: %w", err)
 	}
 	return nil
 }
 
-func (r *Repository) Update(id string, product *models.Product) error {
+func (r *Repository) Update(id string, product *models.Product, orgID string) error {
+	var updatedByVal interface{}
+	if product.UpdatedBy != nil && *product.UpdatedBy != "" {
+		updatedByVal = *product.UpdatedBy
+	}
 	result, err := r.db.Exec(`
 		UPDATE products
 		SET name = $1, category = $2, sku = $3, supplier = $4,
 		    purchase_price = $5, selling_price = $6, current_stock = $7,
 		    minimum_stock = $8, unit = $9, expiry_date = $10,
-		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $11 AND COALESCE(is_active, true) = true
-	`, product.Name, product.Category, product.Sku, product.Supplier,
+		    updated_by = $11, updated_at = NOW()
+		WHERE id = $12 AND COALESCE(is_active, true) = true
+		  AND (organization_id = $13 OR ($13::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL`,
+		product.Name, product.Category, product.Sku, product.Supplier,
 		product.PurchasePrice, product.SellingPrice, product.CurrentStock,
-		product.MinimumStock, product.Unit, product.ExpiryDate, id)
+		product.MinimumStock, product.Unit, product.ExpiryDate, updatedByVal, id, orgID)
 	if err != nil {
 		return fmt.Errorf("failed to update product: %w", err)
 	}
 	return checkRows(result)
 }
 
-func (r *Repository) Delete(id string) error {
-	result, err := r.db.Exec(`UPDATE products SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND COALESCE(is_active, true) = true`, id)
+func (r *Repository) Delete(id, orgID, userByID string) error {
+	var userVal interface{}
+	if userByID != "" {
+		userVal = userByID
+	}
+	result, err := r.db.Exec(`
+		UPDATE products
+		SET deleted_at = NOW(), is_active = false, updated_by = $3
+		WHERE id = $1
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL`,
+		id, orgID, userVal)
 	if err != nil {
 		return fmt.Errorf("failed to delete product: %w", err)
 	}
@@ -118,6 +140,7 @@ func (r *Repository) ListCategories(orgID string) ([]models.ProductCategory, err
 		FROM product_categories
 		WHERE COALESCE(is_active, true) = true
 		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL
 		ORDER BY name ASC
 	`, orgID)
 	if err != nil {
@@ -144,33 +167,50 @@ func (r *Repository) ListCategories(orgID string) ([]models.ProductCategory, err
 }
 
 func (r *Repository) CreateCategory(c *models.ProductCategory, orgID string) error {
+	var createdByVal interface{}
+	if c.CreatedBy != nil && *c.CreatedBy != "" {
+		createdByVal = *c.CreatedBy
+	}
 	_, err := r.db.Exec(`
-		INSERT INTO product_categories (id, name, description, is_active, created_at, updated_at, organization_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, c.ID, c.Name, c.Description, c.IsActive, c.CreatedAt, c.UpdatedAt, nullableString(orgID))
+		INSERT INTO product_categories (id, name, description, is_active, created_at, updated_at, organization_id, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, c.ID, c.Name, c.Description, c.IsActive, c.CreatedAt, c.UpdatedAt, nullableString(orgID), createdByVal)
 	if err != nil {
 		return fmt.Errorf("failed to create product category: %w", err)
 	}
 	return nil
 }
 
-func (r *Repository) UpdateCategory(id string, c *models.ProductCategory) error {
+func (r *Repository) UpdateCategory(id string, c *models.ProductCategory, orgID string) error {
+	var updatedByVal interface{}
+	if c.UpdatedBy != nil && *c.UpdatedBy != "" {
+		updatedByVal = *c.UpdatedBy
+	}
 	result, err := r.db.Exec(`
 		UPDATE product_categories
-		SET name = $1, description = $2, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $3 AND COALESCE(is_active, true) = true
-	`, c.Name, c.Description, id)
+		SET name = $1, description = $2, updated_by = $3, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $4 AND COALESCE(is_active, true) = true
+		  AND (organization_id = $5 OR ($5::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL`,
+		c.Name, c.Description, updatedByVal, id, orgID)
 	if err != nil {
 		return fmt.Errorf("failed to update product category: %w", err)
 	}
 	return checkRows(result)
 }
 
-func (r *Repository) DeleteCategory(id string) error {
+func (r *Repository) DeleteCategory(id, orgID, userByID string) error {
+	var userVal interface{}
+	if userByID != "" {
+		userVal = userByID
+	}
 	result, err := r.db.Exec(`
-		UPDATE product_categories SET is_active = false, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1 AND COALESCE(is_active, true) = true
-	`, id)
+		UPDATE product_categories
+		SET deleted_at = NOW(), is_active = false, updated_by = $3
+		WHERE id = $1
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL`,
+		id, orgID, userVal)
 	if err != nil {
 		return fmt.Errorf("failed to delete product category: %w", err)
 	}

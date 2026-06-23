@@ -80,7 +80,8 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 
 	orgID := c.GetString("org_id")
-	patient, err := h.service.Update(c.Param("id"), req, orgID)
+	userID := c.GetString("user_id")
+	patient, err := h.service.Update(c.Param("id"), req, userID, orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -90,7 +91,9 @@ func (h *Handler) Update(c *gin.Context) {
 }
 
 func (h *Handler) Delete(c *gin.Context) {
-	if err := h.service.Delete(c.Param("id")); err != nil {
+	orgID := c.GetString("org_id")
+	userID := c.GetString("user_id")
+	if err := h.service.Delete(c.Param("id"), orgID, userID); err != nil {
 		h.handleError(c, err)
 		return
 	}

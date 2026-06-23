@@ -33,13 +33,13 @@ func (s *Service) GetClinic(orgID string) (*models.ClinicSettings, error) {
 	return defaults, nil
 }
 
-func (s *Service) UpdateClinic(req models.ClinicSettings, orgID string) (*models.ClinicSettings, error) {
+func (s *Service) UpdateClinic(req models.ClinicSettings, orgID, userByID string) (*models.ClinicSettings, error) {
 	current, err := s.GetClinic(orgID)
 	if err != nil {
 		return nil, err
 	}
 	mergeClinicSettings(current, req)
-	if err := s.repo.Update(current.ID, current); err != nil {
+	if err := s.repo.Update(current.ID, current, userByID); err != nil {
 		return nil, err
 	}
 	return s.GetClinic(orgID)

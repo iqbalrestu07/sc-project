@@ -33,6 +33,8 @@ func RunMigrations() error {
 		seedDefaultPermissions,
 		seedRolePermissions,
 		alterTablesAddOrgID,
+		// Audit trail: created_by, updated_by, deleted_at
+		alterTablesAddAuditTrail,
 	}
 
 	for i, migration := range migrations {
@@ -505,5 +507,72 @@ const (
 	ALTER TABLE cms_pages          ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
 	ALTER TABLE stock_movements    ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
 	ALTER TABLE service_consumables ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	`
+
+	// alterTablesAddAuditTrail adds created_by, updated_by, deleted_at to all business tables.
+	// deleted_at enables proper soft-delete (NULL = active, NOT NULL = deleted).
+	// patients already has created_by; stock_movements are immutable (no update/delete).
+	alterTablesAddAuditTrail = `
+	-- patients: already has created_by
+	ALTER TABLE patients ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE patients ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	ALTER TABLE services ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
+	ALTER TABLE services ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE services ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	ALTER TABLE service_categories ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
+	ALTER TABLE service_categories ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE service_categories ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	ALTER TABLE products ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
+	ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE products ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	ALTER TABLE product_categories ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
+	ALTER TABLE product_categories ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE product_categories ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	ALTER TABLE staff ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
+	ALTER TABLE staff ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE staff ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	-- appointments: already has created_by
+	ALTER TABLE appointments ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE appointments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	-- transactions: already has created_by
+	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
+	ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	ALTER TABLE commissions ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
+	ALTER TABLE commissions ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE commissions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
+	ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	ALTER TABLE cms_pages ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
+	ALTER TABLE cms_pages ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE cms_pages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	ALTER TABLE service_consumables ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
+	ALTER TABLE service_consumables ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE service_consumables ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	-- organizations: already has created_by (via owner_id logic, but add explicit column)
+	ALTER TABLE organizations ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE organizations ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
+	ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
+	ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+	-- stock_movements intentionally skipped: immutable audit records by design
 	`
 )

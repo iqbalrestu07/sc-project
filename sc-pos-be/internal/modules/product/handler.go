@@ -48,7 +48,8 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 	orgID := c.GetString("org_id")
-	product, err := h.service.Create(req, orgID)
+	userID := c.GetString("user_id")
+	product, err := h.service.Create(req, orgID, userID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -63,7 +64,8 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 	orgID := c.GetString("org_id")
-	product, err := h.service.Update(c.Param("id"), req, orgID)
+	userID := c.GetString("user_id")
+	product, err := h.service.Update(c.Param("id"), req, orgID, userID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -72,7 +74,9 @@ func (h *Handler) Update(c *gin.Context) {
 }
 
 func (h *Handler) Delete(c *gin.Context) {
-	if err := h.service.Delete(c.Param("id")); err != nil {
+	orgID := c.GetString("org_id")
+	userID := c.GetString("user_id")
+	if err := h.service.Delete(c.Param("id"), orgID, userID); err != nil {
 		h.handleError(c, err)
 		return
 	}
@@ -96,7 +100,8 @@ func (h *Handler) CreateCategory(c *gin.Context) {
 		return
 	}
 	orgID := c.GetString("org_id")
-	category, err := h.service.CreateCategory(req, orgID)
+	userID := c.GetString("user_id")
+	category, err := h.service.CreateCategory(req, orgID, userID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -110,7 +115,9 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	category, err := h.service.UpdateCategory(c.Param("id"), req)
+	orgID := c.GetString("org_id")
+	userID := c.GetString("user_id")
+	category, err := h.service.UpdateCategory(c.Param("id"), req, orgID, userID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -119,7 +126,9 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 }
 
 func (h *Handler) DeleteCategory(c *gin.Context) {
-	if err := h.service.DeleteCategory(c.Param("id")); err != nil {
+	orgID := c.GetString("org_id")
+	userID := c.GetString("user_id")
+	if err := h.service.DeleteCategory(c.Param("id"), orgID, userID); err != nil {
 		h.handleError(c, err)
 		return
 	}

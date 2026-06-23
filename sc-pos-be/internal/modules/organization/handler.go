@@ -54,6 +54,7 @@ func (h *Handler) GetOrg(c *gin.Context) {
 
 func (h *Handler) UpdateOrg(c *gin.Context) {
 	orgID := c.Param("id")
+	userID := c.GetString("user_id")
 	var req struct {
 		Name        string `json:"name" binding:"required"`
 		Description string `json:"description"`
@@ -70,7 +71,7 @@ func (h *Handler) UpdateOrg(c *gin.Context) {
 		Description: req.Description,
 		LogoURL:     req.LogoURL,
 	}
-	if err := h.service.Update(org); err != nil {
+	if err := h.service.Update(org, userID); err != nil {
 		h.handleError(c, err)
 		return
 	}
@@ -79,7 +80,8 @@ func (h *Handler) UpdateOrg(c *gin.Context) {
 
 func (h *Handler) DeleteOrg(c *gin.Context) {
 	orgID := c.Param("id")
-	if err := h.service.Delete(orgID); err != nil {
+	userID := c.GetString("user_id")
+	if err := h.service.Delete(orgID, userID); err != nil {
 		h.handleError(c, err)
 		return
 	}
@@ -135,7 +137,8 @@ func (h *Handler) AddMember(c *gin.Context) {
 
 func (h *Handler) UpdateMemberRole(c *gin.Context) {
 	orgID := c.Param("id")
-	userID := c.Param("userId")
+	memberUserID := c.Param("userId")
+	callerUserID := c.GetString("user_id")
 	var req struct {
 		Role string `json:"role" binding:"required"`
 	}
@@ -144,7 +147,7 @@ func (h *Handler) UpdateMemberRole(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.UpdateMemberRole(orgID, userID, req.Role); err != nil {
+	if err := h.service.UpdateMemberRole(orgID, memberUserID, req.Role, callerUserID); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -153,8 +156,9 @@ func (h *Handler) UpdateMemberRole(c *gin.Context) {
 
 func (h *Handler) RemoveMember(c *gin.Context) {
 	orgID := c.Param("id")
-	userID := c.Param("userId")
-	if err := h.service.RemoveMember(orgID, userID); err != nil {
+	memberUserID := c.Param("userId")
+	callerUserID := c.GetString("user_id")
+	if err := h.service.RemoveMember(orgID, memberUserID, callerUserID); err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}

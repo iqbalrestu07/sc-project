@@ -58,6 +58,7 @@ func (h *Handler) GetPage(c *gin.Context) {
 
 func (h *Handler) CreatePage(c *gin.Context) {
 	orgID := c.GetString("org_id")
+	userID := c.GetString("user_id")
 	var req map[string]interface{}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
@@ -69,7 +70,7 @@ func (h *Handler) CreatePage(c *gin.Context) {
 		return
 	}
 	delete(req, "page_id")
-	page, err := h.service.UpsertPage(pageID, orgID, req)
+	page, err := h.service.UpsertPage(pageID, orgID, req, userID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -79,12 +80,13 @@ func (h *Handler) CreatePage(c *gin.Context) {
 
 func (h *Handler) UpdatePage(c *gin.Context) {
 	orgID := c.GetString("org_id")
+	userID := c.GetString("user_id")
 	var req interface{}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	page, err := h.service.UpsertPage(c.Param("pageId"), orgID, req)
+	page, err := h.service.UpsertPage(c.Param("pageId"), orgID, req, userID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return

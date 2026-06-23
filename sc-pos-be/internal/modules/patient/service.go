@@ -57,7 +57,7 @@ func (s *Service) Create(req models.Patient, userID, orgID string) (*models.Pati
 	return &req, nil
 }
 
-func (s *Service) Update(id string, req models.Patient, orgID string) (*models.Patient, error) {
+func (s *Service) Update(id string, req models.Patient, userID, orgID string) (*models.Patient, error) {
 	patient, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
@@ -77,12 +77,15 @@ func (s *Service) Update(id string, req models.Patient, orgID string) (*models.P
 	patient.Notes = req.Notes
 	patient.Tags = req.Tags
 	patient.UpdatedAt = time.Now()
+	if userID != "" {
+		patient.UpdatedBy = &userID
+	}
 
 	if patient.Tags == nil {
 		patient.Tags = []string{}
 	}
 
-	if err := s.repo.Update(id, patient); err != nil {
+	if err := s.repo.Update(id, patient, orgID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -92,8 +95,8 @@ func (s *Service) Update(id string, req models.Patient, orgID string) (*models.P
 	return patient, nil
 }
 
-func (s *Service) Delete(id string) error {
-	if err := s.repo.Delete(id); err != nil {
+func (s *Service) Delete(id, orgID, userID string) error {
+	if err := s.repo.Delete(id, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}

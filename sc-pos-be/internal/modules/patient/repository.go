@@ -26,6 +26,7 @@ func (r *Repository) GetAll(orgID string) ([]models.Patient, error) {
 	query := `SELECT` + selectColumns + `
 		FROM patients
 		WHERE is_active = true
+		  AND deleted_at IS NULL
 		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
 		ORDER BY created_at DESC`
 
@@ -42,6 +43,7 @@ func (r *Repository) GetByID(id, orgID string) (*models.Patient, error) {
 	query := `SELECT` + selectColumns + `
 		FROM patients
 		WHERE id = $1 AND is_active = true
+		  AND deleted_at IS NULL
 		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))`
 
 	var patient models.Patient
@@ -89,22 +91,29 @@ func (r *Repository) Create(patient *models.Patient, orgID string) error {
 	return nil
 }
 
-func (r *Repository) Update(id string, patient *models.Patient) error {
+func (r *Repository) Update(id string, patient *models.Patient, orgID string) error {
+	var updatedByVal interface{}
+	if patient.UpdatedBy != nil {
+		updatedByVal = *patient.UpdatedBy
+	}
 	query := `
 		UPDATE patients
 		SET full_name = $1, photo_url = $2, date_of_birth = $3, gender = $4,
 		    phone = $5, whatsapp = $6, email = $7, address = $8,
 		    allergy_history = $9, medical_conditions = $10, skin_type = $11,
 		    notes = $12, tags = $13, reminder_opt_in = $14,
-		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $15 AND is_active = true
+		    updated_by = $15, updated_at = NOW()
+		WHERE id = $16
+		  AND (organization_id = $17 OR ($17::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL
 	`
 
 	result, err := r.db.Exec(query,
 		patient.FullName, patient.PhotoURL, patient.DateOfBirth, patient.Gender,
 		patient.Phone, patient.WhatsApp, patient.Email, patient.Address,
 		patient.AllergyHistory, patient.MedicalConditions, patient.SkinType,
-		patient.Notes, pq.Array(patient.Tags), patient.ReminderOptIn, id,
+		patient.Notes, pq.Array(patient.Tags), patient.ReminderOptIn,
+		updatedByVal, id, nullableString(orgID),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update patient: %w", err)
@@ -121,14 +130,18 @@ func (r *Repository) Update(id string, patient *models.Patient) error {
 	return nil
 }
 
-func (r *Repository) Delete(id string) error {
-	query := `
+func (r *Repository) Delete(id, orgID, userByID string) error {
+	var userVal interface{}
+	if userByID != "" {
+		userVal = userByID
+	}
+	result, err := r.db.Exec(`
 		UPDATE patients
-		SET is_active = false, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1 AND is_active = true
-	`
-
-	result, err := r.db.Exec(query, id)
+		SET deleted_at = NOW(), is_active = false, updated_by = $3
+		WHERE id = $1
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL`,
+		id, nullableString(orgID), userVal)
 	if err != nil {
 		return fmt.Errorf("failed to delete patient: %w", err)
 	}
@@ -147,7 +160,7 @@ func (r *Repository) Delete(id string) error {
 func (r *Repository) Search(query, orgID string) ([]models.Patient, error) {
 	sqlQuery := `SELECT` + selectColumns + `
 		FROM patients
-		WHERE is_active = true AND (
+		WHERE is_active = true AND deleted_at IS NULL AND (
 			full_name ILIKE $1 OR
 			phone ILIKE $1 OR
 			patient_code ILIKE $1
