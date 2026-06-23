@@ -26,8 +26,8 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) ListPages() ([]Page, error) {
-	rows, err := r.db.Query(`SELECT id, page_id, data, created_at, updated_at FROM cms_pages ORDER BY page_id ASC`)
+func (r *Repository) ListPages(orgID string) ([]Page, error) {
+	rows, err := r.db.Query(`SELECT id, page_id, data, created_at, updated_at FROM cms_pages WHERE (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL)) ORDER BY page_id ASC`, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query cms pages: %w", err)
 	}
@@ -50,8 +50,8 @@ func (r *Repository) ListPages() ([]Page, error) {
 	return pages, nil
 }
 
-func (r *Repository) GetPage(pageID string) (*Page, error) {
-	row := r.db.QueryRow(`SELECT id, page_id, data, created_at, updated_at FROM cms_pages WHERE page_id = $1`, pageID)
+func (r *Repository) GetPage(pageID, orgID string) (*Page, error) {
+	row := r.db.QueryRow(`SELECT id, page_id, data, created_at, updated_at FROM cms_pages WHERE page_id = $1 AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))`, pageID, orgID)
 	page, err := scanPage(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -62,21 +62,21 @@ func (r *Repository) GetPage(pageID string) (*Page, error) {
 	return &page, nil
 }
 
-func (r *Repository) UpsertPage(pageID string, data interface{}) (*Page, error) {
+func (r *Repository) UpsertPage(pageID, orgID string, data interface{}) (*Page, error) {
 	payload, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode cms page: %w", err)
 	}
 	_, err = r.db.Exec(`
-		INSERT INTO cms_pages (id, page_id, data, created_at, updated_at)
-		VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		INSERT INTO cms_pages (id, page_id, data, organization_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		ON CONFLICT (page_id)
 		DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP
-	`, uuid.New().String(), pageID, string(payload))
+	`, uuid.New().String(), pageID, string(payload), orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upsert cms page: %w", err)
 	}
-	return r.GetPage(pageID)
+	return r.GetPage(pageID, orgID)
 }
 
 type pageScanner interface {

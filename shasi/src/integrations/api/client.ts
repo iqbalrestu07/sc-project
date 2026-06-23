@@ -18,9 +18,10 @@ const API_TIMEOUT = import.meta.env.VITE_API_TIMEOUT
     ? parseInt(import.meta.env.VITE_API_TIMEOUT)
     : 30000;
 
-// Token management
+// Token + org management
 const TOKEN_STORAGE_KEY = "access_token";
 const REFRESH_TOKEN_STORAGE_KEY = "refresh_token";
+const ORG_ID_STORAGE_KEY = "active_org_id";
 
 class ApiClient {
     private client: AxiosInstance;
@@ -44,12 +45,16 @@ class ApiClient {
     }
 
     private setupInterceptors() {
-        // Request interceptor - attach token
+        // Request interceptor - attach token + org context
         this.client.interceptors.request.use(
             (config) => {
                 const token = this.getAccessToken();
                 if (token) {
                     config.headers.Authorization = `Bearer ${token}`;
+                }
+                const orgId = this.getActiveOrgId();
+                if (orgId) {
+                    config.headers["X-Organization-ID"] = orgId;
                 }
                 return config;
             },
@@ -157,6 +162,20 @@ class ApiClient {
     public clearTokens() {
         localStorage.removeItem(TOKEN_STORAGE_KEY);
         localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+        localStorage.removeItem(ORG_ID_STORAGE_KEY);
+    }
+
+    // Organization context management
+    public setActiveOrgId(orgId: string) {
+        localStorage.setItem(ORG_ID_STORAGE_KEY, orgId);
+    }
+
+    public getActiveOrgId(): string | null {
+        return localStorage.getItem(ORG_ID_STORAGE_KEY);
+    }
+
+    public clearActiveOrg() {
+        localStorage.removeItem(ORG_ID_STORAGE_KEY);
     }
 
     public getDecodedToken(): JwtPayload | null {

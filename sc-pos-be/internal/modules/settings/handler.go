@@ -21,7 +21,8 @@ func NewModule() *Handler {
 }
 
 func (h *Handler) GetClinic(c *gin.Context) {
-	settings, err := h.service.GetClinic()
+	orgID := c.GetString("org_id")
+	settings, err := h.service.GetClinic(orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -30,12 +31,13 @@ func (h *Handler) GetClinic(c *gin.Context) {
 }
 
 func (h *Handler) UpdateClinic(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	var req models.ClinicSettings
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	settings, err := h.service.UpdateClinic(req)
+	settings, err := h.service.UpdateClinic(req, orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return

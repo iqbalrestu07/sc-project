@@ -22,12 +22,12 @@ func NewService(repo ...*Repository) *Service {
 	return &Service{repo: NewRepository()}
 }
 
-func (s *Service) List() ([]models.Product, error) {
-	return s.repo.List()
+func (s *Service) List(orgID string) ([]models.Product, error) {
+	return s.repo.List(orgID)
 }
 
-func (s *Service) Get(id string) (*models.Product, error) {
-	product, err := s.repo.Get(id)
+func (s *Service) Get(id, orgID string) (*models.Product, error) {
+	product, err := s.repo.Get(id, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -37,21 +37,21 @@ func (s *Service) Get(id string) (*models.Product, error) {
 	return product, nil
 }
 
-func (s *Service) Create(req models.Product) (*models.Product, error) {
+func (s *Service) Create(req models.Product, orgID string) (*models.Product, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.CreatedAt = now
 	req.UpdatedAt = now
 	req.IsActive = true
 	applyProductDefaults(&req)
-	if err := s.repo.Create(&req); err != nil {
+	if err := s.repo.Create(&req, orgID); err != nil {
 		return nil, err
 	}
 	return &req, nil
 }
 
-func (s *Service) Update(id string, req models.Product) (*models.Product, error) {
-	_, err := s.Get(id)
+func (s *Service) Update(id string, req models.Product, orgID string) (*models.Product, error) {
+	_, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (s *Service) Update(id string, req models.Product) (*models.Product, error)
 		}
 		return nil, err
 	}
-	return s.Get(id)
+	return s.Get(id, orgID)
 }
 
 func (s *Service) Delete(id string) error {
@@ -75,17 +75,17 @@ func (s *Service) Delete(id string) error {
 	return nil
 }
 
-func (s *Service) ListCategories() ([]models.ProductCategory, error) {
-	return s.repo.ListCategories()
+func (s *Service) ListCategories(orgID string) ([]models.ProductCategory, error) {
+	return s.repo.ListCategories(orgID)
 }
 
-func (s *Service) CreateCategory(req models.ProductCategory) (*models.ProductCategory, error) {
+func (s *Service) CreateCategory(req models.ProductCategory, orgID string) (*models.ProductCategory, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.IsActive = true
 	req.CreatedAt = now
 	req.UpdatedAt = now
-	if err := s.repo.CreateCategory(&req); err != nil {
+	if err := s.repo.CreateCategory(&req, orgID); err != nil {
 		return nil, err
 	}
 	return &req, nil

@@ -22,7 +22,8 @@ func NewModule() *Handler {
 }
 
 func (h *Handler) List(c *gin.Context) {
-	staff, err := h.service.List()
+	orgID := c.GetString("org_id")
+	staff, err := h.service.List(orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -31,7 +32,8 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 func (h *Handler) Get(c *gin.Context) {
-	staff, err := h.service.Get(c.Param("id"))
+	orgID := c.GetString("org_id")
+	staff, err := h.service.Get(c.Param("id"), orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -40,12 +42,13 @@ func (h *Handler) Get(c *gin.Context) {
 }
 
 func (h *Handler) Create(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	var req models.Staff
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	staff, err := h.service.Create(req)
+	staff, err := h.service.Create(req, orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -54,12 +57,13 @@ func (h *Handler) Create(c *gin.Context) {
 }
 
 func (h *Handler) Update(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	var req models.Staff
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	staff, err := h.service.Update(c.Param("id"), req)
+	staff, err := h.service.Update(c.Param("id"), orgID, req)
 	if err != nil {
 		h.handleError(c, err)
 		return

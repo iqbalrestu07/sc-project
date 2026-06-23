@@ -16,15 +16,16 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) List() ([]models.Product, error) {
+func (r *Repository) List(orgID string) ([]models.Product, error) {
 	rows, err := r.db.Query(`
 		SELECT id, name, category, sku, supplier, purchase_price, selling_price,
 		       COALESCE(current_stock, 0), COALESCE(minimum_stock, 5), unit,
 		       expiry_date, COALESCE(is_active, true), created_at, updated_at
 		FROM products
 		WHERE COALESCE(is_active, true) = true
+		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
 		ORDER BY name ASC
-	`)
+	`, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query products: %w", err)
 	}
@@ -47,14 +48,15 @@ func (r *Repository) List() ([]models.Product, error) {
 	return products, nil
 }
 
-func (r *Repository) Get(id string) (*models.Product, error) {
+func (r *Repository) Get(id, orgID string) (*models.Product, error) {
 	row := r.db.QueryRow(`
 		SELECT id, name, category, sku, supplier, purchase_price, selling_price,
 		       COALESCE(current_stock, 0), COALESCE(minimum_stock, 5), unit,
 		       expiry_date, COALESCE(is_active, true), created_at, updated_at
 		FROM products
 		WHERE id = $1 AND COALESCE(is_active, true) = true
-	`, id)
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+	`, id, orgID)
 	product, err := scanProduct(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -65,17 +67,18 @@ func (r *Repository) Get(id string) (*models.Product, error) {
 	return &product, nil
 }
 
-func (r *Repository) Create(product *models.Product) error {
+func (r *Repository) Create(product *models.Product, orgID string) error {
 	_, err := r.db.Exec(`
 		INSERT INTO products (
 			id, name, category, sku, supplier, purchase_price, selling_price,
-			current_stock, minimum_stock, unit, expiry_date, is_active, created_at, updated_at
+			current_stock, minimum_stock, unit, expiry_date, is_active, created_at, updated_at,
+			organization_id
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`, product.ID, product.Name, product.Category, product.Sku, product.Supplier,
 		product.PurchasePrice, product.SellingPrice, product.CurrentStock,
 		product.MinimumStock, product.Unit, product.ExpiryDate, product.IsActive,
-		product.CreatedAt, product.UpdatedAt)
+		product.CreatedAt, product.UpdatedAt, nullableString(orgID))
 	if err != nil {
 		return fmt.Errorf("failed to create product: %w", err)
 	}
@@ -109,13 +112,14 @@ func (r *Repository) Delete(id string) error {
 
 // ──── Product Categories ────
 
-func (r *Repository) ListCategories() ([]models.ProductCategory, error) {
+func (r *Repository) ListCategories(orgID string) ([]models.ProductCategory, error) {
 	rows, err := r.db.Query(`
 		SELECT id, name, description, COALESCE(is_active, true), created_at, updated_at
 		FROM product_categories
 		WHERE COALESCE(is_active, true) = true
+		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
 		ORDER BY name ASC
-	`)
+	`, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query product categories: %w", err)
 	}
@@ -139,11 +143,11 @@ func (r *Repository) ListCategories() ([]models.ProductCategory, error) {
 	return categories, nil
 }
 
-func (r *Repository) CreateCategory(c *models.ProductCategory) error {
+func (r *Repository) CreateCategory(c *models.ProductCategory, orgID string) error {
 	_, err := r.db.Exec(`
-		INSERT INTO product_categories (id, name, description, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, c.ID, c.Name, c.Description, c.IsActive, c.CreatedAt, c.UpdatedAt)
+		INSERT INTO product_categories (id, name, description, is_active, created_at, updated_at, organization_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, c.ID, c.Name, c.Description, c.IsActive, c.CreatedAt, c.UpdatedAt, nullableString(orgID))
 	if err != nil {
 		return fmt.Errorf("failed to create product category: %w", err)
 	}
@@ -212,4 +216,12 @@ func checkRows(result sql.Result) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+// nullableString converts an empty string to nil so it inserts as SQL NULL.
+func nullableString(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }

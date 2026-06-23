@@ -27,9 +27,10 @@ func NewModule() *Handler {
 }
 
 func (h *Handler) ListPages(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	pageID := c.Query("page")
 	if pageID != "" {
-		page, err := h.service.GetPage(pageID)
+		page, err := h.service.GetPage(pageID, orgID)
 		if err != nil {
 			utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 			return
@@ -37,7 +38,7 @@ func (h *Handler) ListPages(c *gin.Context) {
 		utils.SuccessResponse(c, http.StatusOK, page)
 		return
 	}
-	pages, err := h.service.ListPages()
+	pages, err := h.service.ListPages(orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -46,7 +47,8 @@ func (h *Handler) ListPages(c *gin.Context) {
 }
 
 func (h *Handler) GetPage(c *gin.Context) {
-	page, err := h.service.GetPage(c.Param("pageId"))
+	orgID := c.GetString("org_id")
+	page, err := h.service.GetPage(c.Param("pageId"), orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -55,6 +57,7 @@ func (h *Handler) GetPage(c *gin.Context) {
 }
 
 func (h *Handler) CreatePage(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	var req map[string]interface{}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
@@ -66,7 +69,7 @@ func (h *Handler) CreatePage(c *gin.Context) {
 		return
 	}
 	delete(req, "page_id")
-	page, err := h.service.UpsertPage(pageID, req)
+	page, err := h.service.UpsertPage(pageID, orgID, req)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -75,12 +78,13 @@ func (h *Handler) CreatePage(c *gin.Context) {
 }
 
 func (h *Handler) UpdatePage(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	var req interface{}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	page, err := h.service.UpsertPage(c.Param("pageId"), req)
+	page, err := h.service.UpsertPage(c.Param("pageId"), orgID, req)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return

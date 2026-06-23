@@ -18,8 +18,8 @@ func NewService(repo ...*Repository) *Service {
 	return &Service{repo: NewRepository()}
 }
 
-func (s *Service) GetClinic() (*models.ClinicSettings, error) {
-	settings, err := s.repo.GetClinic()
+func (s *Service) GetClinic(orgID string) (*models.ClinicSettings, error) {
+	settings, err := s.repo.GetClinic(orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -27,14 +27,14 @@ func (s *Service) GetClinic() (*models.ClinicSettings, error) {
 		return settings, nil
 	}
 	defaults := defaultClinicSettings()
-	if err := s.repo.Create(defaults); err != nil {
+	if err := s.repo.Create(defaults, orgID); err != nil {
 		return nil, err
 	}
 	return defaults, nil
 }
 
-func (s *Service) UpdateClinic(req models.ClinicSettings) (*models.ClinicSettings, error) {
-	current, err := s.GetClinic()
+func (s *Service) UpdateClinic(req models.ClinicSettings, orgID string) (*models.ClinicSettings, error) {
+	current, err := s.GetClinic(orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func (s *Service) UpdateClinic(req models.ClinicSettings) (*models.ClinicSetting
 	if err := s.repo.Update(current.ID, current); err != nil {
 		return nil, err
 	}
-	return s.GetClinic()
+	return s.GetClinic(orgID)
 }
 
 func defaultClinicSettings() *models.ClinicSettings {

@@ -22,7 +22,8 @@ func NewModule() *Handler {
 }
 
 func (h *Handler) List(c *gin.Context) {
-	services, err := h.service.List(c.Query("search"))
+	orgID := c.GetString("org_id")
+	services, err := h.service.List(c.Query("search"), orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -31,7 +32,8 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 func (h *Handler) Get(c *gin.Context) {
-	service, err := h.service.Get(c.Param("id"))
+	orgID := c.GetString("org_id")
+	service, err := h.service.Get(c.Param("id"), orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -45,7 +47,8 @@ func (h *Handler) Create(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	service, err := h.service.Create(req)
+	orgID := c.GetString("org_id")
+	service, err := h.service.Create(req, orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -59,7 +62,8 @@ func (h *Handler) Update(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	service, err := h.service.Update(c.Param("id"), req)
+	orgID := c.GetString("org_id")
+	service, err := h.service.Update(c.Param("id"), req, orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -76,7 +80,8 @@ func (h *Handler) Delete(c *gin.Context) {
 }
 
 func (h *Handler) ListCategories(c *gin.Context) {
-	categories, err := h.service.ListCategories()
+	orgID := c.GetString("org_id")
+	categories, err := h.service.ListCategories(orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -90,7 +95,8 @@ func (h *Handler) CreateCategory(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	category, err := h.service.CreateCategory(req)
+	orgID := c.GetString("org_id")
+	category, err := h.service.CreateCategory(req, orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return

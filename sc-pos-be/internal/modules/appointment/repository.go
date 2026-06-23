@@ -45,7 +45,7 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) List(start, end *time.Time) ([]AppointmentWithRelations, error) {
+func (r *Repository) List(orgID string, start, end *time.Time) ([]AppointmentWithRelations, error) {
 	query := `
 		SELECT a.id, a.patient_id, a.service_id, a.doctor_id, a.therapist_id,
 		       a.scheduled_at, a.duration_minutes, a.status, a.notes, a.created_by,
@@ -59,11 +59,12 @@ func (r *Repository) List(start, end *time.Time) ([]AppointmentWithRelations, er
 		LEFT JOIN services s ON s.id = a.service_id
 		LEFT JOIN staff d ON d.id = a.doctor_id
 		LEFT JOIN staff t ON t.id = a.therapist_id
-		WHERE ($1::timestamp IS NULL OR a.scheduled_at >= $1)
-		  AND ($2::timestamp IS NULL OR a.scheduled_at <= $2)
+		WHERE ($2::timestamp IS NULL OR a.scheduled_at >= $2)
+		  AND ($3::timestamp IS NULL OR a.scheduled_at <= $3)
+		  AND (a.organization_id = $1 OR ($1::text = '' AND a.organization_id IS NULL))
 		ORDER BY a.scheduled_at ASC
 	`
-	rows, err := r.db.Query(query, start, end)
+	rows, err := r.db.Query(query, orgID, start, end)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query appointments: %w", err)
 	}
@@ -86,7 +87,7 @@ func (r *Repository) List(start, end *time.Time) ([]AppointmentWithRelations, er
 	return appointments, nil
 }
 
-func (r *Repository) Get(id string) (*AppointmentWithRelations, error) {
+func (r *Repository) Get(id, orgID string) (*AppointmentWithRelations, error) {
 	row := r.db.QueryRow(`
 		SELECT a.id, a.patient_id, a.service_id, a.doctor_id, a.therapist_id,
 		       a.scheduled_at, a.duration_minutes, a.status, a.notes, a.created_by,
@@ -101,7 +102,8 @@ func (r *Repository) Get(id string) (*AppointmentWithRelations, error) {
 		LEFT JOIN staff d ON d.id = a.doctor_id
 		LEFT JOIN staff t ON t.id = a.therapist_id
 		WHERE a.id = $1
-	`, id)
+		  AND (a.organization_id = $2 OR ($2::text = '' AND a.organization_id IS NULL))
+	`, id, orgID)
 	appointment, err := scanAppointmentWithRelations(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -112,16 +114,20 @@ func (r *Repository) Get(id string) (*AppointmentWithRelations, error) {
 	return &appointment, nil
 }
 
-func (r *Repository) Create(appointment *models.Appointment) error {
+func (r *Repository) Create(appointment *models.Appointment, orgID string) error {
+	var orgVal interface{}
+	if orgID != "" {
+		orgVal = orgID
+	}
 	_, err := r.db.Exec(`
 		INSERT INTO appointments (
 			id, patient_id, service_id, doctor_id, therapist_id, scheduled_at,
-			duration_minutes, status, notes, created_by, created_at, updated_at
+			duration_minutes, status, notes, created_by, organization_id, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`, appointment.ID, appointment.PatientID, appointment.ServiceID, appointment.DoctorID,
 		appointment.TherapistID, appointment.ScheduledAt, appointment.DurationMinutes,
-		appointment.Status, appointment.Notes, appointment.CreatedBy, appointment.CreatedAt,
+		appointment.Status, appointment.Notes, appointment.CreatedBy, orgVal, appointment.CreatedAt,
 		appointment.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create appointment: %w", err)

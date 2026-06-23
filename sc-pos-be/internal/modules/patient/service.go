@@ -21,12 +21,12 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) List() ([]models.Patient, error) {
-	return s.repo.GetAll()
+func (s *Service) List(orgID string) ([]models.Patient, error) {
+	return s.repo.GetAll(orgID)
 }
 
-func (s *Service) Get(id string) (*models.Patient, error) {
-	patient, err := s.repo.GetByID(id)
+func (s *Service) Get(id, orgID string) (*models.Patient, error) {
+	patient, err := s.repo.GetByID(id, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +37,7 @@ func (s *Service) Get(id string) (*models.Patient, error) {
 	return patient, nil
 }
 
-func (s *Service) Create(req models.Patient, userID string) (*models.Patient, error) {
+func (s *Service) Create(req models.Patient, userID, orgID string) (*models.Patient, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.PatientCode = "PAT-" + strings.ToUpper(uuid.New().String()[:8])
@@ -50,15 +50,15 @@ func (s *Service) Create(req models.Patient, userID string) (*models.Patient, er
 		req.Tags = []string{}
 	}
 
-	if err := s.repo.Create(&req); err != nil {
+	if err := s.repo.Create(&req, orgID); err != nil {
 		return nil, err
 	}
 
 	return &req, nil
 }
 
-func (s *Service) Update(id string, req models.Patient) (*models.Patient, error) {
-	patient, err := s.Get(id)
+func (s *Service) Update(id string, req models.Patient, orgID string) (*models.Patient, error) {
+	patient, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -111,11 +111,11 @@ func (s *Service) GetTransactions(patientID string) ([]TransactionSummary, error
 	return s.repo.GetTransactions(patientID)
 }
 
-func (s *Service) Search(query string) ([]models.Patient, error) {
+func (s *Service) Search(query, orgID string) ([]models.Patient, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, ErrSearchRequired
 	}
 
-	return s.repo.Search(query)
+	return s.repo.Search(query, orgID)
 }

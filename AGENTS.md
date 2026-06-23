@@ -7,13 +7,13 @@
 
 ## 1. Gambaran Umum Project
 
-**SC Project** adalah sistem manajemen klinik kecantikan (aesthetic clinic / salon).
+**SC Project** adalah sistem manajemen klinik kecantikan (aesthetic clinic / salon) dengan arsitektur **multi-tenant SaaS** dan **RBAC granular**.
 Terdiri dari dua sub-project dalam satu monorepo:
 
-| Sub-project | Lokasi | Stack | Fungsi |
-|---|---|---|---|
-| `sc-pos-be` | `sc-pos-be/` | Go + PostgreSQL + Gin | REST API backend |
-| `shasi` | `shasi/` | React + TypeScript + Vite | Frontend admin + landing page |
+| Sub-project | Lokasi       | Stack                     | Fungsi                        |
+| ----------- | ------------ | ------------------------- | ----------------------------- |
+| `sc-pos-be` | `sc-pos-be/` | Go + PostgreSQL + Gin     | REST API backend              |
+| `shasi`     | `shasi/`     | React + TypeScript + Vite | Frontend admin + landing page |
 
 **Root project:** `/Users/macbookpro/pjc/personal/sc-project/`
 
@@ -22,6 +22,7 @@ Terdiri dari dua sub-project dalam satu monorepo:
 ## 2. Backend — `sc-pos-be`
 
 ### 2.1 Tech Stack
+
 - **Language:** Go (module: `github.com/sc-pos/backend`)
 - **Framework:** Gin (`github.com/gin-gonic/gin`)
 - **Database:** PostgreSQL (driver: `lib/pq`, raw `database/sql` — **bukan ORM**)
@@ -30,6 +31,7 @@ Terdiri dari dua sub-project dalam satu monorepo:
 - **Config:** `.env` via `github.com/joho/godotenv`
 
 ### 2.2 Struktur Direktori
+
 ```
 sc-pos-be/
 ├── main.go                         # Entry point
@@ -73,7 +75,9 @@ sc-pos-be/
 ```
 
 ### 2.3 Pattern Setiap Module
+
 Setiap module mengikuti pola layered:
+
 ```
 handler.go    → HTTP layer: binding, validasi, call service
 service.go    → Business logic
@@ -84,6 +88,7 @@ routes.go     → Daftarkan route ke Gin router
 `NewModule()` di `handler.go` adalah shortcut constructor yang merangkai semua layer.
 
 ### 2.4 Environment Variables (`.env`)
+
 ```env
 SERVER_HOST=0.0.0.0
 SERVER_PORT=8080
@@ -101,6 +106,7 @@ WHATSAPP_API_TOKEN=             # opsional: token API WA
 ```
 
 ### 2.5 Menjalankan Backend
+
 ```bash
 cd sc-pos-be
 cp .env.example .env   # isi DB credentials
@@ -112,7 +118,9 @@ Migrasi **otomatis berjalan** saat startup (`database.RunMigrations()`).
 Semua DDL menggunakan `CREATE TABLE IF NOT EXISTS` dan `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` — aman dijalankan berulang.
 
 ### 2.6 API Response Format (Standard)
+
 Semua endpoint menggunakan `utils.SuccessResponse` / `utils.ErrorResponse`:
+
 ```json
 // Success
 { "success": true, "data": <payload> }
@@ -129,6 +137,7 @@ Semua endpoint menggunakan `utils.SuccessResponse` / `utils.ErrorResponse`:
 ```
 
 ### 2.7 Auth & Role System
+
 - JWT disimpan di `localStorage` frontend (key: `access_token`, `refresh_token`)
 - Access token: 24 jam, Refresh token: 7 hari
 - Roles: `admin`, `doctor`, `therapist`, `cashier`
@@ -141,145 +150,162 @@ Semua endpoint menggunakan `utils.SuccessResponse` / `utils.ErrorResponse`:
 **Base URL:** `http://localhost:8080/api`
 
 #### Auth (public)
-| Method | Path | Deskripsi |
-|--------|------|-----------|
-| POST | `/auth/login` | Login, return JWT |
-| POST | `/auth/register` | Register user baru (default role: cashier) |
-| POST | `/auth/refresh` | Refresh access token |
+
+| Method | Path             | Deskripsi                                  |
+| ------ | ---------------- | ------------------------------------------ |
+| POST   | `/auth/login`    | Login, return JWT                          |
+| POST   | `/auth/register` | Register user baru (default role: cashier) |
+| POST   | `/auth/refresh`  | Refresh access token                       |
 
 #### Auth (protected)
-| Method | Path | Role |
-|--------|------|------|
-| GET | `/auth/me` | Semua |
-| POST | `/auth/logout` | Semua |
+
+| Method | Path           | Role  |
+| ------ | -------------- | ----- |
+| GET    | `/auth/me`     | Semua |
+| POST   | `/auth/logout` | Semua |
 
 #### Patients
-| Method | Path | Role | Notes |
-|--------|------|------|-------|
-| GET | `/patients` | Semua | `?search=nama` untuk filter |
-| GET | `/patients/search` | Semua | dedicated search endpoint |
-| POST | `/patients` | Semua | |
-| GET | `/patients/:id` | Semua | |
-| PUT | `/patients/:id` | Semua | |
-| DELETE | `/patients/:id` | Semua | soft delete (`is_active=false`) |
+
+| Method | Path               | Role  | Notes                           |
+| ------ | ------------------ | ----- | ------------------------------- |
+| GET    | `/patients`        | Semua | `?search=nama` untuk filter     |
+| GET    | `/patients/search` | Semua | dedicated search endpoint       |
+| POST   | `/patients`        | Semua |                                 |
+| GET    | `/patients/:id`    | Semua |                                 |
+| PUT    | `/patients/:id`    | Semua |                                 |
+| DELETE | `/patients/:id`    | Semua | soft delete (`is_active=false`) |
 
 #### Patients (tambahan)
-| Method | Path | Role | Notes |
-|--------|------|------|-------|
-| GET | `/patients/:id/visits` | Semua | Riwayat kunjungan (JOIN appointments + services + staff) |
-| GET | `/patients/:id/transactions` | Semua | Riwayat transaksi pasien |
+
+| Method | Path                         | Role  | Notes                                                    |
+| ------ | ---------------------------- | ----- | -------------------------------------------------------- |
+| GET    | `/patients/:id/visits`       | Semua | Riwayat kunjungan (JOIN appointments + services + staff) |
+| GET    | `/patients/:id/transactions` | Semua | Riwayat transaksi pasien                                 |
 
 #### Services
-| Method | Path | Role |
-|--------|------|------|
-| GET | `/services` | Semua |
-| POST | `/services` | Admin |
-| GET | `/services/:id` | Semua |
-| PUT | `/services/:id` | Admin |
-| DELETE | `/services/:id` | Admin |
-| GET | `/service-categories` | Semua |
-| POST | `/service-categories` | Admin |
-| PUT | `/service-categories/:id` | Admin |
+
+| Method | Path                      | Role  |
+| ------ | ------------------------- | ----- |
+| GET    | `/services`               | Semua |
+| POST   | `/services`               | Admin |
+| GET    | `/services/:id`           | Semua |
+| PUT    | `/services/:id`           | Admin |
+| DELETE | `/services/:id`           | Admin |
+| GET    | `/service-categories`     | Semua |
+| POST   | `/service-categories`     | Admin |
+| PUT    | `/service-categories/:id` | Admin |
 | DELETE | `/service-categories/:id` | Admin |
 
 #### Products
-| Method | Path | Role |
-|--------|------|------|
-| GET | `/products` | Semua |
-| POST | `/products` | Admin |
-| GET | `/products/:id` | Semua |
-| PUT | `/products/:id` | Admin |
-| DELETE | `/products/:id` | Admin |
-| GET | `/product-categories` | Semua |
-| POST | `/product-categories` | Admin |
-| PUT | `/product-categories/:id` | Admin |
+
+| Method | Path                      | Role  |
+| ------ | ------------------------- | ----- |
+| GET    | `/products`               | Semua |
+| POST   | `/products`               | Admin |
+| GET    | `/products/:id`           | Semua |
+| PUT    | `/products/:id`           | Admin |
+| DELETE | `/products/:id`           | Admin |
+| GET    | `/product-categories`     | Semua |
+| POST   | `/product-categories`     | Admin |
+| PUT    | `/product-categories/:id` | Admin |
 | DELETE | `/product-categories/:id` | Admin |
 
 #### Staff
-| Method | Path | Role |
-|--------|------|------|
-| GET | `/staff` | Semua |
-| POST | `/staff` | Admin |
-| GET | `/staff/:id` | Semua |
-| PUT | `/staff/:id` | Admin |
+
+| Method | Path         | Role  |
+| ------ | ------------ | ----- |
+| GET    | `/staff`     | Semua |
+| POST   | `/staff`     | Admin |
+| GET    | `/staff/:id` | Semua |
+| PUT    | `/staff/:id` | Admin |
 | DELETE | `/staff/:id` | Admin |
 
 #### Appointments
-| Method | Path | Role | Notes |
-|--------|------|------|-------|
-| GET | `/appointments` | Semua | `?date=YYYY-MM-DD&view=day\|week` |
-| POST | `/appointments` | Semua | |
-| GET | `/appointments/calendar` | Semua | |
-| GET | `/appointments/available-slots` | Semua | |
-| GET | `/appointments/:id` | Semua | |
-| PUT | `/appointments/:id` | Semua | |
-| DELETE | `/appointments/:id` | Semua | |
+
+| Method | Path                            | Role  | Notes                             |
+| ------ | ------------------------------- | ----- | --------------------------------- |
+| GET    | `/appointments`                 | Semua | `?date=YYYY-MM-DD&view=day\|week` |
+| POST   | `/appointments`                 | Semua |                                   |
+| GET    | `/appointments/calendar`        | Semua |                                   |
+| GET    | `/appointments/available-slots` | Semua |                                   |
+| GET    | `/appointments/:id`             | Semua |                                   |
+| PUT    | `/appointments/:id`             | Semua |                                   |
+| DELETE | `/appointments/:id`             | Semua |                                   |
 
 #### Transactions
-| Method | Path | Role |
-|--------|------|------|
-| GET | `/transactions` | Semua |
-| POST | `/transactions` | Semua |
-| GET | `/transactions/:id` | Semua |
-| GET | `/transactions/:id/items` | Semua |
-| PUT | `/transactions/:id` | Semua |
-| DELETE | `/transactions/:id` | Semua |
+
+| Method | Path                      | Role  |
+| ------ | ------------------------- | ----- |
+| GET    | `/transactions`           | Semua |
+| POST   | `/transactions`           | Semua |
+| GET    | `/transactions/:id`       | Semua |
+| GET    | `/transactions/:id/items` | Semua |
+| PUT    | `/transactions/:id`       | Semua |
+| DELETE | `/transactions/:id`       | Semua |
 
 #### Commissions
-| Method | Path | Role |
-|--------|------|------|
-| GET | `/commissions` | Admin/Doctor/Therapist |
-| GET | `/commissions/staff/:staffId` | Admin |
-| POST | `/commissions/update-status` | Admin |
+
+| Method | Path                          | Role                   |
+| ------ | ----------------------------- | ---------------------- |
+| GET    | `/commissions`                | Admin/Doctor/Therapist |
+| GET    | `/commissions/staff/:staffId` | Admin                  |
+| POST   | `/commissions/update-status`  | Admin                  |
 
 Request body update-status:
+
 ```json
 { "ids": ["uuid1", "uuid2"], "status": "paid" }
 ```
 
 #### Dashboard
-| Method | Path | Auth | Notes |
-|--------|------|------|-------|
-| GET | `/dashboard/stats` | Ya | `?from=YYYY-MM-DD&to=YYYY-MM-DD` opsional |
-| GET | `/dashboard/revenue` | Ya | `?from=&to=` opsional; default 30 hari terakhir |
-| GET | `/dashboard/top-services` | Ya | `?from=&to=` opsional |
-| GET | `/dashboard/top-products` | Ya | `?from=&to=` opsional |
-| GET | `/dashboard/appointments-today` | Ya | selalu hari ini, tidak ada filter |
+
+| Method | Path                            | Auth | Notes                                           |
+| ------ | ------------------------------- | ---- | ----------------------------------------------- |
+| GET    | `/dashboard/stats`              | Ya   | `?from=YYYY-MM-DD&to=YYYY-MM-DD` opsional       |
+| GET    | `/dashboard/revenue`            | Ya   | `?from=&to=` opsional; default 30 hari terakhir |
+| GET    | `/dashboard/top-services`       | Ya   | `?from=&to=` opsional                           |
+| GET    | `/dashboard/top-products`       | Ya   | `?from=&to=` opsional                           |
+| GET    | `/dashboard/appointments-today` | Ya   | selalu hari ini, tidak ada filter               |
 
 **Timezone:** Semua filter date range diinterpretasikan sebagai `Asia/Jakarta (UTC+7)`.
 `parseDateRange()` menggunakan `time.ParseInLocation("Asia/Jakarta")`.
 Query stats "hari ini" juga dihitung dalam WIB, bukan UTC server.
 
 #### CMS (public)
-| Method | Path |
-|--------|------|
-| GET | `/cms/pages` |
-| GET | `/cms/pages/:pageId` |
+
+| Method | Path                 |
+| ------ | -------------------- |
+| GET    | `/cms/pages`         |
+| GET    | `/cms/pages/:pageId` |
 
 #### CMS (protected admin)
-| Method | Path | Notes |
-|--------|------|-------|
-| POST | `/cms/pages` | body: `{ "page_id": "...", ...content }` |
-| PUT | `/cms/pages/:pageId` | |
-| POST | `/cms/upload-image` | **multipart/form-data**: field `file` (image) + `folder` (opsional) |
+
+| Method | Path                 | Notes                                                               |
+| ------ | -------------------- | ------------------------------------------------------------------- |
+| POST   | `/cms/pages`         | body: `{ "page_id": "...", ...content }`                            |
+| PUT    | `/cms/pages/:pageId` |                                                                     |
+| POST   | `/cms/upload-image`  | **multipart/form-data**: field `file` (image) + `folder` (opsional) |
 
 Upload image returns: `{ "success": true, "data": { "url": "http://..." } }`
 File disimpan ke `./uploads/cms/<folder>/` dan dapat diakses via `GET /uploads/...`
 
 #### Settings
-| Method | Path | Role |
-|--------|------|------|
-| GET | `/settings/clinic` | Semua |
-| PUT | `/settings/clinic` | Admin |
-| POST | `/settings/clinic/logo` | Admin |
+
+| Method | Path                    | Role  |
+| ------ | ----------------------- | ----- |
+| GET    | `/settings/clinic`      | Semua |
+| PUT    | `/settings/clinic`      | Admin |
+| POST   | `/settings/clinic/logo` | Admin |
 
 #### Stock Movements
-| Method | Path | Role | Notes |
-|--------|------|------|-------|
-| GET | `/stock-movements` | Semua | `?product_id=uuid` opsional |
-| POST | `/stock-movements` | Admin | Otomatis update `products.current_stock` |
+
+| Method | Path               | Role  | Notes                                    |
+| ------ | ------------------ | ----- | ---------------------------------------- |
+| GET    | `/stock-movements` | Semua | `?product_id=uuid` opsional              |
+| POST   | `/stock-movements` | Admin | Otomatis update `products.current_stock` |
 
 Request body POST:
+
 ```json
 {
   "product_id": "uuid",
@@ -293,18 +319,20 @@ Request body POST:
 ```
 
 #### Service Consumables
-| Method | Path | Role | Notes |
-|--------|------|------|-------|
-| GET | `/service-consumables` | Semua | `?service_id=uuid` opsional |
-| POST | `/service-consumables` | Admin | body: `{ service_id, product_id, quantity_used }` |
-| DELETE | `/service-consumables/:id` | Admin | |
+
+| Method | Path                       | Role  | Notes                                             |
+| ------ | -------------------------- | ----- | ------------------------------------------------- |
+| GET    | `/service-consumables`     | Semua | `?service_id=uuid` opsional                       |
+| POST   | `/service-consumables`     | Admin | body: `{ service_id, product_id, quantity_used }` |
+| DELETE | `/service-consumables/:id` | Admin |                                                   |
 
 #### WhatsApp
-| Method | Path | Notes |
-|--------|------|-------|
-| POST | `/whatsapp/send` | `{ "to": "+628...", "message": "..." }` |
-| POST | `/whatsapp/send-bulk` | `{ "recipients": [{"to":"...", "patient_name":"..."}], "message": "..." }` |
-| GET | `/whatsapp/templates` | List template pesan |
+
+| Method | Path                  | Notes                                                                      |
+| ------ | --------------------- | -------------------------------------------------------------------------- |
+| POST   | `/whatsapp/send`      | `{ "to": "+628...", "message": "..." }`                                    |
+| POST   | `/whatsapp/send-bulk` | `{ "recipients": [{"to":"...", "patient_name":"..."}], "message": "..." }` |
+| GET    | `/whatsapp/templates` | List template pesan                                                        |
 
 Jika `WHATSAPP_API_URL` tidak diset, endpoint ini hanya simulasi (tidak benar-benar kirim).
 
@@ -313,6 +341,7 @@ Jika `WHATSAPP_API_URL` tidak diset, endpoint ini hanya simulasi (tidak benar-be
 ## 3. Database Schema
 
 ### Tabel Utama
+
 ```sql
 users              -- akun login (id, email, password_hash, role, created_at, updated_at)
 patients           -- data pasien (id, patient_code, full_name, phone, whatsapp, email,
@@ -345,6 +374,7 @@ service_consumables-- (id, service_id, product_id, quantity_used, created_at) UN
 ```
 
 ### Notes Penting DB
+
 - `patients.tags` → tipe `TEXT[]` PostgreSQL, di Go gunakan `pq.Array(&patient.Tags)`
 - `cms_pages.content` → tipe `JSONB`
 - `appointments.status` → `scheduled | confirmed | completed | cancelled | no_show`
@@ -359,6 +389,7 @@ service_consumables-- (id, service_id, product_id, quantity_used, created_at) UN
 ## 4. Frontend — `shasi`
 
 ### 4.1 Tech Stack
+
 - **Framework:** React 18 + TypeScript
 - **Build Tool:** Vite
 - **UI:** shadcn/ui (Radix UI) + Tailwind CSS
@@ -370,6 +401,7 @@ service_consumables-- (id, service_id, product_id, quantity_used, created_at) UN
 - **Notifications:** Sonner + shadcn `useToast`
 
 ### 4.2 Struktur Direktori
+
 ```
 shasi/src/
 ├── App.tsx                     # Root: routes, providers
@@ -437,17 +469,26 @@ shasi/src/
 ```
 
 ### 4.3 ApiClient — Cara Pakai
+
 ```typescript
 import { apiClient, API_ENDPOINTS } from "@/integrations/api";
 
 // GET
-const data = await apiClient.get<{ data: Patient[] }>(API_ENDPOINTS.PATIENTS.LIST);
+const data = await apiClient.get<{ data: Patient[] }>(
+  API_ENDPOINTS.PATIENTS.LIST,
+);
 
 // GET dengan params
-const data = await apiClient.get<{ data: Patient[] }>(API_ENDPOINTS.PATIENTS.LIST, { search: "budi" });
+const data = await apiClient.get<{ data: Patient[] }>(
+  API_ENDPOINTS.PATIENTS.LIST,
+  { search: "budi" },
+);
 
 // POST
-const result = await apiClient.post<{ data: Patient }>(API_ENDPOINTS.PATIENTS.CREATE, payload);
+const result = await apiClient.post<{ data: Patient }>(
+  API_ENDPOINTS.PATIENTS.CREATE,
+  payload,
+);
 
 // PUT
 await apiClient.put(API_ENDPOINTS.PATIENTS.UPDATE(id), updates);
@@ -467,6 +508,7 @@ const response = await fetch(`${baseURL}${API_ENDPOINTS.CMS.UPLOAD_IMAGE}`, {
 ```
 
 Token disimpan di `localStorage`:
+
 - `access_token` — JWT access (24 jam)
 - `refresh_token` — JWT refresh (7 hari)
 
@@ -474,27 +516,30 @@ Auto-refresh: jika request 401, ApiClient otomatis coba refresh token lalu retry
 Jika refresh gagal → redirect ke `/admin/login`.
 
 ### 4.4 Route Pages & Akses
-| Path | Page | Role yang boleh akses |
-|------|------|-----------------------|
-| `/` | LandingPage | Public |
-| `/admin/login` | Auth | Public |
-| `/dashboard` | Dashboard | Semua (authenticated) |
-| `/patients` | Patients | admin, doctor, therapist |
-| `/patients/:id` | PatientDetail | admin, doctor, therapist |
-| `/appointments` | Appointments | Semua |
-| `/services` | Services | admin |
-| `/products` | Products | admin |
-| `/categories` | Categories | admin ← BARU |
-| `/pos` | POS | Semua |
-| `/transactions` | Transactions | admin, cashier |
-| `/commissions` | Commissions | admin, doctor, therapist |
-| `/staff` | Staff | admin |
-| `/settings` | Settings | admin |
-| `/whatsapp` | WhatsAppMessaging | admin, cashier |
-| `/cms` | CmsManagement | admin |
+
+| Path            | Page              | Role yang boleh akses    |
+| --------------- | ----------------- | ------------------------ |
+| `/`             | LandingPage       | Public                   |
+| `/admin/login`  | Auth              | Public                   |
+| `/dashboard`    | Dashboard         | Semua (authenticated)    |
+| `/patients`     | Patients          | admin, doctor, therapist |
+| `/patients/:id` | PatientDetail     | admin, doctor, therapist |
+| `/appointments` | Appointments      | Semua                    |
+| `/services`     | Services          | admin                    |
+| `/products`     | Products          | admin                    |
+| `/categories`   | Categories        | admin ← BARU             |
+| `/pos`          | POS               | Semua                    |
+| `/transactions` | Transactions      | admin, cashier           |
+| `/commissions`  | Commissions       | admin, doctor, therapist |
+| `/staff`        | Staff             | admin                    |
+| `/settings`     | Settings          | admin                    |
+| `/whatsapp`     | WhatsAppMessaging | admin, cashier           |
+| `/cms`          | CmsManagement     | admin                    |
 
 ### 4.5 Hooks Pattern
+
 Semua hooks menggunakan TanStack Query:
+
 ```typescript
 // Read
 const { data, isLoading, error } = useQuery({
@@ -514,12 +559,14 @@ const mutation = useMutation({
 ```
 
 ### 4.6 Env Variables Frontend
+
 ```env
 VITE_API_BASE_URL=http://localhost:8080/api   # default jika tidak diset
 VITE_API_TIMEOUT=30000                         # ms, opsional
 ```
 
 ### 4.7 Menjalankan Frontend
+
 ```bash
 cd shasi
 cp .env.example .env   # isi VITE_API_BASE_URL
@@ -549,12 +596,14 @@ User klik "Bayar" di POS.tsx
 ## 6. Integrasi Eksternal
 
 ### WhatsApp
+
 - **Status:** Opsional — hanya aktif jika `WHATSAPP_API_URL` diset di `.env`
 - Jika tidak diset: endpoint `/whatsapp/send` tetap return success tapi tidak kirim pesan nyata
 - Frontend: `WhatsAppMessaging.tsx` — kirim individual atau bulk reminder appointment
 - Untuk produksi: integrasikan dengan Wablas, Fonnte, atau penyedia WA API lain
 
 ### Image Upload
+
 - File disimpan **lokal** di `sc-pos-be/uploads/cms/`
 - Accessible via `GET http://localhost:8080/uploads/cms/<filename>`
 - Untuk produksi: pertimbangkan CDN atau object storage (S3, Cloudflare R2)
@@ -565,6 +614,7 @@ User klik "Bayar" di POS.tsx
 ## 7. Hal yang BELUM Diimplementasi / Pekerjaan Tersisa
 
 ### Fungsionalitas Backend yang masih stub/kosong
+
 - [ ] `settings/handler.go` → `UploadLogo()` — belum implementasi upload nyata (masih return empty)
 - [ ] Commission auto-generate — belum ada logika otomatis buat commission saat transaksi dibuat
 - [ ] `appointment/handler.go` → `AvailableSlots()` — perlu cek jadwal staff
@@ -572,6 +622,7 @@ User klik "Bayar" di POS.tsx
 - [ ] Soft delete products — sekarang hard delete, perlu konsistensi dengan patients
 
 ### Fungsionalitas Frontend yang belum ada
+
 - [ ] Form untuk `stock_movements` (tambah stok manual) di halaman Products
 - [ ] UI untuk `service_consumables` (link produk ke layanan) di halaman Services
 - [ ] `reminder_opt_in` toggle di form patient
@@ -580,11 +631,13 @@ User klik "Bayar" di POS.tsx
 - [ ] Notifikasi real-time (saat ini manual refresh)
 
 ### Known Issues
+
 - `internal/repository/patient.go` — ada file duplikat lama di `internal/repository/`, yang aktif ada di `internal/modules/patient/repository.go`. File lama mungkin stale.
 - Supabase client (`shasi/src/integrations/supabase/`) masih ada di codebase. Sudah tidak dipakai tapi belum dihapus — aman dibiarkan, tidak di-import oleh kode aktif.
 - `useTransactionStats` hook masih fetch dari endpoint yang mungkin belum optimal (fetch semua transaksi lalu filter client-side untuk stats)
 
 ### Bug yang sudah diperbaiki (untuk referensi)
+
 - **`pq: unexpected Parse response 'C'`** saat mark transaction as paid → `MarkPaidEffects()` di `transaction/repository.go` memanggil query baru di dalam loop `rows.Next()` saat cursor masih terbuka. Fix: collect semua rows ke slice, `rows.Close()` eksplisit, baru lakukan DML.
 - **Dashboard stats = 0 saat filter hari ini** → `parseDateRange` menggunakan UTC midnight (`time.Parse`), bukan WIB. Fix: `time.ParseInLocation("Asia/Jakarta")`. Query no-filter juga diperbaiki dari `CURRENT_DATE` PostgreSQL ke batas waktu WIB yang dihitung di Go.
 - **Backend binary lama tidak di-restart** → routes baru tidak aktif setelah deploy. Selalu `pkill -f "go run main.go" && go run main.go` atau `make kill && make run` setelah perubahan Go.
@@ -596,6 +649,7 @@ User klik "Bayar" di POS.tsx
 Misalnya ingin tambah module `report`:
 
 **Backend:**
+
 1. Buat folder `sc-pos-be/internal/modules/report/`
 2. Buat `repository.go` — query SQL
 3. Buat `service.go` — business logic
@@ -605,6 +659,7 @@ Misalnya ingin tambah module `report`:
 7. Jika perlu tabel baru: tambah migration di `database/migrations.go` (tambah ke array `migrations` + buat konstanta SQL-nya)
 
 **Frontend:**
+
 1. Tambah endpoint di `integrations/api/endpoints.ts`
 2. Buat hook `hooks/useReport.ts` (TanStack Query pattern)
 3. Buat page `pages/Reports.tsx`
@@ -675,4 +730,223 @@ ca2cdde - Add AGENTS.md
 
 ---
 
-*Terakhir diupdate: commit 0706431 — timezone fix, categories CRUD, commission bug fix*
+_Terakhir diupdate: commit 0706431 — timezone fix, categories CRUD, commission bug fix_
+
+---
+
+## 11. Multi-Tenant & RBAC Architecture (Fitur Baru)
+
+### 11.1 Overview
+
+Sistem telah diupgrade ke arsitektur **multi-organization SaaS** dengan **RBAC granular**:
+
+- Satu user bisa menjadi anggota lebih dari satu organisasi/klinik dengan role berbeda
+- Setiap data (pasien, produk, dll.) diisolasi per `organization_id`
+- Permission diperiksa di middleware backend — bukan hanya role
+- Frontend menyimpan `active_org_id` di localStorage dan mengirimnya via header
+
+### 11.2 Tabel Database Baru
+
+```sql
+organizations       -- (id, name, slug UNIQUE, description, logo_url, owner_id FK→users, created_at, updated_at)
+organization_members-- (id, org_id FK, user_id FK, role, joined_at) UNIQUE(org_id, user_id)
+permissions         -- (id, resource, action, description) — tabel master permission
+                   -- contoh: { resource: "patients", action: "read", description: "..." }
+role_permissions    -- (id, role, permission_id FK) — default permission per role
+user_permissions    -- (id, user_id FK, permission_id FK, org_id FK, granted_by FK, created_at)
+                   -- extra permission per-user di luar default role-nya
+```
+
+Setiap tabel bisnis (patients, services, products, staff, appointments, transactions, commissions,
+clinic_settings, cms_pages, stock_movements, service_consumables) mendapat kolom:
+
+```sql
+organization_id UUID REFERENCES organizations(id)   -- nullable, NULL = data lama/global
+```
+
+### 11.3 Backend: Middleware Baru
+
+```go
+// middleware/auth.go
+
+// OrgMiddleware — dipasang setelah AuthMiddleware di semua protected routes
+// Membaca header X-Organization-ID, verifikasi keanggotaan user, set ke context:
+//   c.Set("org_id", orgID)
+//   c.Set("org_role", role)   // role user di org tersebut (override JWT role)
+middleware.OrgMiddleware()
+
+// RequirePermission — cek permission spesifik (gabungan role_permissions + user_permissions)
+// Contoh: middleware.RequirePermission("patients:read")
+// Urutan cek: 1) ambil default perms dari role_permissions, 2) merge user_permissions,
+//             3) jika permission ada → lanjut, jika tidak → 403
+middleware.RequirePermission("resource:action")
+
+// RequireRole — legacy, masih digunakan untuk beberapa route (misal: admin-only)
+middleware.RequireRole("admin")
+middleware.RequireRole("admin", "doctor", "therapist")
+```
+
+**Context keys yang tersedia di handler setelah middleware:**
+
+- `user_id` — dari JWT
+- `email` — dari JWT
+- `role` — dari JWT (atau dioverride oleh org_role)
+- `org_id` — dari X-Organization-ID header (setelah diverifikasi)
+- `org_role` — role user di organisasi aktif
+
+### 11.4 Backend: Pola Repository Org-Aware
+
+Semua repository method sekarang menerima `orgID string` sebagai parameter. Pattern SQL:
+
+```sql
+-- Filter di WHERE: jika orgID kosong (""), kembalikan semua; jika ada, filter ketat
+AND (organization_id = $N OR ($N::text = '' AND organization_id IS NULL))
+
+-- CREATE: simpan orgID, NULL jika kosong
+-- Di Go: var orgVal interface{}; if orgID != "" { orgVal = orgID }
+-- INSERT: organization_id = $N → orgVal
+```
+
+Setiap handler mengekstrak `orgID` dari context:
+
+```go
+orgID := c.GetString("org_id")
+```
+
+### 11.5 Backend: Route Baru
+
+#### Organizations
+
+| Method | Path                                 | Permission                                    |
+| ------ | ------------------------------------ | --------------------------------------------- |
+| GET    | `/organizations/my`                  | authenticated                                 |
+| POST   | `/organizations`                     | authenticated (creates + sets owner as admin) |
+| GET    | `/organizations/:id`                 | `organization:read`                           |
+| PUT    | `/organizations/:id`                 | `organization:write`                          |
+| DELETE | `/organizations/:id`                 | `organization:write`                          |
+| GET    | `/organizations/:id/members`         | `organization:read`                           |
+| POST   | `/organizations/:id/members`         | `organization:write`                          |
+| PUT    | `/organizations/:id/members/:userId` | `organization:write`                          |
+| DELETE | `/organizations/:id/members/:userId` | `organization:write`                          |
+
+#### RBAC
+
+| Method | Path                                     | Permission                                             |
+| ------ | ---------------------------------------- | ------------------------------------------------------ |
+| GET    | `/rbac/permissions`                      | authenticated                                          |
+| GET    | `/rbac/my-permissions`                   | authenticated (returns effective perms for active org) |
+| GET    | `/rbac/role-permissions`                 | authenticated                                          |
+| GET    | `/rbac/role-permissions/:role`           | authenticated                                          |
+| PUT    | `/rbac/role-permissions/:role`           | `rbac:write`                                           |
+| GET    | `/rbac/user-permissions/:userId`         | `rbac:read`                                            |
+| POST   | `/rbac/user-permissions/:userId`         | `rbac:write`                                           |
+| DELETE | `/rbac/user-permissions/:userId/:permId` | `rbac:write`                                           |
+
+#### Auth (updated)
+
+- `POST /auth/register` — sekarang menerima `full_name` + `organization_name` (opsional).
+  Jika `organization_name` diisi, auto-create org dan return `organizations[]` dalam response.
+- `POST /auth/login` — response sekarang include `organizations: []OrgInfo`
+- `GET /auth/me` — response include `org_id`, `org_role`, `permissions[]` jika ada `X-Organization-ID`
+
+### 11.6 Frontend: Perubahan Kunci
+
+#### AuthContext (`contexts/AuthContext.tsx`)
+
+State baru:
+
+```ts
+activeOrg: OrgInfo | null          // org yang sedang aktif
+organizations: OrgInfo[]           // semua org user
+permissions: string[]              // effective perms di activeOrg
+needsOnboarding: boolean           // true jika user tapi belum punya org
+```
+
+Method baru:
+
+```ts
+signIn(user, orgs); // set user + set org pertama sebagai aktif
+switchOrg(org); // ganti activeOrg, reload permissions
+hasPermission("patients:read"); // cek permission
+hasRole("admin", "doctor"); // cek role
+```
+
+#### ApiClient (`integrations/api/client.ts`)
+
+- Setiap request otomatis menyertakan `X-Organization-ID: <active_org_id>`
+- Method baru: `setActiveOrgId(id)`, `getActiveOrgId()`, `clearActiveOrg()`
+- `clearTokens()` sekarang juga clear `active_org_id` dari localStorage
+
+#### Komponen & Halaman Baru
+
+| Path          | Komponen                            | Deskripsi                                        |
+| ------------- | ----------------------------------- | ------------------------------------------------ |
+| `/onboarding` | `pages/Onboarding.tsx`              | Buat organisasi pertama setelah register         |
+| `/rbac`       | `pages/RBACManagement.tsx`          | Kelola role permissions + user extra permissions |
+| -             | `components/layout/OrgSwitcher.tsx` | Dropdown ganti organisasi aktif                  |
+
+#### ProtectedRoute (`components/auth/ProtectedRoute.tsx`)
+
+Prop baru:
+
+```tsx
+<ProtectedRoute requirePermission="patients:read">  // permission-based guard
+<ProtectedRoute allowedRoles={["admin"]}>            // legacy role guard (masih didukung)
+```
+
+Juga otomatis redirect ke `/onboarding` jika `needsOnboarding === true`.
+
+#### Sidebar
+
+- Menampilkan nama org aktif di header (menggantikan hardcoded "Shasi Beauty Care")
+- OrgSwitcher muncul di atas nav menu
+- Menu item disembunyikan jika user tidak punya permission yang diperlukan
+- Menu baru: **Roles & Permissions** (`/rbac`, icon Shield, permission: `rbac:read`)
+
+### 11.7 Permission List (Seeds Default)
+
+Resource x Action pairs yang ada di tabel `permissions`:
+
+| Resource       | Actions                   |
+| -------------- | ------------------------- |
+| `patients`     | `read`, `write`, `delete` |
+| `appointments` | `read`, `write`, `delete` |
+| `services`     | `read`, `write`, `delete` |
+| `products`     | `read`, `write`, `delete` |
+| `categories`   | `read`, `write`, `delete` |
+| `transactions` | `read`, `write`, `delete` |
+| `commissions`  | `read`, `write`           |
+| `staff`        | `read`, `write`, `delete` |
+| `reports`      | `read`                    |
+| `settings`     | `read`, `write`           |
+| `cms`          | `read`, `write`           |
+| `rbac`         | `read`, `write`           |
+| `organization` | `read`, `write`           |
+
+Default role assignments (role_permissions):
+
+- `admin` → semua permission
+- `doctor` → patients:read/write, appointments:read/write, services:read, commissions:read
+- `therapist` → patients:read, appointments:read/write, services:read, commissions:read
+- `cashier` → patients:read, transactions:read/write, products:read, services:read
+
+### 11.8 Flow Register Baru
+
+```
+1. User isi: email, password, full_name (opsional), organization_name (wajib di form)
+2. POST /auth/register { email, password, full_name, organization_name }
+3. Backend: create user → create org → add user sebagai org.role = "admin" → return tokens + orgs[]
+4. Frontend: simpan token → signIn(user, orgs) → navigate("/dashboard")
+5. Jika org_name kosong (misal: API langsung): register berhasil, orgs[] = [] → redirect ke /onboarding
+```
+
+### 11.9 Flow Login Baru
+
+```
+1. POST /auth/login { email, password }
+2. Response: { access_token, user, organizations: [{id, name, slug, role}, ...] }
+3. Frontend: simpan token → signIn(user, orgs) → set org pertama sebagai active
+4. ApiClient mulai kirim X-Organization-ID di setiap request
+5. Backend OrgMiddleware verifikasi keanggotaan → set org_id + org_role di context
+6. Repository memfilter data by org_id
+```

@@ -33,7 +33,7 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) List(staffID string) ([]CommissionWithRelations, error) {
+func (r *Repository) List(orgID, staffID string) ([]CommissionWithRelations, error) {
 	query := `
 		SELECT c.id, c.staff_id, c.staff_role, c.transaction_id, c.transaction_item_id,
 		       c.base_amount, c.commission_type, c.commission_value, c.commission_amount,
@@ -42,10 +42,11 @@ func (r *Repository) List(staffID string) ([]CommissionWithRelations, error) {
 		FROM commissions c
 		LEFT JOIN staff s ON s.id = c.staff_id
 		LEFT JOIN transactions t ON t.id = c.transaction_id
-		WHERE ($1 = '' OR c.staff_id = $1)
+		WHERE ($2 = '' OR c.staff_id = $2)
+		  AND (c.organization_id = $1 OR ($1::text = '' AND c.organization_id IS NULL))
 		ORDER BY c.created_at DESC
 	`
-	rows, err := r.db.Query(query, staffID)
+	rows, err := r.db.Query(query, orgID, staffID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query commissions: %w", err)
 	}

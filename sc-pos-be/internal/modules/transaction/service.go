@@ -22,12 +22,12 @@ func NewService(repo ...*Repository) *Service {
 	return &Service{repo: NewRepository()}
 }
 
-func (s *Service) List() ([]TransactionWithRelations, error) {
-	return s.repo.List()
+func (s *Service) List(orgID string) ([]TransactionWithRelations, error) {
+	return s.repo.List(orgID)
 }
 
-func (s *Service) Get(id string) (*TransactionWithRelations, error) {
-	transaction, err := s.repo.Get(id)
+func (s *Service) Get(id, orgID string) (*TransactionWithRelations, error) {
+	transaction, err := s.repo.Get(id, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +37,7 @@ func (s *Service) Get(id string) (*TransactionWithRelations, error) {
 	return transaction, nil
 }
 
-func (s *Service) Create(req CreateRequest, userID *string) (*TransactionWithRelations, error) {
+func (s *Service) Create(req CreateRequest, userID *string, orgID string) (*TransactionWithRelations, error) {
 	now := time.Now()
 	req.Transaction.ID = uuid.New().String()
 	req.Transaction.TransactionCode = nextTransactionCode(now)
@@ -76,11 +76,11 @@ func (s *Service) Create(req CreateRequest, userID *string) (*TransactionWithRel
 			req.Items[i].TotalPrice = req.Items[i].UnitPrice * float64(req.Items[i].Quantity)
 		}
 	}
-	return s.repo.Create(req)
+	return s.repo.Create(req, orgID)
 }
 
-func (s *Service) Update(id string, req models.Transaction) (*TransactionWithRelations, error) {
-	current, err := s.Get(id)
+func (s *Service) Update(id, orgID string, req models.Transaction) (*TransactionWithRelations, error) {
+	current, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func (s *Service) Update(id string, req models.Transaction) (*TransactionWithRel
 			return nil, err
 		}
 	}
-	return s.Get(id)
+	return s.Get(id, orgID)
 }
 
 func (s *Service) Delete(id string) error {

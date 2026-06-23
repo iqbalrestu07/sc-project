@@ -22,9 +22,10 @@ func NewModule() *Handler {
 }
 
 func (h *Handler) List(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	// Support optional ?search= query param for inline search
 	if search := c.Query("search"); search != "" {
-		patients, err := h.service.Search(search)
+		patients, err := h.service.Search(search, orgID)
 		if err != nil {
 			h.handleError(c, err)
 			return
@@ -33,7 +34,7 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	patients, err := h.service.List()
+	patients, err := h.service.List(orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -43,7 +44,8 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 func (h *Handler) Get(c *gin.Context) {
-	patient, err := h.service.Get(c.Param("id"))
+	orgID := c.GetString("org_id")
+	patient, err := h.service.Get(c.Param("id"), orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -59,8 +61,9 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
+	orgID := c.GetString("org_id")
 	userID, _ := c.Get("user_id")
-	patient, err := h.service.Create(req, userID.(string))
+	patient, err := h.service.Create(req, userID.(string), orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -76,7 +79,8 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	patient, err := h.service.Update(c.Param("id"), req)
+	orgID := c.GetString("org_id")
+	patient, err := h.service.Update(c.Param("id"), req, orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -95,7 +99,8 @@ func (h *Handler) Delete(c *gin.Context) {
 }
 
 func (h *Handler) Search(c *gin.Context) {
-	patients, err := h.service.Search(c.Query("search"))
+	orgID := c.GetString("org_id")
+	patients, err := h.service.Search(c.Query("search"), orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return

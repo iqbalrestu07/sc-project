@@ -23,6 +23,16 @@ func RunMigrations() error {
 		createServiceConsumablesTable,
 		alterPatientsAddReminderOptIn,
 		createProductCategoriesTable,
+		// SaaS multi-org + RBAC
+		alterUsersAddProfile,
+		createOrganizationsTable,
+		createOrganizationMembersTable,
+		createPermissionsTable,
+		createRolePermissionsTable,
+		createUserPermissionsTable,
+		seedDefaultPermissions,
+		seedRolePermissions,
+		alterTablesAddOrgID,
 	}
 
 	for i, migration := range migrations {
@@ -313,4 +323,187 @@ const (
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);`
+
+	// ── SaaS Multi-Org + RBAC migrations ────────────────────────────────────
+
+	alterUsersAddProfile = `
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255);
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+	`
+
+	createOrganizationsTable = `
+	CREATE TABLE IF NOT EXISTS organizations (
+		id VARCHAR(36) PRIMARY KEY,
+		name VARCHAR(255) NOT NULL,
+		slug VARCHAR(100) UNIQUE NOT NULL,
+		description TEXT,
+		logo_url TEXT,
+		is_active BOOLEAN DEFAULT true,
+		created_by VARCHAR(36) REFERENCES users(id),
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);`
+
+	createOrganizationMembersTable = `
+	CREATE TABLE IF NOT EXISTS organization_members (
+		id VARCHAR(36) PRIMARY KEY,
+		org_id VARCHAR(36) NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+		user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		role VARCHAR(50) NOT NULL DEFAULT 'cashier',
+		is_active BOOLEAN DEFAULT true,
+		joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(org_id, user_id)
+	);`
+
+	createPermissionsTable = `
+	CREATE TABLE IF NOT EXISTS permissions (
+		id VARCHAR(100) PRIMARY KEY,
+		resource VARCHAR(50) NOT NULL,
+		action VARCHAR(50) NOT NULL,
+		description TEXT,
+		UNIQUE(resource, action)
+	);`
+
+	createRolePermissionsTable = `
+	CREATE TABLE IF NOT EXISTS role_permissions (
+		id VARCHAR(36) PRIMARY KEY,
+		role VARCHAR(50) NOT NULL,
+		permission_id VARCHAR(100) NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+		UNIQUE(role, permission_id)
+	);`
+
+	createUserPermissionsTable = `
+	CREATE TABLE IF NOT EXISTS user_permissions (
+		id VARCHAR(36) PRIMARY KEY,
+		user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		org_id VARCHAR(36) NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+		permission_id VARCHAR(100) NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+		granted_by VARCHAR(36) REFERENCES users(id),
+		granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(user_id, org_id, permission_id)
+	);`
+
+	seedDefaultPermissions = `
+	INSERT INTO permissions (id, resource, action, description) VALUES
+		('patients:read',       'patients',     'read',   'View patients'),
+		('patients:write',      'patients',     'write',  'Create and edit patients'),
+		('patients:delete',     'patients',     'delete', 'Delete patients'),
+		('appointments:read',   'appointments', 'read',   'View appointments'),
+		('appointments:write',  'appointments', 'write',  'Create and edit appointments'),
+		('appointments:delete', 'appointments', 'delete', 'Delete appointments'),
+		('services:read',       'services',     'read',   'View services'),
+		('services:write',      'services',     'write',  'Create and edit services'),
+		('services:delete',     'services',     'delete', 'Delete services'),
+		('products:read',       'products',     'read',   'View products'),
+		('products:write',      'products',     'write',  'Create and edit products'),
+		('products:delete',     'products',     'delete', 'Delete products'),
+		('categories:read',     'categories',   'read',   'View categories'),
+		('categories:write',    'categories',   'write',  'Create and edit categories'),
+		('categories:delete',   'categories',   'delete', 'Delete categories'),
+		('transactions:read',   'transactions', 'read',   'View transactions'),
+		('transactions:write',  'transactions', 'write',  'Create and process transactions'),
+		('transactions:delete', 'transactions', 'delete', 'Delete transactions'),
+		('commissions:read',    'commissions',  'read',   'View commissions'),
+		('commissions:write',   'commissions',  'write',  'Update commission status'),
+		('staff:read',          'staff',        'read',   'View staff'),
+		('staff:write',         'staff',        'write',  'Create and edit staff'),
+		('staff:delete',        'staff',        'delete', 'Delete staff'),
+		('reports:read',        'reports',      'read',   'View reports and dashboard'),
+		('settings:read',       'settings',     'read',   'View clinic settings'),
+		('settings:write',      'settings',     'write',  'Update clinic settings'),
+		('cms:read',            'cms',          'read',   'View CMS content'),
+		('cms:write',           'cms',          'write',  'Edit CMS content'),
+		('rbac:read',           'rbac',         'read',   'View RBAC settings'),
+		('rbac:write',          'rbac',         'write',  'Manage roles and permissions'),
+		('organization:read',   'organization', 'read',   'View organization info'),
+		('organization:write',  'organization', 'write',  'Edit organization info'),
+		('organization:delete', 'organization', 'delete', 'Delete organization')
+	ON CONFLICT (id) DO NOTHING;
+	`
+
+	seedRolePermissions = `
+	INSERT INTO role_permissions (id, role, permission_id) VALUES
+		-- admin: all permissions
+		(gen_random_uuid()::varchar, 'admin', 'patients:read'),
+		(gen_random_uuid()::varchar, 'admin', 'patients:write'),
+		(gen_random_uuid()::varchar, 'admin', 'patients:delete'),
+		(gen_random_uuid()::varchar, 'admin', 'appointments:read'),
+		(gen_random_uuid()::varchar, 'admin', 'appointments:write'),
+		(gen_random_uuid()::varchar, 'admin', 'appointments:delete'),
+		(gen_random_uuid()::varchar, 'admin', 'services:read'),
+		(gen_random_uuid()::varchar, 'admin', 'services:write'),
+		(gen_random_uuid()::varchar, 'admin', 'services:delete'),
+		(gen_random_uuid()::varchar, 'admin', 'products:read'),
+		(gen_random_uuid()::varchar, 'admin', 'products:write'),
+		(gen_random_uuid()::varchar, 'admin', 'products:delete'),
+		(gen_random_uuid()::varchar, 'admin', 'categories:read'),
+		(gen_random_uuid()::varchar, 'admin', 'categories:write'),
+		(gen_random_uuid()::varchar, 'admin', 'categories:delete'),
+		(gen_random_uuid()::varchar, 'admin', 'transactions:read'),
+		(gen_random_uuid()::varchar, 'admin', 'transactions:write'),
+		(gen_random_uuid()::varchar, 'admin', 'transactions:delete'),
+		(gen_random_uuid()::varchar, 'admin', 'commissions:read'),
+		(gen_random_uuid()::varchar, 'admin', 'commissions:write'),
+		(gen_random_uuid()::varchar, 'admin', 'staff:read'),
+		(gen_random_uuid()::varchar, 'admin', 'staff:write'),
+		(gen_random_uuid()::varchar, 'admin', 'staff:delete'),
+		(gen_random_uuid()::varchar, 'admin', 'reports:read'),
+		(gen_random_uuid()::varchar, 'admin', 'settings:read'),
+		(gen_random_uuid()::varchar, 'admin', 'settings:write'),
+		(gen_random_uuid()::varchar, 'admin', 'cms:read'),
+		(gen_random_uuid()::varchar, 'admin', 'cms:write'),
+		(gen_random_uuid()::varchar, 'admin', 'rbac:read'),
+		(gen_random_uuid()::varchar, 'admin', 'rbac:write'),
+		(gen_random_uuid()::varchar, 'admin', 'organization:read'),
+		(gen_random_uuid()::varchar, 'admin', 'organization:write'),
+		(gen_random_uuid()::varchar, 'admin', 'organization:delete'),
+		-- doctor
+		(gen_random_uuid()::varchar, 'doctor', 'patients:read'),
+		(gen_random_uuid()::varchar, 'doctor', 'patients:write'),
+		(gen_random_uuid()::varchar, 'doctor', 'appointments:read'),
+		(gen_random_uuid()::varchar, 'doctor', 'appointments:write'),
+		(gen_random_uuid()::varchar, 'doctor', 'services:read'),
+		(gen_random_uuid()::varchar, 'doctor', 'products:read'),
+		(gen_random_uuid()::varchar, 'doctor', 'transactions:read'),
+		(gen_random_uuid()::varchar, 'doctor', 'commissions:read'),
+		(gen_random_uuid()::varchar, 'doctor', 'reports:read'),
+		-- therapist
+		(gen_random_uuid()::varchar, 'therapist', 'patients:read'),
+		(gen_random_uuid()::varchar, 'therapist', 'appointments:read'),
+		(gen_random_uuid()::varchar, 'therapist', 'services:read'),
+		(gen_random_uuid()::varchar, 'therapist', 'products:read'),
+		(gen_random_uuid()::varchar, 'therapist', 'transactions:read'),
+		(gen_random_uuid()::varchar, 'therapist', 'commissions:read'),
+		-- cashier
+		(gen_random_uuid()::varchar, 'cashier', 'patients:read'),
+		(gen_random_uuid()::varchar, 'cashier', 'patients:write'),
+		(gen_random_uuid()::varchar, 'cashier', 'appointments:read'),
+		(gen_random_uuid()::varchar, 'cashier', 'appointments:write'),
+		(gen_random_uuid()::varchar, 'cashier', 'transactions:read'),
+		(gen_random_uuid()::varchar, 'cashier', 'transactions:write'),
+		(gen_random_uuid()::varchar, 'cashier', 'services:read'),
+		(gen_random_uuid()::varchar, 'cashier', 'products:read'),
+		(gen_random_uuid()::varchar, 'cashier', 'categories:read'),
+		(gen_random_uuid()::varchar, 'cashier', 'reports:read')
+	ON CONFLICT (role, permission_id) DO NOTHING;
+	`
+
+	alterTablesAddOrgID = `
+	ALTER TABLE patients           ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	ALTER TABLE service_categories ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	ALTER TABLE services           ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	ALTER TABLE product_categories ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	ALTER TABLE products           ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	ALTER TABLE staff              ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	ALTER TABLE appointments       ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	ALTER TABLE transactions       ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	ALTER TABLE transaction_items  ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	ALTER TABLE commissions        ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	ALTER TABLE clinic_settings    ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	ALTER TABLE cms_pages          ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	ALTER TABLE stock_movements    ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	ALTER TABLE service_consumables ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
+	`
 )

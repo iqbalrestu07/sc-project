@@ -131,4 +131,28 @@ export const API_ENDPOINTS = {
         SEND_BULK: "/whatsapp/send-bulk",
         TEMPLATES: "/whatsapp/templates",
     },
+
+    // Organizations
+    ORGANIZATIONS: {
+        MY:           "/organizations/my",
+        CREATE:       "/organizations",
+        DETAIL:       (id: string) => `/organizations/${id}`,
+        UPDATE:       (id: string) => `/organizations/${id}`,
+        DELETE:       (id: string) => `/organizations/${id}`,
+        MEMBERS:      (id: string) => `/organizations/${id}/members`,
+        ADD_MEMBER:   (id: string) => `/organizations/${id}/members`,
+        UPDATE_MEMBER:(id: string, userId: string) => `/organizations/${id}/members/${userId}`,
+        REMOVE_MEMBER:(id: string, userId: string) => `/organizations/${id}/members/${userId}`,
+    },
+
+    // RBAC
+    RBAC: {
+        PERMISSIONS:          "/rbac/permissions",
+        MY_PERMISSIONS:       "/rbac/my-permissions",
+        ALL_ROLE_PERMISSIONS: "/rbac/role-permissions",
+        ROLE_PERMISSIONS:     (role: string) => `/rbac/role-permissions/${role}`,
+        USER_PERMISSIONS:     (userId: string) => `/rbac/user-permissions/${userId}`,
+        GRANT_PERMISSION:     (userId: string) => `/rbac/user-permissions/${userId}`,
+        REVOKE_PERMISSION:    (userId: string, permId: string) => `/rbac/user-permissions/${userId}/${permId}`,
+    },
 };

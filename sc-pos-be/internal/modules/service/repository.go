@@ -16,7 +16,7 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) List(search string) ([]models.Service, error) {
+func (r *Repository) List(search, orgID string) ([]models.Service, error) {
 	query := `
 		SELECT s.id, s.name, s.category_id, s.description, s.duration_minutes,
 		       s.base_price, COALESCE(s.doctor_commission_type, 'fixed'),
@@ -30,9 +30,10 @@ func (r *Repository) List(search string) ([]models.Service, error) {
 		LEFT JOIN service_categories c ON c.id = s.category_id
 		WHERE COALESCE(s.is_active, true) = true
 		  AND ($1 = '' OR s.name ILIKE '%' || $1 || '%' OR COALESCE(s.description, '') ILIKE '%' || $1 || '%')
+		  AND (s.organization_id = $2 OR ($2::text = '' AND s.organization_id IS NULL))
 		ORDER BY s.name ASC
 	`
-	rows, err := r.db.Query(query, search)
+	rows, err := r.db.Query(query, search, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query services: %w", err)
 	}
@@ -55,7 +56,7 @@ func (r *Repository) List(search string) ([]models.Service, error) {
 	return services, nil
 }
 
-func (r *Repository) Get(id string) (*models.Service, error) {
+func (r *Repository) Get(id, orgID string) (*models.Service, error) {
 	query := `
 		SELECT s.id, s.name, s.category_id, s.description, s.duration_minutes, s.base_price,
 		       COALESCE(s.doctor_commission_type, 'fixed'), COALESCE(s.doctor_commission_value, 0),
@@ -65,8 +66,9 @@ func (r *Repository) Get(id string) (*models.Service, error) {
 		FROM services s
 		LEFT JOIN service_categories c ON c.id = s.category_id
 		WHERE s.id = $1 AND COALESCE(s.is_active, true) = true
+		  AND (s.organization_id = $2 OR ($2::text = '' AND s.organization_id IS NULL))
 	`
-	row := r.db.QueryRow(query, id)
+	row := r.db.QueryRow(query, id, orgID)
 	service, err := scanService(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -77,21 +79,22 @@ func (r *Repository) Get(id string) (*models.Service, error) {
 	return &service, nil
 }
 
-func (r *Repository) Create(service *models.Service) error {
+func (r *Repository) Create(service *models.Service, orgID string) error {
 	query := `
 		INSERT INTO services (
 			id, name, category_id, description, duration_minutes, base_price,
 			doctor_commission_type, doctor_commission_value,
 			therapist_commission_type, therapist_commission_value,
-			requires_doctor, is_active, created_at, updated_at
+			requires_doctor, is_active, created_at, updated_at,
+			organization_id
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
 	if _, err := r.db.Exec(query, service.ID, service.Name, service.CategoryID, service.Description,
 		service.DurationMinutes, service.BasePrice, service.DoctorCommissionType,
 		service.DoctorCommissionValue, service.TherapistCommissionType,
 		service.TherapistCommissionValue, service.RequiresDoctor, service.IsActive,
-		service.CreatedAt, service.UpdatedAt); err != nil {
+		service.CreatedAt, service.UpdatedAt, nullableString(orgID)); err != nil {
 		return fmt.Errorf("failed to create service: %w", err)
 	}
 	return nil
@@ -124,13 +127,14 @@ func (r *Repository) Delete(id string) error {
 	return checkRows(result)
 }
 
-func (r *Repository) ListCategories() ([]models.ServiceCategory, error) {
+func (r *Repository) ListCategories(orgID string) ([]models.ServiceCategory, error) {
 	rows, err := r.db.Query(`
 		SELECT id, name, description, COALESCE(is_active, true), created_at, updated_at
 		FROM service_categories
 		WHERE COALESCE(is_active, true) = true
+		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
 		ORDER BY name ASC
-	`)
+	`, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query service categories: %w", err)
 	}
@@ -153,11 +157,11 @@ func (r *Repository) ListCategories() ([]models.ServiceCategory, error) {
 	return categories, nil
 }
 
-func (r *Repository) CreateCategory(category *models.ServiceCategory) error {
+func (r *Repository) CreateCategory(category *models.ServiceCategory, orgID string) error {
 	_, err := r.db.Exec(`
-		INSERT INTO service_categories (id, name, description, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, category.ID, category.Name, category.Description, category.IsActive, category.CreatedAt, category.UpdatedAt)
+		INSERT INTO service_categories (id, name, description, is_active, created_at, updated_at, organization_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, category.ID, category.Name, category.Description, category.IsActive, category.CreatedAt, category.UpdatedAt, nullableString(orgID))
 	if err != nil {
 		return fmt.Errorf("failed to create service category: %w", err)
 	}
@@ -232,4 +236,12 @@ func checkRows(result sql.Result) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+// nullableString converts an empty string to nil so it inserts as SQL NULL.
+func nullableString(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }

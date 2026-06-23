@@ -16,7 +16,7 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) GetClinic() (*models.ClinicSettings, error) {
+func (r *Repository) GetClinic(orgID string) (*models.ClinicSettings, error) {
 	row := r.db.QueryRow(`
 		SELECT id, clinic_name, address, phone, email, tax_rate, tax_inclusive,
 		       low_stock_alerts, appointment_reminders, expiry_warnings,
@@ -24,9 +24,10 @@ func (r *Repository) GetClinic() (*models.ClinicSettings, error) {
 		       whatsapp_business_phone_id, invoice_header_title,
 		       invoice_header_description, invoice_footer_text, created_at, updated_at
 		FROM clinic_settings
+		WHERE (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
 		ORDER BY created_at ASC
 		LIMIT 1
-	`)
+	`, orgID)
 	settings, err := scanClinicSettings(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -37,23 +38,23 @@ func (r *Repository) GetClinic() (*models.ClinicSettings, error) {
 	return &settings, nil
 }
 
-func (r *Repository) Create(settings *models.ClinicSettings) error {
+func (r *Repository) Create(settings *models.ClinicSettings, orgID string) error {
 	_, err := r.db.Exec(`
 		INSERT INTO clinic_settings (
 			id, clinic_name, address, phone, email, tax_rate, tax_inclusive,
 			low_stock_alerts, appointment_reminders, expiry_warnings,
 			reminder_hours_before, whatsapp_reminder_enabled, email_reminder_enabled,
 			whatsapp_business_phone_id, invoice_header_title, invoice_header_description,
-			invoice_footer_text, created_at, updated_at
+			invoice_footer_text, created_at, updated_at, organization_id
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 	`, settings.ID, settings.ClinicName, settings.Address, settings.Phone, settings.Email,
 		settings.TaxRate, settings.TaxInclusive, settings.LowStockAlerts,
 		settings.AppointmentReminders, settings.ExpiryWarnings, settings.ReminderHoursBefore,
 		settings.WhatsAppReminderEnabled, settings.EmailReminderEnabled,
 		settings.WhatsAppBusinessPhoneID, settings.InvoiceHeaderTitle,
 		settings.InvoiceHeaderDescription, settings.InvoiceFooterText,
-		settings.CreatedAt, settings.UpdatedAt)
+		settings.CreatedAt, settings.UpdatedAt, orgID)
 	if err != nil {
 		return fmt.Errorf("failed to create clinic settings: %w", err)
 	}

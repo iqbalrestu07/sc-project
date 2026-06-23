@@ -23,7 +23,8 @@ func NewModule() *Handler {
 }
 
 func (h *Handler) List(c *gin.Context) {
-	appointments, err := h.service.List(nil, nil)
+	orgID := c.GetString("org_id")
+	appointments, err := h.service.List(orgID, nil, nil)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -32,6 +33,7 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 func (h *Handler) Calendar(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	start, err := parseOptionalTime(c.Query("start_date"))
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, "invalid start_date")
@@ -42,7 +44,7 @@ func (h *Handler) Calendar(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusBadRequest, "invalid end_date")
 		return
 	}
-	appointments, err := h.service.List(start, end)
+	appointments, err := h.service.List(orgID, start, end)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -55,7 +57,8 @@ func (h *Handler) AvailableSlots(c *gin.Context) {
 }
 
 func (h *Handler) Get(c *gin.Context) {
-	appointment, err := h.service.Get(c.Param("id"))
+	orgID := c.GetString("org_id")
+	appointment, err := h.service.Get(c.Param("id"), orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -64,13 +67,14 @@ func (h *Handler) Get(c *gin.Context) {
 }
 
 func (h *Handler) Create(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	var req models.Appointment
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	userID := getUserID(c)
-	appointment, err := h.service.Create(req, userID)
+	appointment, err := h.service.Create(req, userID, orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -79,12 +83,13 @@ func (h *Handler) Create(c *gin.Context) {
 }
 
 func (h *Handler) Update(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	var req models.Appointment
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	appointment, err := h.service.Update(c.Param("id"), req)
+	appointment, err := h.service.Update(c.Param("id"), orgID, req)
 	if err != nil {
 		h.handleError(c, err)
 		return

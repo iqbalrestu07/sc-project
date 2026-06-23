@@ -18,17 +18,25 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) List(productID string) ([]models.StockMovement, error) {
-	query := `
+func (r *Repository) List(productID, orgID string) ([]models.StockMovement, error) {
+	baseQuery := `
 		SELECT id, product_id, movement_type, quantity, reason,
 		       reference_id, reference_type, notes, created_by, created_at
 		FROM stock_movements`
 	args := []interface{}{}
+	argIdx := 1
+	var where string
 	if productID != "" {
-		query += " WHERE product_id = $1"
+		where = fmt.Sprintf(" WHERE product_id = $%d", argIdx)
 		args = append(args, productID)
+		argIdx++
+		where += fmt.Sprintf(" AND (organization_id = $%d OR ($%d::text = '' AND organization_id IS NULL))", argIdx, argIdx)
+		args = append(args, orgID)
+	} else {
+		where = fmt.Sprintf(" WHERE (organization_id = $%d OR ($%d::text = '' AND organization_id IS NULL))", argIdx, argIdx)
+		args = append(args, orgID)
 	}
-	query += " ORDER BY created_at DESC"
+	query := baseQuery + where + " ORDER BY created_at DESC"
 
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
@@ -55,7 +63,7 @@ func (r *Repository) List(productID string) ([]models.StockMovement, error) {
 	return movements, nil
 }
 
-func (r *Repository) Create(m *models.StockMovement) error {
+func (r *Repository) Create(m *models.StockMovement, orgID string) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -67,10 +75,11 @@ func (r *Repository) Create(m *models.StockMovement) error {
 
 	if _, err := tx.Exec(`
 		INSERT INTO stock_movements (id, product_id, movement_type, quantity, reason,
-		                            reference_id, reference_type, notes, created_by, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		                            reference_id, reference_type, notes, created_by, created_at,
+		                            organization_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`, m.ID, m.ProductID, m.MovementType, m.Quantity, m.Reason,
-		m.ReferenceID, m.ReferenceType, m.Notes, m.CreatedBy, m.CreatedAt); err != nil {
+		m.ReferenceID, m.ReferenceType, m.Notes, m.CreatedBy, m.CreatedAt, orgID); err != nil {
 		return fmt.Errorf("failed to insert stock movement: %w", err)
 	}
 

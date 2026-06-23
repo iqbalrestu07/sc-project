@@ -11,12 +11,12 @@ func NewService(repo ...*Repository) *Service {
 	return &Service{repo: NewRepository()}
 }
 
-func (s *Service) ListPages() ([]Page, error) {
-	return s.repo.ListPages()
+func (s *Service) ListPages(orgID string) ([]Page, error) {
+	return s.repo.ListPages(orgID)
 }
 
-func (s *Service) GetPage(pageID string) (interface{}, error) {
-	page, err := s.repo.GetPage(pageID)
+func (s *Service) GetPage(pageID, orgID string) (interface{}, error) {
+	page, err := s.repo.GetPage(pageID, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -26,8 +26,8 @@ func (s *Service) GetPage(pageID string) (interface{}, error) {
 	return page.Data, nil
 }
 
-func (s *Service) UpsertPage(pageID string, data interface{}) (interface{}, error) {
-	page, err := s.repo.UpsertPage(pageID, data)
+func (s *Service) UpsertPage(pageID, orgID string, data interface{}) (interface{}, error) {
+	page, err := s.repo.UpsertPage(pageID, orgID, data)
 	if err != nil {
 		return nil, err
 	}

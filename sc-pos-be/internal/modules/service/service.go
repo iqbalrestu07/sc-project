@@ -23,12 +23,12 @@ func NewService(repo ...*Repository) *Service {
 	return &Service{repo: NewRepository()}
 }
 
-func (s *Service) List(search string) ([]models.Service, error) {
-	return s.repo.List(strings.TrimSpace(search))
+func (s *Service) List(search, orgID string) ([]models.Service, error) {
+	return s.repo.List(strings.TrimSpace(search), orgID)
 }
 
-func (s *Service) Get(id string) (*models.Service, error) {
-	service, err := s.repo.Get(id)
+func (s *Service) Get(id, orgID string) (*models.Service, error) {
+	service, err := s.repo.Get(id, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -38,21 +38,21 @@ func (s *Service) Get(id string) (*models.Service, error) {
 	return service, nil
 }
 
-func (s *Service) Create(req models.Service) (*models.Service, error) {
+func (s *Service) Create(req models.Service, orgID string) (*models.Service, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.CreatedAt = now
 	req.UpdatedAt = now
 	req.IsActive = true
 	applyServiceDefaults(&req)
-	if err := s.repo.Create(&req); err != nil {
+	if err := s.repo.Create(&req, orgID); err != nil {
 		return nil, err
 	}
 	return &req, nil
 }
 
-func (s *Service) Update(id string, req models.Service) (*models.Service, error) {
-	_, err := s.Get(id)
+func (s *Service) Update(id string, req models.Service, orgID string) (*models.Service, error) {
+	_, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func (s *Service) Update(id string, req models.Service) (*models.Service, error)
 		}
 		return nil, err
 	}
-	return s.Get(id)
+	return s.Get(id, orgID)
 }
 
 func (s *Service) Delete(id string) error {
@@ -76,17 +76,17 @@ func (s *Service) Delete(id string) error {
 	return nil
 }
 
-func (s *Service) ListCategories() ([]models.ServiceCategory, error) {
-	return s.repo.ListCategories()
+func (s *Service) ListCategories(orgID string) ([]models.ServiceCategory, error) {
+	return s.repo.ListCategories(orgID)
 }
 
-func (s *Service) CreateCategory(req models.ServiceCategory) (*models.ServiceCategory, error) {
+func (s *Service) CreateCategory(req models.ServiceCategory, orgID string) (*models.ServiceCategory, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.CreatedAt = now
 	req.UpdatedAt = now
 	req.IsActive = true
-	if err := s.repo.CreateCategory(&req); err != nil {
+	if err := s.repo.CreateCategory(&req, orgID); err != nil {
 		return nil, err
 	}
 	return &req, nil

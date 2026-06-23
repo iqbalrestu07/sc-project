@@ -22,12 +22,12 @@ func NewService(repo ...*Repository) *Service {
 	return &Service{repo: NewRepository()}
 }
 
-func (s *Service) List(start, end *time.Time) ([]AppointmentWithRelations, error) {
-	return s.repo.List(start, end)
+func (s *Service) List(orgID string, start, end *time.Time) ([]AppointmentWithRelations, error) {
+	return s.repo.List(orgID, start, end)
 }
 
-func (s *Service) Get(id string) (*AppointmentWithRelations, error) {
-	appointment, err := s.repo.Get(id)
+func (s *Service) Get(id, orgID string) (*AppointmentWithRelations, error) {
+	appointment, err := s.repo.Get(id, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +37,7 @@ func (s *Service) Get(id string) (*AppointmentWithRelations, error) {
 	return appointment, nil
 }
 
-func (s *Service) Create(req models.Appointment, userID *string) (*AppointmentWithRelations, error) {
+func (s *Service) Create(req models.Appointment, userID *string, orgID string) (*AppointmentWithRelations, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.CreatedBy = userID
@@ -46,14 +46,14 @@ func (s *Service) Create(req models.Appointment, userID *string) (*AppointmentWi
 	if req.Status == "" {
 		req.Status = "scheduled"
 	}
-	if err := s.repo.Create(&req); err != nil {
+	if err := s.repo.Create(&req, orgID); err != nil {
 		return nil, err
 	}
-	return s.Get(req.ID)
+	return s.Get(req.ID, orgID)
 }
 
-func (s *Service) Update(id string, req models.Appointment) (*AppointmentWithRelations, error) {
-	current, err := s.Get(id)
+func (s *Service) Update(id, orgID string, req models.Appointment) (*AppointmentWithRelations, error) {
+	current, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (s *Service) Update(id string, req models.Appointment) (*AppointmentWithRel
 		}
 		return nil, err
 	}
-	return s.Get(id)
+	return s.Get(id, orgID)
 }
 
 func (s *Service) Delete(id string) error {

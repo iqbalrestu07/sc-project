@@ -15,9 +15,9 @@ func NewService(repo ...*Repository) *Service {
 	return &Service{repo: NewRepository(), staffRepo: staffRepo}
 }
 
-func (s *Service) List(userRole, userID string) ([]CommissionWithRelations, error) {
+func (s *Service) List(orgID, userRole, userID string) ([]CommissionWithRelations, error) {
 	if userRole == "admin" {
-		return s.repo.List("")
+		return s.repo.List(orgID, "")
 	}
 
 	staff, err := s.staffRepo.GetByUserID(userID)
@@ -28,11 +28,11 @@ func (s *Service) List(userRole, userID string) ([]CommissionWithRelations, erro
 		return []CommissionWithRelations{}, nil
 	}
 
-	return s.repo.List(staff.ID)
+	return s.repo.List(orgID, staff.ID)
 }
 
-func (s *Service) ListByStaff(staffID string) ([]CommissionWithRelations, error) {
-	return s.repo.List(staffID)
+func (s *Service) ListByStaff(orgID, staffID string) ([]CommissionWithRelations, error) {
+	return s.repo.List(orgID, staffID)
 }
 
 func (s *Service) UpdateStatus(ids []string, status string) error {

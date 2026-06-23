@@ -31,14 +31,14 @@ type DateRange struct {
 	To   *time.Time
 }
 
-func (r *Repository) Stats(dr DateRange) (map[string]interface{}, error) {
+func (r *Repository) Stats(dr DateRange, orgID string) (map[string]interface{}, error) {
 	var patients, appointmentsToday, paidTransactionsToday, lowStockProducts int
 	var revenueToday float64
 
-	if err := r.db.QueryRow(`SELECT COUNT(*) FROM patients WHERE COALESCE(is_active, true) = true`).Scan(&patients); err != nil {
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM patients WHERE COALESCE(is_active, true) = true AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))`, orgID).Scan(&patients); err != nil {
 		return nil, fmt.Errorf("failed to count patients: %w", err)
 	}
-	if err := r.db.QueryRow(`SELECT COUNT(*) FROM appointments WHERE scheduled_at AT TIME ZONE 'Asia/Jakarta' >= CURRENT_DATE AND scheduled_at AT TIME ZONE 'Asia/Jakarta' < CURRENT_DATE + INTERVAL '1 day'`).Scan(&appointmentsToday); err != nil {
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM appointments WHERE scheduled_at AT TIME ZONE 'Asia/Jakarta' >= CURRENT_DATE AND scheduled_at AT TIME ZONE 'Asia/Jakarta' < CURRENT_DATE + INTERVAL '1 day' AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))`, orgID).Scan(&appointmentsToday); err != nil {
 		return nil, fmt.Errorf("failed to count appointments: %w", err)
 	}
 
@@ -50,7 +50,8 @@ func (r *Repository) Stats(dr DateRange) (map[string]interface{}, error) {
 			WHERE payment_status = 'paid'
 			  AND COALESCE(paid_at, updated_at) >= $1
 			  AND COALESCE(paid_at, updated_at) < $2
-		`, dr.From, dr.To).Scan(&paidTransactionsToday, &revenueToday); err != nil {
+			  AND (organization_id = $3 OR ($3::text = '' AND organization_id IS NULL))
+		`, dr.From, dr.To, orgID).Scan(&paidTransactionsToday, &revenueToday); err != nil {
 			return nil, fmt.Errorf("failed to calculate revenue: %w", err)
 		}
 	} else {
@@ -66,12 +67,13 @@ func (r *Repository) Stats(dr DateRange) (map[string]interface{}, error) {
 			WHERE payment_status = 'paid'
 			  AND COALESCE(paid_at, updated_at) >= $1
 			  AND COALESCE(paid_at, updated_at) < $2
-		`, todayStart, todayEnd).Scan(&paidTransactionsToday, &revenueToday); err != nil {
+			  AND (organization_id = $3 OR ($3::text = '' AND organization_id IS NULL))
+		`, todayStart, todayEnd, orgID).Scan(&paidTransactionsToday, &revenueToday); err != nil {
 			return nil, fmt.Errorf("failed to calculate revenue: %w", err)
 		}
 	}
 
-	if err := r.db.QueryRow(`SELECT COUNT(*) FROM products WHERE COALESCE(is_active, true) = true AND COALESCE(current_stock, 0) <= COALESCE(minimum_stock, 5)`).Scan(&lowStockProducts); err != nil {
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM products WHERE COALESCE(is_active, true) = true AND COALESCE(current_stock, 0) <= COALESCE(minimum_stock, 5) AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))`, orgID).Scan(&lowStockProducts); err != nil {
 		return nil, fmt.Errorf("failed to count low stock products: %w", err)
 	}
 
@@ -89,7 +91,7 @@ type RevenueRow struct {
 	Revenue float64 `json:"revenue"`
 }
 
-func (r *Repository) Revenue(dr DateRange) ([]RevenueRow, error) {
+func (r *Repository) Revenue(dr DateRange, orgID string) ([]RevenueRow, error) {
 	var query string
 	var args []interface{}
 
@@ -101,15 +103,18 @@ func (r *Repository) Revenue(dr DateRange) ([]RevenueRow, error) {
 			WHERE payment_status = 'paid'
 			  AND COALESCE(paid_at, updated_at) >= $1
 			  AND COALESCE(paid_at, updated_at) < $2
+			  AND (organization_id = $3 OR ($3::text = '' AND organization_id IS NULL))
 			GROUP BY 1 ORDER BY 1 DESC LIMIT 366`
-		args = []interface{}{dr.From, dr.To}
+		args = []interface{}{dr.From, dr.To, orgID}
 	} else {
 		query = `
 			SELECT (COALESCE(paid_at, updated_at) AT TIME ZONE 'Asia/Jakarta')::date AS date,
 			       COALESCE(SUM(total_amount), 0)::float8 AS revenue
 			FROM transactions
 			WHERE payment_status = 'paid'
+			  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
 			GROUP BY 1 ORDER BY 1 DESC LIMIT 30`
+		args = []interface{}{orgID}
 	}
 
 	rows, err := r.db.Query(query, args...)
@@ -143,7 +148,7 @@ type TopItem struct {
 	Revenue  float64 `json:"revenue"`
 }
 
-func (r *Repository) TopServices(dr DateRange) ([]TopItem, error) {
+func (r *Repository) TopServices(dr DateRange, orgID string) ([]TopItem, error) {
 	var rows *sql.Rows
 	var err error
 	if dr.From != nil && dr.To != nil {
@@ -155,10 +160,11 @@ func (r *Repository) TopServices(dr DateRange) ([]TopItem, error) {
 			WHERE t.payment_status = 'paid'
 			  AND COALESCE(t.paid_at, t.updated_at) >= $1
 			  AND COALESCE(t.paid_at, t.updated_at) < $2
+			  AND (t.organization_id = $3 OR ($3::text = '' AND t.organization_id IS NULL))
 			GROUP BY s.id, s.name
 			ORDER BY revenue DESC
 			LIMIT 10
-		`, dr.From, dr.To)
+		`, dr.From, dr.To, orgID)
 	} else {
 		rows, err = r.db.Query(`
 			SELECT s.id, s.name, COUNT(*)::float8 AS quantity, COALESCE(SUM(ti.total_price), 0)::float8 AS revenue
@@ -166,10 +172,11 @@ func (r *Repository) TopServices(dr DateRange) ([]TopItem, error) {
 			JOIN services s ON s.id = ti.service_id
 			JOIN transactions t ON t.id = ti.transaction_id
 			WHERE t.payment_status = 'paid'
+			  AND (t.organization_id = $1 OR ($1::text = '' AND t.organization_id IS NULL))
 			GROUP BY s.id, s.name
 			ORDER BY revenue DESC
 			LIMIT 10
-		`)
+		`, orgID)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query top services: %w", err)
@@ -178,7 +185,7 @@ func (r *Repository) TopServices(dr DateRange) ([]TopItem, error) {
 	return scanTopItems(rows)
 }
 
-func (r *Repository) TopProducts(dr DateRange) ([]TopItem, error) {
+func (r *Repository) TopProducts(dr DateRange, orgID string) ([]TopItem, error) {
 	var rows *sql.Rows
 	var err error
 	if dr.From != nil && dr.To != nil {
@@ -190,10 +197,11 @@ func (r *Repository) TopProducts(dr DateRange) ([]TopItem, error) {
 			WHERE t.payment_status = 'paid'
 			  AND COALESCE(t.paid_at, t.updated_at) >= $1
 			  AND COALESCE(t.paid_at, t.updated_at) < $2
+			  AND (t.organization_id = $3 OR ($3::text = '' AND t.organization_id IS NULL))
 			GROUP BY p.id, p.name
 			ORDER BY revenue DESC
 			LIMIT 10
-		`, dr.From, dr.To)
+		`, dr.From, dr.To, orgID)
 	} else {
 		rows, err = r.db.Query(`
 			SELECT p.id, p.name, COALESCE(SUM(ti.quantity), 0)::float8 AS quantity, COALESCE(SUM(ti.total_price), 0)::float8 AS revenue
@@ -201,10 +209,11 @@ func (r *Repository) TopProducts(dr DateRange) ([]TopItem, error) {
 			JOIN products p ON p.id = ti.product_id
 			JOIN transactions t ON t.id = ti.transaction_id
 			WHERE t.payment_status = 'paid'
+			  AND (t.organization_id = $1 OR ($1::text = '' AND t.organization_id IS NULL))
 			GROUP BY p.id, p.name
 			ORDER BY revenue DESC
 			LIMIT 10
-		`)
+		`, orgID)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query top products: %w", err)
@@ -236,7 +245,7 @@ type AppointmentTodayRow struct {
 	ServiceName string    `json:"service_name"`
 }
 
-func (r *Repository) AppointmentsToday() ([]AppointmentTodayRow, error) {
+func (r *Repository) AppointmentsToday(orgID string) ([]AppointmentTodayRow, error) {
 	rows, err := r.db.Query(`
 		SELECT a.id, a.scheduled_at, a.status,
 		       COALESCE(p.full_name, '') AS patient_name,
@@ -246,8 +255,9 @@ func (r *Repository) AppointmentsToday() ([]AppointmentTodayRow, error) {
 		LEFT JOIN services s ON s.id = a.service_id
 		WHERE a.scheduled_at AT TIME ZONE 'Asia/Jakarta' >= CURRENT_DATE
 		  AND a.scheduled_at AT TIME ZONE 'Asia/Jakarta' < CURRENT_DATE + INTERVAL '1 day'
+		  AND (a.organization_id = $1 OR ($1::text = '' AND a.organization_id IS NULL))
 		ORDER BY a.scheduled_at ASC
-	`)
+	`, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query appointments today: %w", err)
 	}

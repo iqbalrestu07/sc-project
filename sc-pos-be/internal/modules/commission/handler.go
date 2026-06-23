@@ -20,6 +20,7 @@ func NewModule() *Handler {
 }
 
 func (h *Handler) List(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	role, _ := c.Get("role")
 	userID, _ := c.Get("user_id")
 
@@ -40,7 +41,7 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	commissions, err := h.service.List(roleStr, idStr)
+	commissions, err := h.service.List(orgID, roleStr, idStr)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -49,7 +50,8 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 func (h *Handler) ListByStaff(c *gin.Context) {
-	commissions, err := h.service.ListByStaff(c.Param("staffId"))
+	orgID := c.GetString("org_id")
+	commissions, err := h.service.ListByStaff(orgID, c.Param("staffId"))
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return

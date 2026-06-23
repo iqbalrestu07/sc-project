@@ -17,7 +17,8 @@ func NewModule() *Handler {
 }
 
 func (h *Handler) List(c *gin.Context) {
-	movements, err := h.repo.List(c.Query("product_id"))
+	orgID := c.GetString("org_id")
+	movements, err := h.repo.List(c.Query("product_id"), orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -26,6 +27,7 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 func (h *Handler) Create(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	var req models.StockMovement
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
@@ -41,7 +43,7 @@ func (h *Handler) Create(c *gin.Context) {
 		req.CreatedBy = &uid
 	}
 
-	if err := h.repo.Create(&req); err != nil {
+	if err := h.repo.Create(&req, orgID); err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}

@@ -22,7 +22,8 @@ func NewModule() *Handler {
 }
 
 func (h *Handler) List(c *gin.Context) {
-	transactions, err := h.service.List()
+	orgID := c.GetString("org_id")
+	transactions, err := h.service.List(orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -31,7 +32,8 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 func (h *Handler) Get(c *gin.Context) {
-	transaction, err := h.service.Get(c.Param("id"))
+	orgID := c.GetString("org_id")
+	transaction, err := h.service.Get(c.Param("id"), orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -40,12 +42,13 @@ func (h *Handler) Get(c *gin.Context) {
 }
 
 func (h *Handler) Create(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	var req CreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	transaction, err := h.service.Create(req, getUserID(c))
+	transaction, err := h.service.Create(req, getUserID(c), orgID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -54,12 +57,13 @@ func (h *Handler) Create(c *gin.Context) {
 }
 
 func (h *Handler) Update(c *gin.Context) {
+	orgID := c.GetString("org_id")
 	var req models.Transaction
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	transaction, err := h.service.Update(c.Param("id"), req)
+	transaction, err := h.service.Update(c.Param("id"), orgID, req)
 	if err != nil {
 		h.handleError(c, err)
 		return

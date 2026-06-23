@@ -48,27 +48,32 @@ func parseDateRange(c *gin.Context) DateRange {
 }
 
 func (h *Handler) Stats(c *gin.Context) {
-	data, err := h.service.Stats(parseDateRange(c))
+	orgID := c.GetString("org_id")
+	data, err := h.service.Stats(parseDateRange(c), orgID)
 	respond(c, data, err)
 }
 
 func (h *Handler) Revenue(c *gin.Context) {
-	data, err := h.service.Revenue(parseDateRange(c))
+	orgID := c.GetString("org_id")
+	data, err := h.service.Revenue(parseDateRange(c), orgID)
 	respond(c, data, err)
 }
 
 func (h *Handler) TopServices(c *gin.Context) {
-	data, err := h.service.TopServices(parseDateRange(c))
+	orgID := c.GetString("org_id")
+	data, err := h.service.TopServices(parseDateRange(c), orgID)
 	respond(c, data, err)
 }
 
 func (h *Handler) TopProducts(c *gin.Context) {
-	data, err := h.service.TopProducts(parseDateRange(c))
+	orgID := c.GetString("org_id")
+	data, err := h.service.TopProducts(parseDateRange(c), orgID)
 	respond(c, data, err)
 }
 
 func (h *Handler) AppointmentsToday(c *gin.Context) {
-	data, err := h.service.AppointmentsToday()
+	orgID := c.GetString("org_id")
+	data, err := h.service.AppointmentsToday(orgID)
 	respond(c, data, err)
 }
 

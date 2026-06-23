@@ -51,7 +51,7 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) List() ([]TransactionWithRelations, error) {
+func (r *Repository) List(orgID string) ([]TransactionWithRelations, error) {
 	rows, err := r.db.Query(`
 		SELECT t.id, t.transaction_code, t.appointment_id, t.patient_id, t.subtotal,
 		       t.discount_amount, t.discount_type, t.total_amount, COALESCE(t.tax_amount, 0),
@@ -59,8 +59,9 @@ func (r *Repository) List() ([]TransactionWithRelations, error) {
 		       t.created_at, t.updated_at, p.id, p.full_name, p.patient_code, p.phone, p.whatsapp
 		FROM transactions t
 		LEFT JOIN patients p ON p.id = t.patient_id
+		WHERE (t.organization_id = $1 OR ($1::text = '' AND t.organization_id IS NULL))
 		ORDER BY t.created_at DESC
-	`)
+	`, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query transactions: %w", err)
 	}
@@ -90,7 +91,7 @@ func (r *Repository) List() ([]TransactionWithRelations, error) {
 	return transactions, nil
 }
 
-func (r *Repository) Get(id string) (*TransactionWithRelations, error) {
+func (r *Repository) Get(id, orgID string) (*TransactionWithRelations, error) {
 	row := r.db.QueryRow(`
 		SELECT t.id, t.transaction_code, t.appointment_id, t.patient_id, t.subtotal,
 		       t.discount_amount, t.discount_type, t.total_amount, COALESCE(t.tax_amount, 0),
@@ -99,7 +100,8 @@ func (r *Repository) Get(id string) (*TransactionWithRelations, error) {
 		FROM transactions t
 		LEFT JOIN patients p ON p.id = t.patient_id
 		WHERE t.id = $1
-	`, id)
+		  AND (t.organization_id = $2 OR ($2::text = '' AND t.organization_id IS NULL))
+	`, id, orgID)
 	transaction, err := scanTransaction(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -115,25 +117,30 @@ func (r *Repository) Get(id string) (*TransactionWithRelations, error) {
 	return &transaction, nil
 }
 
-func (r *Repository) Create(req CreateRequest) (*TransactionWithRelations, error) {
+func (r *Repository) Create(req CreateRequest, orgID string) (*TransactionWithRelations, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
+	var orgVal interface{}
+	if orgID != "" {
+		orgVal = orgID
+	}
+
 	if _, err := tx.Exec(`
 		INSERT INTO transactions (
 			id, transaction_code, appointment_id, patient_id, subtotal, discount_amount,
 			discount_type, total_amount, tax_amount, payment_method, payment_status,
-			notes, created_by, paid_at, created_at, updated_at
+			notes, created_by, paid_at, organization_id, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 	`, req.Transaction.ID, req.Transaction.TransactionCode, req.Transaction.AppointmentID,
 		req.Transaction.PatientID, req.Transaction.Subtotal, req.Transaction.DiscountAmount,
 		req.Transaction.DiscountType, req.Transaction.TotalAmount, req.Transaction.TaxAmount,
 		req.Transaction.PaymentMethod, req.Transaction.PaymentStatus, req.Transaction.Notes,
-		req.Transaction.CreatedBy, req.Transaction.PaidAt, req.Transaction.CreatedAt,
+		req.Transaction.CreatedBy, req.Transaction.PaidAt, orgVal, req.Transaction.CreatedAt,
 		req.Transaction.UpdatedAt); err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
@@ -155,7 +162,7 @@ func (r *Repository) Create(req CreateRequest) (*TransactionWithRelations, error
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
-	return r.Get(req.Transaction.ID)
+	return r.Get(req.Transaction.ID, orgID)
 }
 
 func (r *Repository) Update(id string, updates models.Transaction) error {
@@ -237,13 +244,13 @@ func (r *Repository) Items(transactionID string) ([]TransactionItemWithRelations
 }
 
 type paidItemRow struct {
-	itemID, itemType                   string
-	productID, serviceID               sql.NullString
-	doctorID, therapistID              sql.NullString
-	quantity                           int
-	totalPrice                         float64
-	doctorType, therapistType          string
-	doctorValue, therapistValue        float64
+	itemID, itemType            string
+	productID, serviceID        sql.NullString
+	doctorID, therapistID       sql.NullString
+	quantity                    int
+	totalPrice                  float64
+	doctorType, therapistType   string
+	doctorValue, therapistValue float64
 }
 
 func (r *Repository) MarkPaidEffects(transactionID string) error {

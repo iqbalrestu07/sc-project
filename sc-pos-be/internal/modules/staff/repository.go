@@ -16,14 +16,15 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) List() ([]models.Staff, error) {
+func (r *Repository) List(orgID string) ([]models.Staff, error) {
 	rows, err := r.db.Query(`
 		SELECT id, user_id, full_name, role, phone, email, specialization,
 		       COALESCE(is_active, true), created_at, updated_at
 		FROM staff
 		WHERE COALESCE(is_active, true) = true
+		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
 		ORDER BY full_name ASC
-	`)
+	`, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query staff: %w", err)
 	}
@@ -46,13 +47,14 @@ func (r *Repository) List() ([]models.Staff, error) {
 	return staffList, nil
 }
 
-func (r *Repository) Get(id string) (*models.Staff, error) {
+func (r *Repository) Get(id, orgID string) (*models.Staff, error) {
 	row := r.db.QueryRow(`
 		SELECT id, user_id, full_name, role, phone, email, specialization,
 		       COALESCE(is_active, true), created_at, updated_at
 		FROM staff
 		WHERE id = $1 AND COALESCE(is_active, true) = true
-	`, id)
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+	`, id, orgID)
 	staff, err := scanStaff(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -80,11 +82,15 @@ func (r *Repository) GetByUserID(userID string) (*models.Staff, error) {
 	return &staff, nil
 }
 
-func (r *Repository) Create(staff *models.Staff) error {
+func (r *Repository) Create(staff *models.Staff, orgID string) error {
+	var orgVal interface{}
+	if orgID != "" {
+		orgVal = orgID
+	}
 	_, err := r.db.Exec(`
-		INSERT INTO staff (id, user_id, full_name, role, phone, email, specialization, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-	`, staff.ID, staff.UserID, staff.FullName, staff.Role, staff.Phone, staff.Email, staff.Specialization, staff.IsActive, staff.CreatedAt, staff.UpdatedAt)
+		INSERT INTO staff (id, user_id, full_name, role, phone, email, specialization, is_active, organization_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	`, staff.ID, staff.UserID, staff.FullName, staff.Role, staff.Phone, staff.Email, staff.Specialization, staff.IsActive, orgVal, staff.CreatedAt, staff.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create staff: %w", err)
 	}

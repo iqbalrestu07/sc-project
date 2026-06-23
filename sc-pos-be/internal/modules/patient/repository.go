@@ -22,13 +22,14 @@ const selectColumns = `
 	whatsapp, email, address, allergy_history, medical_conditions, skin_type,
 	notes, tags, is_active, reminder_opt_in, created_by, created_at, updated_at`
 
-func (r *Repository) GetAll() ([]models.Patient, error) {
+func (r *Repository) GetAll(orgID string) ([]models.Patient, error) {
 	query := `SELECT` + selectColumns + `
 		FROM patients
 		WHERE is_active = true
+		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
 		ORDER BY created_at DESC`
 
-	rows, err := r.db.Query(query)
+	rows, err := r.db.Query(query, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query patients: %w", err)
 	}
@@ -37,13 +38,14 @@ func (r *Repository) GetAll() ([]models.Patient, error) {
 	return scanPatients(rows)
 }
 
-func (r *Repository) GetByID(id string) (*models.Patient, error) {
+func (r *Repository) GetByID(id, orgID string) (*models.Patient, error) {
 	query := `SELECT` + selectColumns + `
 		FROM patients
-		WHERE id = $1 AND is_active = true`
+		WHERE id = $1 AND is_active = true
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))`
 
 	var patient models.Patient
-	err := r.db.QueryRow(query, id).Scan(
+	err := r.db.QueryRow(query, id, orgID).Scan(
 		&patient.ID, &patient.PatientCode, &patient.FullName, &patient.PhotoURL,
 		&patient.DateOfBirth, &patient.Gender, &patient.Phone, &patient.WhatsApp,
 		&patient.Email, &patient.Address, &patient.AllergyHistory,
@@ -61,13 +63,14 @@ func (r *Repository) GetByID(id string) (*models.Patient, error) {
 	return &patient, nil
 }
 
-func (r *Repository) Create(patient *models.Patient) error {
+func (r *Repository) Create(patient *models.Patient, orgID string) error {
 	query := `
 		INSERT INTO patients (id, patient_code, full_name, photo_url, date_of_birth,
 		                     gender, phone, whatsapp, email, address, allergy_history,
 		                     medical_conditions, skin_type, notes, tags, is_active,
-		                     reminder_opt_in, created_by, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+		                     reminder_opt_in, created_by, created_at, updated_at,
+		                     organization_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
 	`
 
 	_, err := r.db.Exec(query,
@@ -77,6 +80,7 @@ func (r *Repository) Create(patient *models.Patient) error {
 		patient.MedicalConditions, patient.SkinType, patient.Notes,
 		pq.Array(patient.Tags), patient.IsActive, patient.ReminderOptIn,
 		patient.CreatedBy, patient.CreatedAt, patient.UpdatedAt,
+		nullableString(orgID),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create patient: %w", err)
@@ -140,7 +144,7 @@ func (r *Repository) Delete(id string) error {
 	return nil
 }
 
-func (r *Repository) Search(query string) ([]models.Patient, error) {
+func (r *Repository) Search(query, orgID string) ([]models.Patient, error) {
 	sqlQuery := `SELECT` + selectColumns + `
 		FROM patients
 		WHERE is_active = true AND (
@@ -148,9 +152,10 @@ func (r *Repository) Search(query string) ([]models.Patient, error) {
 			phone ILIKE $1 OR
 			patient_code ILIKE $1
 		)
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
 		ORDER BY created_at DESC`
 
-	rows, err := r.db.Query(sqlQuery, "%"+query+"%")
+	rows, err := r.db.Query(sqlQuery, "%"+query+"%", orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search patients: %w", err)
 	}
@@ -171,13 +176,13 @@ type VisitSummary struct {
 
 // TransactionSummary is a condensed transaction record for patient history
 type TransactionSummary struct {
-	ID              string   `json:"id"`
-	TransactionCode string   `json:"transaction_code"`
-	TotalAmount     float64  `json:"total_amount"`
-	PaymentStatus   string   `json:"payment_status"`
-	PaymentMethod   *string  `json:"payment_method,omitempty"`
-	PaidAt          *string  `json:"paid_at,omitempty"`
-	CreatedAt       string   `json:"created_at"`
+	ID              string  `json:"id"`
+	TransactionCode string  `json:"transaction_code"`
+	TotalAmount     float64 `json:"total_amount"`
+	PaymentStatus   string  `json:"payment_status"`
+	PaymentMethod   *string `json:"payment_method,omitempty"`
+	PaidAt          *string `json:"paid_at,omitempty"`
+	CreatedAt       string  `json:"created_at"`
 }
 
 func (r *Repository) GetVisits(patientID string) ([]VisitSummary, error) {
@@ -264,6 +269,14 @@ func (r *Repository) GetTransactions(patientID string) ([]TransactionSummary, er
 		txns = []TransactionSummary{}
 	}
 	return txns, nil
+}
+
+// nullableString converts an empty string to nil so it inserts as SQL NULL.
+func nullableString(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func scanPatients(rows *sql.Rows) ([]models.Patient, error) {
