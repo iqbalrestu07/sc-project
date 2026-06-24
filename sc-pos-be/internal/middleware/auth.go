@@ -57,6 +57,21 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// Ensure the user still exists in the database. A valid JWT from a
+		// dropped/reset database (or a deleted user) should not be accepted.
+		var exists bool
+		err = database.DB.QueryRow(`SELECT EXISTS (SELECT 1 FROM users WHERE id = $1)`, claims.UserID).Scan(&exists)
+		if err != nil {
+			utils.ErrorResponse(c, http.StatusInternalServerError, "failed to verify user")
+			c.Abort()
+			return
+		}
+		if !exists {
+			utils.ErrorResponse(c, http.StatusUnauthorized, "invalid token: user not found")
+			c.Abort()
+			return
+		}
+
 		c.Set("user_id", claims.UserID)
 		c.Set("email", claims.Email)
 		c.Set("role", claims.Role)
