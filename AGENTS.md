@@ -743,7 +743,7 @@ psql -U postgres -d sc_pos        # connect
 ## 10. Git History Ringkas
 
 ```
-<latest-commit> - feat: direct user creation in Members + POS print receipt prompt
+596a571 - feat: direct user creation in Members + POS print receipt prompt
           Backend: POST /auth/admin/register sudah tersedia; di frontend sekarang
                    Members page bisa langsung buat user baru + auto-add ke org.
           Frontend: Setelah checkout POS berhasil, muncul AlertDialog bertanya
@@ -828,7 +828,7 @@ ca2cdde - Add AGENTS.md
 
 ---
 
-_Terakhir diupdate: commit <latest-commit> — direct user creation in Members page, POS print receipt prompt_
+_Terakhir diupdate: commit 596a571 — direct user creation in Members page, POS print receipt prompt_
 
 ---
 
