@@ -3,7 +3,7 @@ import { apiClient, API_ENDPOINTS } from "@/integrations/api";
 import type { Product, ProductCategory, ProductInsert, ProductUpdate, ProductFormData } from "@/types/product";
 import { toast } from "sonner";
 
-export function useProducts() {
+export function useProducts(enabled = true) {
   const queryClient = useQueryClient();
 
   const productsQuery = useQuery({
@@ -19,6 +19,7 @@ export function useProducts() {
         throw error;
       }
     },
+    enabled,
   });
 
   const createProduct = useMutation({

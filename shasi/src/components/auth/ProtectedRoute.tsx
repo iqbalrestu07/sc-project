@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth, AppRole } from "@/contexts/AuthContext";
+import { getDefaultRoute } from "@/lib/routes";
 import { Loader2 } from "lucide-react";
 
 interface ProtectedRouteProps {
@@ -36,22 +37,12 @@ export function ProtectedRoute({ children, allowedRoles, requirePermission }: Pr
 
   // Permission-based guard
   if (requirePermission && !hasPermission(requirePermission)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center max-w-md px-4">
-          <h1 className="text-2xl font-semibold mb-2">Akses Ditolak</h1>
-          <p className="text-muted-foreground mb-4">
-            Anda tidak memiliki permission <code className="font-mono text-sm bg-muted px-1 py-0.5 rounded">{requirePermission}</code> untuk mengakses halaman ini.
-          </p>
-          <Navigate to="/dashboard" replace />
-        </div>
-      </div>
-    );
+    return <Navigate to={getDefaultRoute(role)} replace />;
   }
 
   // Legacy role-based guard (fallback)
   if (allowedRoles && role && !allowedRoles.includes(role)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={getDefaultRoute(role)} replace />;
   }
 
   return <>{children}</>;

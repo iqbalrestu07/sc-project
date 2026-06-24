@@ -35,12 +35,18 @@ const serviceSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name is too long"),
   category_id: z.string().optional(),
   description: z.string().max(500, "Description is too long").optional(),
-  duration_minutes: z.coerce.number().min(5).max(480).optional(),
-  base_price: z.coerce.number().min(0, "Price cannot be negative"),
-  doctor_commission_type: z.enum(["fixed", "percentage"]).optional(),
-  doctor_commission_value: z.coerce.number().min(0).optional(),
-  therapist_commission_type: z.enum(["fixed", "percentage"]).optional(),
-  therapist_commission_value: z.coerce.number().min(0).optional(),
+  duration_minutes: z.coerce.number().min(5, "Duration must be at least 5 minutes").max(480, "Duration must be at most 480 minutes"),
+  base_price: z.coerce.number().min(0.01, "Base price is required and must be greater than 0"),
+  doctor_commission_type: z.enum(["fixed", "percentage"], {
+    required_error: "Doctor commission type is required",
+    invalid_type_error: "Doctor commission type is required",
+  }),
+  doctor_commission_value: z.coerce.number().min(0, "Commission value cannot be negative"),
+  therapist_commission_type: z.enum(["fixed", "percentage"], {
+    required_error: "Therapist commission type is required",
+    invalid_type_error: "Therapist commission type is required",
+  }),
+  therapist_commission_value: z.coerce.number().min(0, "Commission value cannot be negative"),
   requires_doctor: z.boolean().optional(),
 });
 

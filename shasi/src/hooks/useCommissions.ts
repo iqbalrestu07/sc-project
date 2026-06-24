@@ -8,7 +8,7 @@ interface CommissionWithRelations extends Commission {
   transaction?: { id: string; transaction_code: string } | null;
 }
 
-export function useCommissions() {
+export function useCommissions(enabled = true) {
   const queryClient = useQueryClient();
 
   const commissionsQuery = useQuery({
@@ -24,6 +24,7 @@ export function useCommissions() {
         throw error;
       }
     },
+    enabled,
   });
 
   // Mutation to update commission status

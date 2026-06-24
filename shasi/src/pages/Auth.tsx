@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sparkles, Mail, Lock, Loader2, User, Building2 } from "lucide-react";
 import { apiClient, API_ENDPOINTS } from "@/integrations/api";
 import { useAuth, OrgInfo } from "@/contexts/AuthContext";
+import { getDefaultRoute } from "@/lib/routes";
 import { useToast } from "@/hooks/use-toast";
 
 interface AuthResponse {
@@ -62,7 +63,7 @@ export default function Auth() {
     if (response.needs_onboarding || orgs.length === 0) {
       navigate("/onboarding");
     } else {
-      navigate("/dashboard");
+      navigate(getDefaultRoute(orgs[0].role));
     }
   };
 

@@ -66,11 +66,24 @@ function CategoryFormDialog({
   title: string;
 }) {
   const [values, setValues] = useState<CategoryFormValues>(initialValues);
+  const [nameError, setNameError] = useState("");
 
   // Sync when dialog opens with new data
   const handleOpenChange = (v: boolean) => {
-    if (v) setValues(initialValues);
+    if (v) {
+      setValues(initialValues);
+      setNameError("");
+    }
     onOpenChange(v);
+  };
+
+  const handleSubmit = () => {
+    if (!values.name.trim()) {
+      setNameError("Category name is required");
+      return;
+    }
+    setNameError("");
+    onSubmit(values);
   };
 
   return (
@@ -87,9 +100,17 @@ function CategoryFormDialog({
             <Input
               id="cat-name"
               value={values.name}
-              onChange={(e) => setValues((v) => ({ ...v, name: e.target.value }))}
+              onChange={(e) => {
+                setValues((v) => ({ ...v, name: e.target.value }));
+                if (nameError) setNameError("");
+              }}
               placeholder="e.g. Facial Treatments"
+              className={nameError ? "border-destructive focus-visible:ring-destructive" : ""}
+              aria-invalid={!!nameError}
             />
+            {nameError && (
+              <p className="text-sm text-destructive">{nameError}</p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="cat-desc">Description</Label>
@@ -106,10 +127,7 @@ function CategoryFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button
-            disabled={!values.name.trim() || isPending}
-            onClick={() => onSubmit(values)}
-          >
+          <Button disabled={isPending} onClick={handleSubmit}>
             {isPending ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>

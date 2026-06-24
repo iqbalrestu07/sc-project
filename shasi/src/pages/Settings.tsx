@@ -24,9 +24,11 @@ export default function SettingsPage() {
   const { settings, isLoading, updateSettings } = useClinicSettings();
   const [formData, setFormData] = useState<Partial<ClinicSettings>>({});
   const [hasChanges, setHasChanges] = useState(false);
+  const [clinicNameError, setClinicNameError] = useState("");
 
   useEffect(() => {
     if (settings) {
+      setClinicNameError("");
       setFormData({
         clinic_name: settings.clinic_name || "",
         address: settings.address || "",
@@ -50,10 +52,17 @@ export default function SettingsPage() {
 
   const handleChange = (field: keyof ClinicSettings, value: string | number | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    if (field === "clinic_name" && clinicNameError) {
+      setClinicNameError("");
+    }
     setHasChanges(true);
   };
 
   const handleSave = () => {
+    if (!formData.clinic_name?.trim()) {
+      setClinicNameError("Clinic name is required");
+      return;
+    }
     updateSettings.mutate(formData, {
       onSuccess: () => setHasChanges(false),
     });
@@ -100,13 +109,18 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="clinicName">Clinic Name</Label>
+              <Label htmlFor="clinicName">Clinic Name <span className="text-destructive">*</span></Label>
               <Input 
                 id="clinicName" 
                 placeholder="Your Aesthetic Clinic" 
                 value={formData.clinic_name || ""}
                 onChange={(e) => handleChange("clinic_name", e.target.value)}
+                className={clinicNameError ? "border-destructive focus-visible:ring-destructive" : ""}
+                aria-invalid={!!clinicNameError}
               />
+              {clinicNameError && (
+                <p className="text-sm text-destructive">{clinicNameError}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="address">Address</Label>

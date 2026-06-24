@@ -40,7 +40,7 @@ const formSchema = z.object({
   therapist_id: z.string().optional(),
   scheduled_date: z.string().min(1, "Date is required"),
   scheduled_time: z.string().min(1, "Time is required"),
-  duration_minutes: z.coerce.number().min(5).optional(),
+  duration_minutes: z.coerce.number().min(5, "Duration must be at least 5 minutes"),
   notes: z.string().optional(),
 });
 

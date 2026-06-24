@@ -267,13 +267,13 @@ Request body update-status:
 
 #### Dashboard
 
-| Method | Path                            | Auth | Notes                                           |
-| ------ | ------------------------------- | ---- | ----------------------------------------------- |
-| GET    | `/dashboard/stats`              | Ya   | `?from=YYYY-MM-DD&to=YYYY-MM-DD` opsional       |
-| GET    | `/dashboard/revenue`            | Ya   | `?from=&to=` opsional; default 30 hari terakhir |
-| GET    | `/dashboard/top-services`       | Ya   | `?from=&to=` opsional                           |
-| GET    | `/dashboard/top-products`       | Ya   | `?from=&to=` opsional                           |
-| GET    | `/dashboard/appointments-today` | Ya   | selalu hari ini, tidak ada filter               |
+| Method | Path                            | Permission     | Notes                                           |
+| ------ | ------------------------------- | -------------- | ----------------------------------------------- |
+| GET    | `/dashboard/stats`              | `reports:read` | `?from=YYYY-MM-DD&to=YYYY-MM-DD` opsional       |
+| GET    | `/dashboard/revenue`            | `reports:read` | `?from=&to=` opsional; default 30 hari terakhir |
+| GET    | `/dashboard/top-services`       | `reports:read` | `?from=&to=` opsional                           |
+| GET    | `/dashboard/top-products`       | `reports:read` | `?from=&to=` opsional                           |
+| GET    | `/dashboard/appointments-today` | `reports:read` | selalu hari ini, tidak ada filter               |
 
 **Timezone:** Semua filter date range diinterpretasikan sebagai `Asia/Jakarta (UTC+7)`.
 `parseDateRange()` menggunakan `time.ParseInLocation("Asia/Jakarta")`.
@@ -567,13 +567,13 @@ Jika refresh gagal → redirect ke `/admin/login`.
 | --------------- | ----------------- | ------------------------ |
 | `/`             | LandingPage       | Public                   |
 | `/admin/login`  | Auth              | Public                   |
-| `/dashboard`    | Dashboard         | Semua (authenticated)    |
+| `/dashboard`    | Dashboard         | `reports:read`           |
 | `/patients`     | Patients          | admin, doctor, therapist |
 | `/patients/:id` | PatientDetail     | admin, doctor, therapist |
 | `/appointments` | Appointments      | Semua                    |
 | `/services`     | Services          | admin                    |
 | `/products`     | Products          | admin                    |
-| `/categories`   | Categories        | admin ← BARU             |
+| `/categories`   | Categories        | admin                    |
 | `/pos`          | POS               | Semua                    |
 | `/transactions` | Transactions      | admin, cashier           |
 | `/commissions`  | Commissions       | admin, doctor, therapist |
@@ -584,9 +584,21 @@ Jika refresh gagal → redirect ke `/admin/login`.
 | `/cms`          | CmsManagement     | admin                    |
 | `/rbac`         | RBACManagement    | admin                    |
 
+**Default redirect setelah login:** berdasarkan role organisasi aktif:
+
+- `admin` → `/dashboard`
+- `doctor` / `therapist` → `/appointments`
+- `cashier` → `/pos`
+
+Jika user mengakses route tanpa permission, `ProtectedRoute` redirect ke default route role-nya (bukan ke `/dashboard`).
+
 ### 4.5 Hooks Pattern
 
 Semua hooks menggunakan TanStack Query:
+
+- Query retries tidak dilakukan untuk error 4xx (misal 403) agar tidak spam API yang tidak diizinkan.
+- `useProducts(enabled?)` dan `useCommissions(enabled?)` menerima parameter `enabled` opsional sehingga halaman
+  seperti Dashboard bisa menonaktifkan query ketika user tidak punya permission terkait.
 
 ```typescript
 // Read
@@ -743,6 +755,15 @@ psql -U postgres -d sc_pos        # connect
 ## 10. Git History Ringkas
 
 ```
+<latest-commit> - fix: role-based default routes + guard API calls + mandatory form validation
+          Backend: Dashboard routes sekarang pakai permission `reports:read` (bukan admin-only).
+          Frontend: Default redirect setelah login berdasarkan role (admin→dashboard,
+                   doctor/therapist→appointments, cashier→pos). ProtectedRoute redirect
+                   ke default route saat permission ditolak. Dashboard hanya fetch
+                   products/commissions jika user punya permission. QueryClient tidak
+                   retry request 4xx. Validasi mandatory field ditambah di Product,
+                   Service, Appointment, Category, Settings.
+
 596a571 - feat: direct user creation in Members + POS print receipt prompt
           Backend: POST /auth/admin/register sudah tersedia; di frontend sekarang
                    Members page bisa langsung buat user baru + auto-add ke org.
@@ -828,7 +849,7 @@ ca2cdde - Add AGENTS.md
 
 ---
 
-_Terakhir diupdate: commit 596a571 — direct user creation in Members page, POS print receipt prompt_
+_Terakhir diupdate: commit <latest-commit> — role-based default routes, guard API calls, mandatory form validation_
 
 ---
 

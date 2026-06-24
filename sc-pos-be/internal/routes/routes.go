@@ -120,7 +120,7 @@ func SetupRoutes(router *gin.Engine) {
 		settings.RegisterRoutes(protectedAPI, canWriteSettings)
 
 		// ── Dashboard ─────────────────────────────────────────────────────
-		dashboard.RegisterRoutes(protectedAPI, adminOnly)
+		dashboard.RegisterRoutes(protectedAPI, canReadReports)
 
 		// ── CMS ───────────────────────────────────────────────────────────
 		cms.RegisterRoutes(protectedAPI, canWriteCMS)

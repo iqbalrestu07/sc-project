@@ -15,6 +15,7 @@ import {
   Receipt,
 } from "lucide-react";
 import { PatientFormDialog } from "@/components/patients";
+import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardStats, useDashboardRevenue, useDashboardAppointmentsToday } from "@/hooks/useDashboard";
 import { useCommissions } from "@/hooks/useCommissions";
 import { useProducts } from "@/hooks/useProducts";
@@ -38,6 +39,7 @@ const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
   const [isPatientFormOpen, setIsPatientFormOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState<{ from: Date | undefined; to: Date | undefined; preset: PeriodPreset }>({
     from: startOfDay(new Date()),
@@ -54,8 +56,8 @@ export default function Dashboard() {
   const { data: stats } = useDashboardStats(backendDateRange);
   const { data: revenuePoints } = useDashboardRevenue(backendDateRange);
   const { data: appointmentsToday } = useDashboardAppointmentsToday();
-  const { commissions } = useCommissions();
-  const { products } = useProducts();
+  const { commissions } = useCommissions(hasPermission("commissions:read"));
+  const { products } = useProducts(hasPermission("products:read"));
 
   // Filter commissions by date range (client-side for flexibility)
   const filteredCommissions = commissions.filter((c) => {

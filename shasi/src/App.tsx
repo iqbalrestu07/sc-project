@@ -33,7 +33,19 @@ import Categories from "./pages/Categories";
 import RBACManagement from "./pages/RBACManagement";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) => {
+        const status =
+          (error as any)?.statusCode || (error as any)?.response?.status;
+        if (status && status >= 400 && status < 500) return false;
+        return failureCount < 3;
+      },
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function AppRoutes() {
   const { signOut } = useAuth();
@@ -54,7 +66,7 @@ function AppRoutes() {
 
       {/* Protected routes with sidebar layout */}
       <Route path="/dashboard" element={
-        <ProtectedRoute>
+        <ProtectedRoute requirePermission="reports:read">
           <MainLayout onSignOut={signOut}><Dashboard /></MainLayout>
         </ProtectedRoute>
       } />
