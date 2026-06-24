@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, UserPlus, Trash2, Search } from "lucide-react";
 
@@ -40,6 +41,8 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("cashier");
+  const [password, setPassword] = useState("");
+  const [createIfNotFound, setCreateIfNotFound] = useState(false);
   const [searching, setSearching] = useState(false);
 
   const loadMembers = async () => {
@@ -95,23 +98,47 @@ export default function MembersPage() {
       toast.error("Masukkan email");
       return;
     }
+    if (createIfNotFound && !password) {
+      toast.error("Masukkan password untuk user baru");
+      return;
+    }
     setSearching(true);
     try {
-      const userResp = await apiClient.get<{ success: boolean; data: UserLookup }>(
-        API_ENDPOINTS.AUTH.USERS,
-        { email: email.trim() }
-      );
-      if (!userResp.data?.id) {
+      let userId: string | null = null;
+
+      try {
+        const userResp = await apiClient.get<{ success: boolean; data: UserLookup }>(
+          API_ENDPOINTS.AUTH.USERS,
+          { email: email.trim() }
+        );
+        userId = userResp.data?.id || null;
+      } catch (err: any) {
+        const notFound = err.statusCode === 404 || err.message === "user not found";
+        if (!notFound || !createIfNotFound) {
+          throw err;
+        }
+        // User not found — create a new user and auto-add to current org
+        const createResp = await apiClient.post<{ success: boolean; data: { id: string } }>(
+          API_ENDPOINTS.AUTH.ADMIN_REGISTER,
+          { email: email.trim(), password, role }
+        );
+        userId = createResp.data?.id || null;
+      }
+
+      if (!userId) {
         toast.error("User dengan email tersebut tidak ditemukan");
         return;
       }
+
       await apiClient.post(
         API_ENDPOINTS.ORGANIZATIONS.ADD_MEMBER(activeOrg.id),
-        { user_id: userResp.data.id, role }
+        { user_id: userId, role }
       );
       toast.success("Anggota berhasil ditambahkan");
       setEmail("");
+      setPassword("");
       setRole("cashier");
+      setCreateIfNotFound(false);
       loadMembers();
     } catch (err: any) {
       toast.error("Gagal menambahkan anggota: " + err.message);
@@ -142,7 +169,9 @@ export default function MembersPage() {
                 <UserPlus className="h-5 w-5 text-primary" />
                 Tambah Anggota
               </CardTitle>
-              <CardDescription>Cari user yang sudah terdaftar berdasarkan email</CardDescription>
+              <CardDescription>
+                Tambahkan user yang sudah terdaftar, atau buat user baru langsung.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -171,9 +200,37 @@ export default function MembersPage() {
                   </Select>
                 </div>
               </div>
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="create-if-not-found">Buat user baru jika belum terdaftar</Label>
+                  <p className="text-xs text-muted-foreground">
+                    User akan langsung dibuat dan ditambahkan ke organisasi.
+                  </p>
+                </div>
+                <Switch
+                  id="create-if-not-found"
+                  checked={createIfNotFound}
+                  onCheckedChange={setCreateIfNotFound}
+                />
+              </div>
+              {createIfNotFound && (
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password Sementara</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Minimal 6 karakter"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Password ini diberikan ke user baru untuk login pertama kali.
+                  </p>
+                </div>
+              )}
               <Button onClick={handleAdd} disabled={searching || !email.trim()} className="gap-2">
                 {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                Tambahkan
+                {createIfNotFound ? "Buat & Tambahkan" : "Cari & Tambahkan"}
               </Button>
             </CardContent>
           </Card>

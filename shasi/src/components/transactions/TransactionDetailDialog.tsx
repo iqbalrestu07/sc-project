@@ -172,7 +172,7 @@ export function TransactionDetailDialog({
   );
 }
 
-function printTransactionReceipt(
+export function printTransactionReceipt(
   transaction: TransactionWithRelations,
   settings: ClinicSettings
 ) {

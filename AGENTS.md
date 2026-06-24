@@ -743,6 +743,12 @@ psql -U postgres -d sc_pos        # connect
 ## 10. Git History Ringkas
 
 ```
+<latest-commit> - feat: direct user creation in Members + POS print receipt prompt
+          Backend: POST /auth/admin/register sudah tersedia; di frontend sekarang
+                   Members page bisa langsung buat user baru + auto-add ke org.
+          Frontend: Setelah checkout POS berhasil, muncul AlertDialog bertanya
+                   "Cetak struk?" dengan tombol Cetak / Tidak.
+
 06ba869 - feat: organization members management page + user lookup by email
           Backend: GET /auth/users?email=... (admin-only) untuk mencari user yang sudah
                    terdaftar sebelum di-invite ke organisasi.
@@ -822,7 +828,7 @@ ca2cdde - Add AGENTS.md
 
 ---
 
-_Terakhir diupdate: commit 06ba869 — organization members management page, user lookup by email, transaction commission, print receipt_
+_Terakhir diupdate: commit <latest-commit> — direct user creation in Members page, POS print receipt prompt_
 
 ---
 

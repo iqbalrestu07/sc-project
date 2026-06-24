@@ -12,6 +12,7 @@ export const API_ENDPOINTS = {
         LOGOUT: "/auth/logout",
         ME: "/auth/me",
         USERS: "/auth/users", // ?email=... (admin only)
+        ADMIN_REGISTER: "/auth/admin/register", // admin only
     },
 
     // Patients

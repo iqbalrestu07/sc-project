@@ -35,6 +35,7 @@ import {
   Banknote,
   ChevronsUpDown,
   Check,
+  Printer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePatients } from "@/hooks/usePatients";
@@ -42,9 +43,21 @@ import { useServices } from "@/hooks/useServices";
 import { useProducts } from "@/hooks/useProducts";
 import { useStaff } from "@/hooks/useStaff";
 import { useTransactions } from "@/hooks/useTransactions";
-import type { CartItem, PaymentMethod } from "@/types/transaction";
+import { useClinicSettings } from "@/hooks/useClinicSettings";
+import type { CartItem, PaymentMethod, TransactionWithRelations } from "@/types/transaction";
 import { PAYMENT_METHODS } from "@/types/transaction";
 import { toast } from "sonner";
+import { printTransactionReceipt } from "@/components/transactions/TransactionDetailDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export function POSInterface() {
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -54,12 +67,15 @@ export function POSInterface() {
   const [activeTab, setActiveTab] = useState<"services" | "products">("services");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [discount, setDiscount] = useState(0);
+  const [showPrintPrompt, setShowPrintPrompt] = useState(false);
+  const [completedTransaction, setCompletedTransaction] = useState<TransactionWithRelations | null>(null);
 
   const patientsQuery = usePatients();
   const servicesQuery = useServices();
   const { products } = useProducts();
   const { doctors, therapists } = useStaff();
   const { createTransaction, updatePaymentStatus } = useTransactions();
+  const { settings } = useClinicSettings();
 
   const patients = patientsQuery.data || [];
   const services = servicesQuery.data || [];
@@ -175,7 +191,7 @@ export function POSInterface() {
       });
 
       // Process payment immediately
-      await updatePaymentStatus.mutateAsync({
+      const paidTransaction = await updatePaymentStatus.mutateAsync({
         id: transaction.id,
         payment_status: "paid",
         payment_method: paymentMethod,
@@ -185,7 +201,10 @@ export function POSInterface() {
       setCart([]);
       setSelectedPatientId("");
       setDiscount(0);
-      toast.success("Transaction completed!");
+
+      // Ask user whether to print receipt
+      setCompletedTransaction(paidTransaction);
+      setShowPrintPrompt(true);
     } catch (error) {
       // Error handled in mutation
     }
@@ -197,6 +216,20 @@ export function POSInterface() {
       currency: "IDR",
       minimumFractionDigits: 0,
     }).format(price);
+  };
+
+  const handlePrintReceipt = () => {
+    if (completedTransaction && settings) {
+      printTransactionReceipt(completedTransaction, settings);
+    }
+    setShowPrintPrompt(false);
+    setCompletedTransaction(null);
+  };
+
+  const handleSkipPrint = () => {
+    setShowPrintPrompt(false);
+    setCompletedTransaction(null);
+    toast.success("Transaction completed!");
   };
 
   return (
@@ -538,6 +571,28 @@ export function POSInterface() {
           </Button>
         </CardContent>
       </Card>
+
+      <AlertDialog open={showPrintPrompt} onOpenChange={setShowPrintPrompt}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Transaksi Berhasil!</AlertDialogTitle>
+            <AlertDialogDescription>
+              Apakah Anda ingin mencetak struk invoice untuk transaksi{" "}
+              <span className="font-mono font-medium">
+                {completedTransaction?.transaction_code}
+              </span>
+              ?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleSkipPrint}>Tidak</AlertDialogCancel>
+            <AlertDialogAction onClick={handlePrintReceipt} className="gap-2">
+              <Printer className="h-4 w-4" />
+              Cetak Struk
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
