@@ -148,6 +148,18 @@ func (s *Service) AdminRegister(email, password, role string) (*AuthPayload, err
 	return s.issueTokens(user, nil)
 }
 
+func (s *Service) FindUserByEmail(email string) (*models.User, error) {
+	email = strings.TrimSpace(strings.ToLower(email))
+	user, err := s.repo.GetByEmail(email)
+	if err != nil {
+		return nil, err
+	}
+	if user != nil {
+		user.Password = ""
+	}
+	return user, nil
+}
+
 func (s *Service) Refresh(refreshToken string) (*AuthPayload, error) {
 	claims, err := backendauth.VerifyToken(refreshToken)
 	if err != nil {

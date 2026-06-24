@@ -26,6 +26,7 @@ import Commissions from "./pages/Commissions";
 import Transactions from "./pages/Transactions";
 import WhatsAppMessaging from "./pages/WhatsAppMessaging";
 import Staff from "./pages/Staff";
+import Members from "./pages/Members";
 import SettingsPage from "./pages/Settings";
 import CmsManagement from "./pages/CmsManagement";
 import Categories from "./pages/Categories";
@@ -114,6 +115,12 @@ function AppRoutes() {
       <Route path="/staff" element={
         <ProtectedRoute requirePermission="staff:read">
           <MainLayout onSignOut={signOut}><Staff /></MainLayout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/members" element={
+        <ProtectedRoute requirePermission="organization:write">
+          <MainLayout onSignOut={signOut}><Members /></MainLayout>
         </ProtectedRoute>
       } />
 

@@ -131,6 +131,26 @@ func (h *Handler) Logout(c *gin.Context) {
 	utils.SuccessResponseWithMessage(c, http.StatusOK, "logged out successfully", nil)
 }
 
+// SearchUserByEmail looks up an existing user by email. Admin-only.
+func (h *Handler) SearchUserByEmail(c *gin.Context) {
+	email := c.Query("email")
+	if email == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "email query parameter is required")
+		return
+	}
+
+	user, err := h.service.FindUserByEmail(email)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if user == nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "user not found")
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, user)
+}
+
 func (h *Handler) handleError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, ErrInvalidCredentials):

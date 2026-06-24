@@ -20,5 +20,6 @@ func RegisterProtectedRoutes(router gin.IRouter, admin gin.HandlerFunc) {
 	router.POST("/auth/logout", handler.Logout)
 	// Admin-only: membuat user dengan role tertentu (admin, doctor, therapist, cashier)
 	router.POST("/auth/admin/register", admin, handler.AdminRegister)
+	// Admin-only: cari user berdasarkan email untuk invite ke organisasi
+	router.GET("/auth/users", admin, handler.SearchUserByEmail)
 }
-

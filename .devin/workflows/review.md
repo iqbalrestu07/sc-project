@@ -26,7 +26,7 @@ Analyze the changes deeply across these 10 vectors:
 
 - **Parallel Exploration:** Use your tools in parallel to check code definitions, dependencies, and flow across files to maximize velocity. Do not wander aimlessly.
 - **Evidence-Based Reporting:** Do NOT report speculative, low-confidence, or subjective formatting nits unless explicitly labeled as `[Nitpick]`. Base everything on concrete code flows.
-- **Commit State Awareness:** If a specific git commit was passed, assume the local workspace state might differ. Verify the checked-out branch state before drawing conclusions.
+- **Commit State Awareness:** If a specific git commit was passed, assume the local workspace state might differ. Verify the checked-out branch state before drawing conclusions. always ask confirmation is the changes need to push now or not, if the answer yes you can generate comit message and push the changes, if nor you just continue the work.
 
 ## 3. OUTPUT FORMAT REQUIREMENT
 

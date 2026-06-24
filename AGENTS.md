@@ -165,10 +165,12 @@ Semua endpoint menggunakan `utils.SuccessResponse` / `utils.ErrorResponse`:
 
 #### Auth (protected)
 
-| Method | Path           | Role  |
-| ------ | -------------- | ----- |
-| GET    | `/auth/me`     | Semua |
-| POST   | `/auth/logout` | Semua |
+| Method | Path                   | Role  | Notes                                        |
+| ------ | ---------------------- | ----- | -------------------------------------------- |
+| GET    | `/auth/me`             | Semua |                                              |
+| POST   | `/auth/logout`         | Semua |                                              |
+| POST   | `/auth/admin/register` | Admin | Buat user baru + auto-add ke org aktif       |
+| GET    | `/auth/users`          | Admin | `?email=...` — cari user untuk invite member |
 
 #### Patients
 
@@ -576,9 +578,11 @@ Jika refresh gagal → redirect ke `/admin/login`.
 | `/transactions` | Transactions      | admin, cashier           |
 | `/commissions`  | Commissions       | admin, doctor, therapist |
 | `/staff`        | Staff             | admin                    |
+| `/members`      | Members           | admin (org admin)        |
 | `/settings`     | Settings          | admin                    |
 | `/whatsapp`     | WhatsAppMessaging | admin, cashier           |
 | `/cms`          | CmsManagement     | admin                    |
+| `/rbac`         | RBACManagement    | admin                    |
 
 ### 4.5 Hooks Pattern
 
@@ -739,6 +743,12 @@ psql -U postgres -d sc_pos        # connect
 ## 10. Git History Ringkas
 
 ```
+<latest-commit> - feat: organization members management page + user lookup by email
+          Backend: GET /auth/users?email=... (admin-only) untuk mencari user yang sudah
+                   terdaftar sebelum di-invite ke organisasi.
+          Frontend: Halaman /members + menu sidebar "Members" untuk kelola anggota
+                   organisasi: list, ubah role, hapus, dan tambah anggota via email.
+
 6dd3a06 - feat: commissions on paid transaction creation, patient history staff names, transaction detail + print receipt
           Backend: Create paid transaction otomatis generate commission & kurangi stock.
                    Patient visits/transactions sertakan doctor_name + therapist_name.
@@ -910,10 +920,10 @@ orgID := c.GetString("org_id")
 | ------ | ------------------------------------ | --------------------------------------------- |
 | GET    | `/organizations/my`                  | authenticated                                 |
 | POST   | `/organizations`                     | authenticated (creates + sets owner as admin) |
-| GET    | `/organizations/:id`                 | `organization:read`                           |
+| GET    | `/organizations/:id`                 | org member (via OrgMiddleware)                |
 | PUT    | `/organizations/:id`                 | `organization:write`                          |
 | DELETE | `/organizations/:id`                 | `organization:write`                          |
-| GET    | `/organizations/:id/members`         | `organization:read`                           |
+| GET    | `/organizations/:id/members`         | org member (via OrgMiddleware)                |
 | POST   | `/organizations/:id/members`         | `organization:write`                          |
 | PUT    | `/organizations/:id/members/:userId` | `organization:write`                          |
 | DELETE | `/organizations/:id/members/:userId` | `organization:write`                          |

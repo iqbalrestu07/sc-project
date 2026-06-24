@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, Users, Calendar, Sparkles, Package, Tag,
   ShoppingCart, DollarSign, UserCog, Settings, Menu, X, LogOut,
-  ChevronLeft, Globe, MessageCircle, Shield,
+  ChevronLeft, Globe, MessageCircle, Shield, Building2,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { OrgSwitcher } from "./OrgSwitcher";
@@ -28,6 +28,7 @@ const navItems: NavItem[] = [
   { to: "/commissions",  icon: DollarSign,      label: "Commissions",  permission: "commissions:read" },
   { to: "/whatsapp",     icon: MessageCircle,   label: "WhatsApp" },
   { to: "/staff",        icon: UserCog,         label: "Staff",        permission: "staff:read" },
+  { to: "/members",      icon: Building2,       label: "Members",      permission: "organization:write" },
   { to: "/rbac",         icon: Shield,          label: "Roles & Permissions", permission: "rbac:read" },
   { to: "/cms",          icon: Globe,           label: "Website CMS",  permission: "cms:read" },
   { to: "/settings",     icon: Settings,        label: "Settings",     permission: "settings:read" },

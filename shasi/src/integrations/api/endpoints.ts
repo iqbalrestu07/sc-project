@@ -11,6 +11,7 @@ export const API_ENDPOINTS = {
         REFRESH: "/auth/refresh",
         LOGOUT: "/auth/logout",
         ME: "/auth/me",
+        USERS: "/auth/users", // ?email=... (admin only)
     },
 
     // Patients
