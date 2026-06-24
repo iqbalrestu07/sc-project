@@ -120,9 +120,9 @@ export function PatientList({ patients, onEdit, isLoading }: PatientListProps) {
                     </Badge>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
-                    {age !== null && (
+                    {age !== null || patient.gender ? (
                       <span>
-                        {age} yrs
+                        {age !== null ? `${age} yrs` : "—"}
                         {patient.gender && (
                           <span className="text-muted-foreground">
                             {" "}
@@ -130,6 +130,8 @@ export function PatientList({ patients, onEdit, isLoading }: PatientListProps) {
                           </span>
                         )}
                       </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
