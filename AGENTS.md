@@ -755,7 +755,7 @@ psql -U postgres -d sc_pos        # connect
 ## 10. Git History Ringkas
 
 ```
-<latest-commit> - fix: role-based default routes + guard API calls + mandatory form validation
+87ffce2 - fix: role-based default routes + guard API calls + mandatory form validation
           Backend: Dashboard routes sekarang pakai permission `reports:read` (bukan admin-only).
           Frontend: Default redirect setelah login berdasarkan role (admin→dashboard,
                    doctor/therapist→appointments, cashier→pos). ProtectedRoute redirect
@@ -849,7 +849,7 @@ ca2cdde - Add AGENTS.md
 
 ---
 
-_Terakhir diupdate: commit <latest-commit> — role-based default routes, guard API calls, mandatory form validation_
+_Terakhir diupdate: commit 87ffce2 — role-based default routes, guard API calls, mandatory form validation_
 
 ---
 
