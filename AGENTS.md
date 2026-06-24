@@ -54,7 +54,9 @@ sc-pos-be/
 │   │   ├── commission.go
 │   │   ├── clinic_settings.go
 │   │   ├── stock_movement.go
-│   │   └── service_consumable.go
+│   │   ├── service_consumable.go
+│   │   ├── organization.go          # Organization, OrganizationMember, Permission, RolePermission, UserPermission
+│   │   └── nullable_time.go         # NullableTime — wrapper time.Time untuk JSON/SQL NULL + empty string
 │   ├── modules/                    # Feature modules (handler + service + repository + routes)
 │   │   ├── auth/
 │   │   ├── patient/
@@ -115,7 +117,9 @@ go run main.go
 ```
 
 Migrasi **otomatis berjalan** saat startup (`database.RunMigrations()`).
-Semua DDL menggunakan `CREATE TABLE IF NOT EXISTS` dan `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` — aman dijalankan berulang.
+Schema saat ini adalah **fresh consolidated schema** (4 step: create schema, indexes, seed permissions, seed role permissions).
+Setelah perubahan arsitektur multi-tenant + audit trail, direkomendasikan membuat database baru dari nol supaya schema koheren.
+DDL tetap idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`), jadi aman dijalankan berulang.
 
 ### 2.6 API Response Format (Standard)
 
@@ -141,9 +145,11 @@ Semua endpoint menggunakan `utils.SuccessResponse` / `utils.ErrorResponse`:
 - JWT disimpan di `localStorage` frontend (key: `access_token`, `refresh_token`)
 - Access token: 24 jam, Refresh token: 7 hari
 - Roles: `admin`, `doctor`, `therapist`, `cashier`
-- Middleware `RequireRole("admin")` → hanya admin
-- Middleware `RequireRole("admin", "doctor", "therapist")` → staff medis + admin
-- Context keys dari JWT: `user_id`, `email`, `role`
+- `AuthMiddleware` tidak hanya cek signature JWT, tapi juga verifikasi `user_id` dari JWT masih ada di tabel `users` (menolak token dari database lama/deleted user)
+- `OrgMiddleware` membaca `X-Organization-ID`, verifikasi keanggotaan user aktif, dan set `org_id` + `org_role`
+- `RequirePermission("resource:action")` → cek effective permission (gabungan `role_permissions` + `user_permissions`) untuk org aktif
+- `RequireRole("admin", ...)` → legacy role check, masih dipakai beberapa route admin-only
+- Context keys dari JWT: `user_id`, `email`, `role`; ditambah dari OrgMiddleware: `org_id`, `org_role`
 
 ### 2.8 Semua Route Backend
 
@@ -416,6 +422,9 @@ service_consumables  -- (id, service_id, product_id, quantity_used, organization
 - **Semua tabel bisnis** memiliki `organization_id` FK ke `organizations(id)` untuk multi-tenant.
 - `users.id` dan semua FK user/audit adalah `VARCHAR(36)` (bukan UUID), supaya konsisten dengan Go UUID string.
 - `permissions.id` memakai format `resource:action` (contoh: `patients:read`).
+- Field tanggal opsional (`patients.date_of_birth`, `products.expiry_date`) di Go menggunakan `models.NullableTime`.
+  - Menerima JSON: `null`, `""`, `YYYY-MM-DD`, atau `RFC3339`.
+  - Jika kosong, disimpan sebagai `NULL` di PostgreSQL.
 - Migration **tidak menggunakan file terpisah** — semua dalam `migrations.go` sebagai SQL string constants.
 - Schema saat ini adalah **fresh consolidated schema** (4 migration steps: create schema, indexes, seed permissions, seed role permissions). Setelah refactor ini, direkomendasikan membuat database baru dari nol.
 
@@ -651,10 +660,8 @@ User klik "Bayar" di POS.tsx
 ### Fungsionalitas Backend yang masih stub/kosong
 
 - [ ] `settings/handler.go` → `UploadLogo()` — belum implementasi upload nyata (masih return empty)
-- [ ] Commission auto-generate — belum ada logika otomatis buat commission saat transaksi dibuat
 - [ ] `appointment/handler.go` → `AvailableSlots()` — perlu cek jadwal staff
 - [ ] Pagination — semua endpoint LIST belum ada pagination (`page`, `limit` query params)
-- [ ] Soft delete products — sekarang hard delete, perlu konsistensi dengan patients
 
 ### Fungsionalitas Frontend yang belum ada
 
@@ -676,6 +683,10 @@ User klik "Bayar" di POS.tsx
 - **`pq: unexpected Parse response 'C'`** saat mark transaction as paid → `MarkPaidEffects()` di `transaction/repository.go` memanggil query baru di dalam loop `rows.Next()` saat cursor masih terbuka. Fix: collect semua rows ke slice, `rows.Close()` eksplisit, baru lakukan DML.
 - **Dashboard stats = 0 saat filter hari ini** → `parseDateRange` menggunakan UTC midnight (`time.Parse`), bukan WIB. Fix: `time.ParseInLocation("Asia/Jakarta")`. Query no-filter juga diperbaiki dari `CURRENT_DATE` PostgreSQL ke batas waktu WIB yang dihitung di Go.
 - **Backend binary lama tidak di-restart** → routes baru tidak aktif setelah deploy. Selalu `pkill -f "go run main.go" && go run main.go` atau `make kill && make run` setelah perubahan Go.
+- **`pq: foreign key constraint patients_updated_by_fkey cannot be implemented`** setelah nambah audit trail → audit columns dideklarasikan sebagai `UUID` padahal `users.id` adalah `VARCHAR(36)`. Fix: semua FK user/audit dijadikan `VARCHAR(36)`, sekaligus migrasi di-consolidate jadi schema bersih dari awal.
+- **JWT dari database lama masih diterima setelah reset DB** → `AuthMiddleware` sekarang cek `user_id` dari JWT masih ada di tabel `users`.
+- **Banyak endpoint mengembalikan `permission check failed` untuk user/org baru** → query `checkPermission` memfilter `user_permissions.deleted_at IS NULL`, padahal tabel `user_permissions` tidak punya kolom `deleted_at` (grants di-revoke via hard DELETE). Fix: hapus filter `deleted_at` dari query tersebut.
+- **`parsing time ""` / `parsing time "YYYY-MM-DD"` saat create/update Patient/Product** → `*time.Time` tidak menerima string kosong atau date-only. Fix: buat `models.NullableTime` yang menerima `null`, `""`, `RFC3339`, dan `YYYY-MM-DD`, lalu apply ke `Patient.DateOfBirth` dan `Product.ExpiryDate`.
 
 ---
 
@@ -728,6 +739,32 @@ psql -U postgres -d sc_pos        # connect
 ## 10. Git History Ringkas
 
 ```
+68af740 - fix(models): handle empty string dates for optional date fields
+          Buat models.NullableTime. Apply ke Patient.DateOfBirth & Product.ExpiryDate.
+          Menerima null, "", date-only (YYYY-MM-DD), dan RFC3339.
+
+a357a69 - fix(rbac): remove deleted_at filter from user_permissions permission check
+          Query checkPermission salah filter user_permissions.deleted_at IS NULL,
+          padahal tabel tidak punya kolom deleted_at. Fix: hapus filter.
+
+6f2b237 - fix(auth): reject JWTs when the user no longer exists
+          AuthMiddleware sekarang verifikasi user_id dari JWT masih ada di tabel users.
+
+fafa73c - refactor: clean consolidated database schema from scratch
+          Ganti 27-step migration tumpuk jadi 4 migration step bersih.
+          Semua tabel bisnis langsung punya organization_id + created_by/updated_by/deleted_at.
+          Fix FK type mismatch: audit/user FK pakai VARCHAR(36) konsisten dengan users.id.
+
+8a5bd48 - feat: full audit trail (created_by, updated_by, deleted_at) across all business tables
+          Semua repository soft-delete pattern: deleted_at IS NULL, create set created_by,
+          update set updated_by + updated_at. stock_movements tetap immutable.
+
+2ed7388 - feat: multi-tenant SaaS + granular RBAC
+          Organizations, org_members, permissions, role_permissions, user_permissions.
+          OrgMiddleware, RequirePermission, Onboarding, RBACManagement page, OrgSwitcher.
+
+7b3933a - docs(AGENTS.md): update context — new routes, schema, bugs, git history
+
 0706431 - chore: add Makefile kill target + update frontend dist build
 
 72587c3 - fix: close rows cursor before DML in MarkPaidEffects
@@ -765,7 +802,7 @@ ca2cdde - Add AGENTS.md
 
 ---
 
-_Terakhir diupdate: commit 0706431 — timezone fix, categories CRUD, commission bug fix_
+_Terakhir diupdate: commit 68af740 — consolidated schema, audit trail, RBAC fix, NullableTime date handling, user existence check_
 
 ---
 
@@ -783,20 +820,25 @@ Sistem telah diupgrade ke arsitektur **multi-organization SaaS** dengan **RBAC g
 ### 11.2 Tabel Database Baru
 
 ```sql
-organizations       -- (id, name, slug UNIQUE, description, logo_url, owner_id FK→users, created_at, updated_at)
-organization_members-- (id, org_id FK, user_id FK, role, joined_at) UNIQUE(org_id, user_id)
+organizations       -- (id, name, slug UNIQUE, description, logo_url, created_by FK→users,
+                   --   is_active, deleted_at, created_at, updated_at)
+organization_members-- (id, org_id FK, user_id FK, role, is_active, joined_at,
+                   --   created_by, updated_by, deleted_at, created_at, updated_at)
+                   --   UNIQUE(org_id, user_id)
 permissions         -- (id, resource, action, description) — tabel master permission
                    -- contoh: { resource: "patients", action: "read", description: "..." }
 role_permissions    -- (id, role, permission_id FK) — default permission per role
-user_permissions    -- (id, user_id FK, permission_id FK, org_id FK, granted_by FK, created_at)
+                   -- di-seed saat migration; admin punya semua permission
+user_permissions    -- (id, user_id FK, permission_id FK, org_id FK, granted_by FK, granted_at)
                    -- extra permission per-user di luar default role-nya
+                   -- kosong by default; baru terisi kalau admin grant extra permission
 ```
 
 Setiap tabel bisnis (patients, services, products, staff, appointments, transactions, commissions,
 clinic_settings, cms_pages, stock_movements, service_consumables) mendapat kolom:
 
 ```sql
-organization_id UUID REFERENCES organizations(id)   -- nullable, NULL = data lama/global
+organization_id VARCHAR(36) REFERENCES organizations(id)  -- nullable, NULL = data lama/global
 ```
 
 ### 11.3 Backend: Middleware Baru
@@ -814,6 +856,8 @@ middleware.OrgMiddleware()
 // Contoh: middleware.RequirePermission("patients:read")
 // Urutan cek: 1) ambil default perms dari role_permissions, 2) merge user_permissions,
 //             3) jika permission ada → lanjut, jika tidak → 403
+// Catatan: user_permissions di-revoke via hard DELETE (tidak ada soft delete), jadi query
+// tidak memfilter deleted_at di sini.
 middleware.RequirePermission("resource:action")
 
 // RequireRole — legacy, masih digunakan untuk beberapa route (misal: admin-only)
@@ -970,7 +1014,7 @@ Default role assignments (role_permissions):
 ```
 1. User isi: email, password, full_name (opsional), organization_name (wajib di form)
 2. POST /auth/register { email, password, full_name, organization_name }
-3. Backend: create user → create org → add user sebagai org.role = "admin" → return tokens + orgs[]
+3. Backend: AuthMiddleware verifikasi user_id JWT masih ada di DB → create user → create org → add user sebagai org.role = "admin" → return tokens + orgs[]
 4. Frontend: simpan token → signIn(user, orgs) → navigate("/dashboard")
 5. Jika org_name kosong (misal: API langsung): register berhasil, orgs[] = [] → redirect ke /onboarding
 ```
