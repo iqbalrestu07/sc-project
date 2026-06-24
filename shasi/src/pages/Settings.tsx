@@ -355,14 +355,16 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Invoice Settings */}
+        {/* Invoice / Receipt Print Settings */}
         <Card className="shadow-clinic">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
-              Pengaturan Invoice
+              Pengaturan Cetak Invoice / Struk
             </CardTitle>
-            <CardDescription>Atur tampilan header dan footer invoice untuk printer thermal 58mm</CardDescription>
+            <CardDescription>
+              Header dan footer ini digunakan saat mencetak invoice maupun struk transaksi di printer thermal 58mm
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">

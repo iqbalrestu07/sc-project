@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { usePatient, usePatientVisits, usePatientTransactions } from "@/hooks/usePatients";
 import { PatientFormDialog } from "@/components/patients";
+import { TransactionDetailDialog } from "@/components/transactions/TransactionDetailDialog";
 import { useState } from "react";
 
 export default function PatientDetail() {
@@ -29,6 +30,7 @@ export default function PatientDetail() {
   const { data: visits = [] } = usePatientVisits(id);
   const { data: patientTransactions = [] } = usePatientTransactions(id);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
 
   const getInitials = (name: string) => {
     return name
@@ -241,6 +243,9 @@ export default function PatientDetail() {
                             {visit.doctor_name && (
                               <p className="text-xs text-muted-foreground">Dr. {visit.doctor_name}</p>
                             )}
+                            {visit.therapist_name && (
+                              <p className="text-xs text-muted-foreground">Therapist: {visit.therapist_name}</p>
+                            )}
                             {visit.notes && (
                               <p className="text-xs text-muted-foreground italic">{visit.notes}</p>
                             )}
@@ -270,39 +275,57 @@ export default function PatientDetail() {
                 </Card>
               ) : (
                 <div className="space-y-3">
-                  {patientTransactions.map((txn) => (
-                    <Card key={txn.id} className="shadow-clinic">
-                      <CardContent className="py-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="space-y-1">
-                            <p className="font-medium text-sm font-mono">{txn.transaction_code}</p>
-                            {txn.payment_method && (
-                              <p className="text-xs text-muted-foreground capitalize">{txn.payment_method}</p>
-                            )}
+                  {patientTransactions.map((txn) => {
+                    const staff = [txn.doctor_name, txn.therapist_name].filter(Boolean).join(" · ");
+                    return (
+                      <Card
+                        key={txn.id}
+                        className="shadow-clinic cursor-pointer hover:bg-muted/50"
+                        onClick={() => setSelectedTransactionId(txn.id)}
+                      >
+                        <CardContent className="py-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-1">
+                              <p className="font-medium text-sm font-mono">{txn.transaction_code}</p>
+                              {txn.payment_method && (
+                                <p className="text-xs text-muted-foreground capitalize">{txn.payment_method}</p>
+                              )}
+                              {staff && (
+                                <p className="text-xs text-muted-foreground">Handled by: {staff}</p>
+                              )}
+                            </div>
+                            <div className="text-right shrink-0">
+                              <Badge variant={txn.payment_status === "paid" ? "default" : "secondary"} className="capitalize text-xs mb-1">
+                                {txn.payment_status}
+                              </Badge>
+                              <p className="text-sm font-semibold">
+                                Rp {Number(txn.total_amount).toLocaleString("id-ID")}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {txn.paid_at
+                                  ? format(new Date(txn.paid_at), "dd MMM yyyy")
+                                  : format(new Date(txn.created_at), "dd MMM yyyy")}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-right shrink-0">
-                            <Badge variant={txn.payment_status === "paid" ? "default" : "secondary"} className="capitalize text-xs mb-1">
-                              {txn.payment_status}
-                            </Badge>
-                            <p className="text-sm font-semibold">
-                              Rp {Number(txn.total_amount).toLocaleString("id-ID")}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {txn.paid_at
-                                ? format(new Date(txn.paid_at), "dd MMM yyyy")
-                                : format(new Date(txn.created_at), "dd MMM yyyy")}
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </TabsContent>
           </Tabs>
         </div>
       </div>
+
+      <TransactionDetailDialog
+        transactionId={selectedTransactionId}
+        open={!!selectedTransactionId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedTransactionId(null);
+        }}
+      />
 
       <PatientFormDialog
         open={isFormOpen}

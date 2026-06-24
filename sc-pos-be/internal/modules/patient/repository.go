@@ -179,12 +179,13 @@ func (r *Repository) Search(query, orgID string) ([]models.Patient, error) {
 
 // VisitSummary is a condensed appointment record for patient history
 type VisitSummary struct {
-	ID          string  `json:"id"`
-	ScheduledAt string  `json:"scheduled_at"`
-	Status      string  `json:"status"`
-	ServiceName string  `json:"service_name"`
-	DoctorName  *string `json:"doctor_name,omitempty"`
-	Notes       *string `json:"notes,omitempty"`
+	ID            string  `json:"id"`
+	ScheduledAt   string  `json:"scheduled_at"`
+	Status        string  `json:"status"`
+	ServiceName   string  `json:"service_name"`
+	DoctorName    *string `json:"doctor_name,omitempty"`
+	TherapistName *string `json:"therapist_name,omitempty"`
+	Notes         *string `json:"notes,omitempty"`
 }
 
 // TransactionSummary is a condensed transaction record for patient history
@@ -196,6 +197,8 @@ type TransactionSummary struct {
 	PaymentMethod   *string `json:"payment_method,omitempty"`
 	PaidAt          *string `json:"paid_at,omitempty"`
 	CreatedAt       string  `json:"created_at"`
+	DoctorName      *string `json:"doctor_name,omitempty"`
+	TherapistName   *string `json:"therapist_name,omitempty"`
 }
 
 func (r *Repository) GetVisits(patientID string) ([]VisitSummary, error) {
@@ -203,11 +206,14 @@ func (r *Repository) GetVisits(patientID string) ([]VisitSummary, error) {
 		SELECT a.id, a.scheduled_at, a.status,
 		       COALESCE(s.name, '') AS service_name,
 		       d.full_name AS doctor_name,
+		       th.full_name AS therapist_name,
 		       a.notes
 		FROM appointments a
 		LEFT JOIN services s ON s.id = a.service_id
 		LEFT JOIN staff d ON d.id = a.doctor_id
+		LEFT JOIN staff th ON th.id = a.therapist_id
 		WHERE a.patient_id = $1
+		  AND a.deleted_at IS NULL
 		ORDER BY a.scheduled_at DESC
 		LIMIT 100
 	`, patientID)
@@ -220,9 +226,10 @@ func (r *Repository) GetVisits(patientID string) ([]VisitSummary, error) {
 	for rows.Next() {
 		var v VisitSummary
 		var doctorName sql.NullString
+		var therapistName sql.NullString
 		var notes sql.NullString
 		var scheduledAt sql.NullTime
-		if err := rows.Scan(&v.ID, &scheduledAt, &v.Status, &v.ServiceName, &doctorName, &notes); err != nil {
+		if err := rows.Scan(&v.ID, &scheduledAt, &v.Status, &v.ServiceName, &doctorName, &therapistName, &notes); err != nil {
 			return nil, fmt.Errorf("failed to scan visit: %w", err)
 		}
 		if scheduledAt.Valid {
@@ -230,6 +237,9 @@ func (r *Repository) GetVisits(patientID string) ([]VisitSummary, error) {
 		}
 		if doctorName.Valid {
 			v.DoctorName = &doctorName.String
+		}
+		if therapistName.Valid {
+			v.TherapistName = &therapistName.String
 		}
 		if notes.Valid {
 			v.Notes = &notes.String
@@ -245,9 +255,17 @@ func (r *Repository) GetVisits(patientID string) ([]VisitSummary, error) {
 func (r *Repository) GetTransactions(patientID string) ([]TransactionSummary, error) {
 	rows, err := r.db.Query(`
 		SELECT t.id, t.transaction_code, t.total_amount, t.payment_status,
-		       t.payment_method, t.paid_at, t.created_at
+		       t.payment_method, t.paid_at, t.created_at,
+		       COALESCE(string_agg(DISTINCT d.full_name, ', '), '') AS doctor_names,
+		       COALESCE(string_agg(DISTINCT th.full_name, ', '), '') AS therapist_names
 		FROM transactions t
+		LEFT JOIN transaction_items ti ON ti.transaction_id = t.id AND ti.deleted_at IS NULL
+		LEFT JOIN staff d ON d.id = ti.doctor_id
+		LEFT JOIN staff th ON th.id = ti.therapist_id
 		WHERE t.patient_id = $1
+		  AND t.deleted_at IS NULL
+		GROUP BY t.id, t.transaction_code, t.total_amount, t.payment_status,
+		         t.payment_method, t.paid_at, t.created_at
 		ORDER BY t.created_at DESC
 		LIMIT 100
 	`, patientID)
@@ -262,8 +280,10 @@ func (r *Repository) GetTransactions(patientID string) ([]TransactionSummary, er
 		var paymentMethod sql.NullString
 		var paidAt sql.NullTime
 		var createdAt sql.NullTime
+		var doctorNames sql.NullString
+		var therapistNames sql.NullString
 		if err := rows.Scan(&t.ID, &t.TransactionCode, &t.TotalAmount, &t.PaymentStatus,
-			&paymentMethod, &paidAt, &createdAt); err != nil {
+			&paymentMethod, &paidAt, &createdAt, &doctorNames, &therapistNames); err != nil {
 			return nil, fmt.Errorf("failed to scan transaction: %w", err)
 		}
 		if paymentMethod.Valid {
@@ -275,6 +295,12 @@ func (r *Repository) GetTransactions(patientID string) ([]TransactionSummary, er
 		}
 		if createdAt.Valid {
 			t.CreatedAt = createdAt.Time.Format("2006-01-02T15:04:05Z")
+		}
+		if doctorNames.Valid && doctorNames.String != "" {
+			t.DoctorName = &doctorNames.String
+		}
+		if therapistNames.Valid && therapistNames.String != "" {
+			t.TherapistName = &therapistNames.String
 		}
 		txns = append(txns, t)
 	}

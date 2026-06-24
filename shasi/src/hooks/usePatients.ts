@@ -100,6 +100,7 @@ export interface PatientVisit {
   status: string;
   service_name: string;
   doctor_name?: string | null;
+  therapist_name?: string | null;
   notes?: string | null;
 }
 
@@ -111,6 +112,8 @@ export interface PatientTransaction {
   payment_method?: string | null;
   paid_at?: string | null;
   created_at: string;
+  doctor_name?: string | null;
+  therapist_name?: string | null;
 }
 
 export function usePatientVisits(patientId: string | undefined) {

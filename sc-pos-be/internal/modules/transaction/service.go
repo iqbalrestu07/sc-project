@@ -77,7 +77,28 @@ func (s *Service) Create(req CreateRequest, userID *string, orgID string) (*Tran
 			req.Items[i].TotalPrice = req.Items[i].UnitPrice * float64(req.Items[i].Quantity)
 		}
 	}
-	return s.repo.Create(req, orgID)
+
+	if req.Transaction.PaymentStatus == "paid" && req.Transaction.PaidAt == nil {
+		req.Transaction.PaidAt = &now
+	}
+
+	result, err := s.repo.Create(req, orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Transaction.PaymentStatus == "paid" {
+		createdBy := ""
+		if userID != nil {
+			createdBy = *userID
+		}
+		if err := s.repo.MarkPaidEffects(req.Transaction.ID, createdBy); err != nil {
+			return nil, err
+		}
+		return s.Get(req.Transaction.ID, orgID)
+	}
+
+	return result, nil
 }
 
 func (s *Service) Update(id, orgID, userID string, req models.Transaction) (*TransactionWithRelations, error) {

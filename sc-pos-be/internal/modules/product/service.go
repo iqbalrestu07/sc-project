@@ -133,4 +133,12 @@ func applyProductDefaults(product *models.Product) {
 		unit := "pcs"
 		product.Unit = &unit
 	}
+	if product.Sku == nil {
+		sku := genSkuCode()
+		product.Sku = &sku
+	}
+}
+
+func genSkuCode() string {
+	return "SKU-" + time.Now().Format("20060102150405")
 }
