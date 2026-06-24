@@ -743,7 +743,7 @@ psql -U postgres -d sc_pos        # connect
 ## 10. Git History Ringkas
 
 ```
-<latest-commit> - feat: organization members management page + user lookup by email
+06ba869 - feat: organization members management page + user lookup by email
           Backend: GET /auth/users?email=... (admin-only) untuk mencari user yang sudah
                    terdaftar sebelum di-invite ke organisasi.
           Frontend: Halaman /members + menu sidebar "Members" untuk kelola anggota
@@ -822,7 +822,7 @@ ca2cdde - Add AGENTS.md
 
 ---
 
-_Terakhir diupdate: commit 6dd3a06 — transaction commission on creation, patient history staff names, transaction detail dialog + print receipt_
+_Terakhir diupdate: commit 06ba869 — organization members management page, user lookup by email, transaction commission, print receipt_
 
 ---
 
