@@ -4,37 +4,17 @@ import (
 	"fmt"
 )
 
+// RunMigrations executes the full schema setup from a clean slate.
+// The SQL is idempotent (CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS)
+// so it is safe to run on an empty database or on a database that already has
+// some of the tables. The intended use after the audit-trail refactor is to drop
+// the database and recreate it from scratch so the schema is coherent.
 func RunMigrations() error {
 	migrations := []string{
-		createUsersTable,
-		createPatientsTable,
-		createServiceCategoriesTable,
-		createServicesTable,
-		createProductsTable,
-		createStaffTable,
-		createAppointmentsTable,
-		createTransactionsTable,
-		createTransactionItemsTable,
-		createCommissionsTable,
-		createClinicSettingsTable,
-		createCMSPagesTable,
-		alterExistingTables,
-		createStockMovementsTable,
-		createServiceConsumablesTable,
-		alterPatientsAddReminderOptIn,
-		createProductCategoriesTable,
-		// SaaS multi-org + RBAC
-		alterUsersAddProfile,
-		createOrganizationsTable,
-		createOrganizationMembersTable,
-		createPermissionsTable,
-		createRolePermissionsTable,
-		createUserPermissionsTable,
+		createSchema,
+		createIndexes,
 		seedDefaultPermissions,
 		seedRolePermissions,
-		alterTablesAddOrgID,
-		// Audit trail: created_by, updated_by, deleted_at
-		alterTablesAddAuditTrail,
 	}
 
 	for i, migration := range migrations {
@@ -47,532 +27,508 @@ func RunMigrations() error {
 	return nil
 }
 
-const (
-	createUsersTable = `
-	CREATE TABLE IF NOT EXISTS users (
-		id VARCHAR(36) PRIMARY KEY,
-		email VARCHAR(255) UNIQUE NOT NULL,
-		password VARCHAR(255) NOT NULL,
-		role VARCHAR(50) NOT NULL,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);`
+const createSchema = `
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-	createPatientsTable = `
-	CREATE TABLE IF NOT EXISTS patients (
-		id VARCHAR(36) PRIMARY KEY,
-		patient_code VARCHAR(50) UNIQUE NOT NULL,
-		full_name VARCHAR(255) NOT NULL,
-		photo_url TEXT,
-		date_of_birth DATE,
-		gender VARCHAR(20),
-		phone VARCHAR(20),
-		whatsapp VARCHAR(20),
-		email VARCHAR(255),
-		address TEXT,
-		allergy_history TEXT,
-		medical_conditions TEXT,
-		skin_type VARCHAR(50),
-		notes TEXT,
-		tags TEXT[],
-		is_active BOOLEAN DEFAULT true,
-		created_by VARCHAR(36),
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);`
+-- ── Auth / identity ───────────────────────────────────────────────────────
 
-	createServiceCategoriesTable = `
-	CREATE TABLE IF NOT EXISTS service_categories (
-		id VARCHAR(36) PRIMARY KEY,
-		name VARCHAR(255) NOT NULL,
-		description TEXT,
-		is_active BOOLEAN DEFAULT true,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);`
+CREATE TABLE IF NOT EXISTS users (
+	id VARCHAR(36) PRIMARY KEY,
+	email VARCHAR(255) UNIQUE NOT NULL,
+	password VARCHAR(255) NOT NULL,
+	role VARCHAR(50) NOT NULL,
+	full_name VARCHAR(255) NOT NULL DEFAULT '',
+	avatar_url TEXT,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-	createServicesTable = `
-	CREATE TABLE IF NOT EXISTS services (
-		id VARCHAR(36) PRIMARY KEY,
-		name VARCHAR(255) NOT NULL,
-		category_id VARCHAR(36),
-		description TEXT,
-		duration_minutes INTEGER DEFAULT 30,
-		base_price DECIMAL(10, 2) NOT NULL,
-		doctor_commission_type VARCHAR(20),
-		doctor_commission_value DECIMAL(10, 2),
-		therapist_commission_type VARCHAR(20),
-		therapist_commission_value DECIMAL(10, 2),
-		requires_doctor BOOLEAN DEFAULT false,
-		is_active BOOLEAN DEFAULT true,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (category_id) REFERENCES service_categories(id)
-	);`
+-- ── SaaS multi-tenant / RBAC ──────────────────────────────────────────────
 
-	createProductsTable = `
-	CREATE TABLE IF NOT EXISTS products (
-		id VARCHAR(36) PRIMARY KEY,
-		name VARCHAR(255) NOT NULL,
-		category VARCHAR(100),
-		sku VARCHAR(100) UNIQUE,
-		supplier VARCHAR(255),
-		purchase_price DECIMAL(10, 2),
-		selling_price DECIMAL(10, 2),
-		current_stock INTEGER DEFAULT 0,
-		minimum_stock INTEGER DEFAULT 5,
-		unit VARCHAR(50),
-		expiry_date DATE,
-		is_active BOOLEAN DEFAULT true,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);`
+CREATE TABLE IF NOT EXISTS organizations (
+	id VARCHAR(36) PRIMARY KEY,
+	name VARCHAR(255) NOT NULL,
+	slug VARCHAR(100) UNIQUE NOT NULL,
+	description TEXT,
+	logo_url TEXT,
+	is_active BOOLEAN DEFAULT true,
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-	createStaffTable = `
-	CREATE TABLE IF NOT EXISTS staff (
-		id VARCHAR(36) PRIMARY KEY,
-		user_id VARCHAR(36) UNIQUE,
-		full_name VARCHAR(255) NOT NULL,
-		role VARCHAR(50) NOT NULL,
-		phone VARCHAR(20),
-		email VARCHAR(255),
-		specialization VARCHAR(255),
-		is_active BOOLEAN DEFAULT true,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (user_id) REFERENCES users(id)
-	);`
+CREATE TABLE IF NOT EXISTS organization_members (
+	id VARCHAR(36) PRIMARY KEY,
+	org_id VARCHAR(36) NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+	user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	role VARCHAR(50) NOT NULL DEFAULT 'cashier',
+	is_active BOOLEAN DEFAULT true,
+	joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	UNIQUE(org_id, user_id)
+);
 
-	createAppointmentsTable = `
-	CREATE TABLE IF NOT EXISTS appointments (
-		id VARCHAR(36) PRIMARY KEY,
-		patient_id VARCHAR(36) NOT NULL,
-		service_id VARCHAR(36) NOT NULL,
-		doctor_id VARCHAR(36),
-		therapist_id VARCHAR(36),
-		scheduled_at TIMESTAMP NOT NULL,
-		duration_minutes INTEGER,
-		status VARCHAR(50) DEFAULT 'scheduled',
-		notes TEXT,
-		created_by VARCHAR(36),
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (patient_id) REFERENCES patients(id),
-		FOREIGN KEY (service_id) REFERENCES services(id),
-		FOREIGN KEY (doctor_id) REFERENCES staff(id),
-		FOREIGN KEY (therapist_id) REFERENCES staff(id)
-	);`
+CREATE TABLE IF NOT EXISTS permissions (
+	id VARCHAR(100) PRIMARY KEY,
+	resource VARCHAR(50) NOT NULL,
+	action VARCHAR(50) NOT NULL,
+	description TEXT,
+	UNIQUE(resource, action)
+);
 
-	createTransactionsTable = `
-	CREATE TABLE IF NOT EXISTS transactions (
-		id VARCHAR(36) PRIMARY KEY,
-		transaction_code VARCHAR(50) UNIQUE NOT NULL,
-		appointment_id VARCHAR(36),
-		patient_id VARCHAR(36),
-		subtotal DECIMAL(10, 2) NOT NULL DEFAULT 0,
-		discount_amount DECIMAL(10, 2),
-		discount_type VARCHAR(50),
-		total_amount DECIMAL(10, 2) NOT NULL,
-		tax_amount DECIMAL(10, 2) DEFAULT 0,
-		payment_method VARCHAR(50),
-		payment_status VARCHAR(50) DEFAULT 'pending',
-		notes TEXT,
-		created_by VARCHAR(36),
-		paid_at TIMESTAMP,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (appointment_id) REFERENCES appointments(id),
-		FOREIGN KEY (patient_id) REFERENCES patients(id)
-	);`
+CREATE TABLE IF NOT EXISTS role_permissions (
+	id VARCHAR(36) PRIMARY KEY,
+	role VARCHAR(50) NOT NULL,
+	permission_id VARCHAR(100) NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+	UNIQUE(role, permission_id)
+);
 
-	createTransactionItemsTable = `
-	CREATE TABLE IF NOT EXISTS transaction_items (
-		id VARCHAR(36) PRIMARY KEY,
-		transaction_id VARCHAR(36) NOT NULL,
-		item_type VARCHAR(50) NOT NULL DEFAULT 'service',
-		service_id VARCHAR(36),
-		product_id VARCHAR(36),
-		quantity INTEGER DEFAULT 1,
-		unit_price DECIMAL(10, 2) NOT NULL,
-		discount_amount DECIMAL(10, 2),
-		total_price DECIMAL(10, 2) NOT NULL,
-		doctor_id VARCHAR(36),
-		therapist_id VARCHAR(36),
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (transaction_id) REFERENCES transactions(id),
-		FOREIGN KEY (service_id) REFERENCES services(id),
-		FOREIGN KEY (product_id) REFERENCES products(id),
-		FOREIGN KEY (doctor_id) REFERENCES staff(id),
-		FOREIGN KEY (therapist_id) REFERENCES staff(id)
-	);`
+CREATE TABLE IF NOT EXISTS user_permissions (
+	id VARCHAR(36) PRIMARY KEY,
+	user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	org_id VARCHAR(36) NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+	permission_id VARCHAR(100) NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+	granted_by VARCHAR(36) REFERENCES users(id),
+	granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	UNIQUE(user_id, org_id, permission_id)
+);
 
-	createCommissionsTable = `
-	CREATE TABLE IF NOT EXISTS commissions (
-		id VARCHAR(36) PRIMARY KEY,
-		staff_id VARCHAR(36) NOT NULL,
-		staff_role VARCHAR(50) NOT NULL,
-		transaction_id VARCHAR(36) NOT NULL,
-		transaction_item_id VARCHAR(36) NOT NULL,
-		base_amount DECIMAL(10, 2) NOT NULL,
-		commission_type VARCHAR(20) NOT NULL,
-		commission_value DECIMAL(10, 2) NOT NULL,
-		commission_amount DECIMAL(10, 2) NOT NULL,
-		status VARCHAR(50) DEFAULT 'pending',
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (staff_id) REFERENCES staff(id),
-		FOREIGN KEY (transaction_id) REFERENCES transactions(id),
-		FOREIGN KEY (transaction_item_id) REFERENCES transaction_items(id)
-	);`
+-- ── Service catalog ───────────────────────────────────────────────────────
 
-	createClinicSettingsTable = `
-	CREATE TABLE IF NOT EXISTS clinic_settings (
-		id VARCHAR(36) PRIMARY KEY,
-		clinic_name VARCHAR(255),
-		address TEXT,
-		phone VARCHAR(20),
-		email VARCHAR(255),
-		tax_rate DECIMAL(5, 2),
-		tax_inclusive BOOLEAN,
-		low_stock_alerts BOOLEAN,
-		appointment_reminders BOOLEAN,
-		expiry_warnings BOOLEAN,
-		reminder_hours_before INTEGER,
-		whatsapp_reminder_enabled BOOLEAN,
-		email_reminder_enabled BOOLEAN,
-		whatsapp_business_phone_id VARCHAR(255),
-		invoice_header_title VARCHAR(255),
-		invoice_header_description TEXT,
-		invoice_footer_text TEXT,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);`
+CREATE TABLE IF NOT EXISTS service_categories (
+	id VARCHAR(36) PRIMARY KEY,
+	name VARCHAR(255) NOT NULL,
+	description TEXT,
+	is_active BOOLEAN DEFAULT true,
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-	createCMSPagesTable = `
-	CREATE TABLE IF NOT EXISTS cms_pages (
-		id VARCHAR(36) PRIMARY KEY,
-		page_id VARCHAR(100) UNIQUE NOT NULL,
-		data JSONB NOT NULL DEFAULT '{}'::jsonb,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);`
+CREATE TABLE IF NOT EXISTS services (
+	id VARCHAR(36) PRIMARY KEY,
+	name VARCHAR(255) NOT NULL,
+	category_id VARCHAR(36) REFERENCES service_categories(id),
+	description TEXT,
+	duration_minutes INTEGER DEFAULT 30,
+	base_price DECIMAL(10, 2) NOT NULL,
+	doctor_commission_type VARCHAR(20),
+	doctor_commission_value DECIMAL(10, 2),
+	therapist_commission_type VARCHAR(20),
+	therapist_commission_value DECIMAL(10, 2),
+	requires_doctor BOOLEAN DEFAULT false,
+	is_active BOOLEAN DEFAULT true,
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-	alterExistingTables = `
-	ALTER TABLE service_categories ADD COLUMN IF NOT EXISTS description TEXT;
-	ALTER TABLE products ADD COLUMN IF NOT EXISTS category VARCHAR(100);
-	ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier VARCHAR(255);
-	ALTER TABLE products ADD COLUMN IF NOT EXISTS purchase_price DECIMAL(10, 2);
-	ALTER TABLE products ADD COLUMN IF NOT EXISTS selling_price DECIMAL(10, 2);
-	ALTER TABLE products ADD COLUMN IF NOT EXISTS unit VARCHAR(50);
-	ALTER TABLE staff ALTER COLUMN user_id DROP NOT NULL;
-	ALTER TABLE staff ADD COLUMN IF NOT EXISTS specialization VARCHAR(255);
-	ALTER TABLE appointments ADD COLUMN IF NOT EXISTS duration_minutes INTEGER;
-	ALTER TABLE appointments ADD COLUMN IF NOT EXISTS created_by VARCHAR(36);
-	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS appointment_id VARCHAR(36);
-	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS subtotal DECIMAL(10, 2) NOT NULL DEFAULT 0;
-	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10, 2);
-	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS discount_type VARCHAR(50);
-	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS notes TEXT;
-	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS created_by VARCHAR(36);
-	ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS item_type VARCHAR(50) NOT NULL DEFAULT 'service';
-	ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10, 2);
-	ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS total_price DECIMAL(10, 2);
-	UPDATE transaction_items SET total_price = COALESCE(total_price, unit_price * quantity) WHERE total_price IS NULL;
-	ALTER TABLE transaction_items ALTER COLUMN total_price SET NOT NULL;
-	ALTER TABLE commissions ADD COLUMN IF NOT EXISTS staff_role VARCHAR(50) NOT NULL DEFAULT 'staff';
-	ALTER TABLE commissions ADD COLUMN IF NOT EXISTS base_amount DECIMAL(10, 2) NOT NULL DEFAULT 0;
-	ALTER TABLE commissions ADD COLUMN IF NOT EXISTS commission_type VARCHAR(20) NOT NULL DEFAULT 'fixed';
-	ALTER TABLE commissions ADD COLUMN IF NOT EXISTS commission_value DECIMAL(10, 2) NOT NULL DEFAULT 0;
-	`
+-- ── Product catalog ───────────────────────────────────────────────────────
 
-	createStockMovementsTable = `
-	CREATE TABLE IF NOT EXISTS stock_movements (
-		id VARCHAR(36) PRIMARY KEY,
-		product_id VARCHAR(36) NOT NULL,
-		movement_type VARCHAR(20) NOT NULL,
-		quantity INTEGER NOT NULL,
-		reason VARCHAR(255),
-		reference_id VARCHAR(36),
-		reference_type VARCHAR(50),
-		notes TEXT,
-		created_by VARCHAR(36),
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (product_id) REFERENCES products(id)
-	);`
+CREATE TABLE IF NOT EXISTS product_categories (
+	id VARCHAR(36) PRIMARY KEY,
+	name VARCHAR(100) NOT NULL,
+	description TEXT,
+	is_active BOOLEAN DEFAULT true,
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-	createServiceConsumablesTable = `
-	CREATE TABLE IF NOT EXISTS service_consumables (
-		id VARCHAR(36) PRIMARY KEY,
-		service_id VARCHAR(36) NOT NULL,
-		product_id VARCHAR(36) NOT NULL,
-		quantity_used DECIMAL(10, 3) NOT NULL DEFAULT 1,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (service_id) REFERENCES services(id),
-		FOREIGN KEY (product_id) REFERENCES products(id),
-		UNIQUE (service_id, product_id)
-	);`
+CREATE TABLE IF NOT EXISTS products (
+	id VARCHAR(36) PRIMARY KEY,
+	name VARCHAR(255) NOT NULL,
+	category VARCHAR(100),
+	sku VARCHAR(100) UNIQUE,
+	supplier VARCHAR(255),
+	purchase_price DECIMAL(10, 2),
+	selling_price DECIMAL(10, 2),
+	current_stock INTEGER DEFAULT 0,
+	minimum_stock INTEGER DEFAULT 5,
+	unit VARCHAR(50),
+	expiry_date DATE,
+	is_active BOOLEAN DEFAULT true,
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-	alterPatientsAddReminderOptIn = `
-	ALTER TABLE patients ADD COLUMN IF NOT EXISTS reminder_opt_in BOOLEAN DEFAULT true;
-	`
+-- ── Staff and patients ──────────────────────────────────────────────────
 
-	createProductCategoriesTable = `
-	CREATE TABLE IF NOT EXISTS product_categories (
-		id VARCHAR(36) PRIMARY KEY,
-		name VARCHAR(100) NOT NULL,
-		description TEXT,
-		is_active BOOLEAN DEFAULT true,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);`
+CREATE TABLE IF NOT EXISTS staff (
+	id VARCHAR(36) PRIMARY KEY,
+	user_id VARCHAR(36) UNIQUE REFERENCES users(id),
+	full_name VARCHAR(255) NOT NULL,
+	role VARCHAR(50) NOT NULL,
+	phone VARCHAR(20),
+	email VARCHAR(255),
+	specialization VARCHAR(255),
+	is_active BOOLEAN DEFAULT true,
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-	// ── SaaS Multi-Org + RBAC migrations ────────────────────────────────────
+CREATE TABLE IF NOT EXISTS patients (
+	id VARCHAR(36) PRIMARY KEY,
+	patient_code VARCHAR(50) UNIQUE NOT NULL,
+	full_name VARCHAR(255) NOT NULL,
+	photo_url TEXT,
+	date_of_birth DATE,
+	gender VARCHAR(20),
+	phone VARCHAR(20),
+	whatsapp VARCHAR(20),
+	email VARCHAR(255),
+	address TEXT,
+	allergy_history TEXT,
+	medical_conditions TEXT,
+	skin_type VARCHAR(50),
+	notes TEXT,
+	tags TEXT[],
+	is_active BOOLEAN DEFAULT true,
+	reminder_opt_in BOOLEAN DEFAULT true,
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-	alterUsersAddProfile = `
-	ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255);
-	ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
-	`
+-- ── Appointments and transactions ─────────────────────────────────────────
 
-	createOrganizationsTable = `
-	CREATE TABLE IF NOT EXISTS organizations (
-		id VARCHAR(36) PRIMARY KEY,
-		name VARCHAR(255) NOT NULL,
-		slug VARCHAR(100) UNIQUE NOT NULL,
-		description TEXT,
-		logo_url TEXT,
-		is_active BOOLEAN DEFAULT true,
-		created_by VARCHAR(36) REFERENCES users(id),
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);`
+CREATE TABLE IF NOT EXISTS appointments (
+	id VARCHAR(36) PRIMARY KEY,
+	patient_id VARCHAR(36) NOT NULL REFERENCES patients(id),
+	service_id VARCHAR(36) NOT NULL REFERENCES services(id),
+	doctor_id VARCHAR(36) REFERENCES staff(id),
+	therapist_id VARCHAR(36) REFERENCES staff(id),
+	scheduled_at TIMESTAMP NOT NULL,
+	duration_minutes INTEGER,
+	status VARCHAR(50) DEFAULT 'scheduled',
+	notes TEXT,
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-	createOrganizationMembersTable = `
-	CREATE TABLE IF NOT EXISTS organization_members (
-		id VARCHAR(36) PRIMARY KEY,
-		org_id VARCHAR(36) NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-		user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-		role VARCHAR(50) NOT NULL DEFAULT 'cashier',
-		is_active BOOLEAN DEFAULT true,
-		joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(org_id, user_id)
-	);`
+CREATE TABLE IF NOT EXISTS transactions (
+	id VARCHAR(36) PRIMARY KEY,
+	transaction_code VARCHAR(50) UNIQUE NOT NULL,
+	appointment_id VARCHAR(36) REFERENCES appointments(id),
+	patient_id VARCHAR(36) REFERENCES patients(id),
+	subtotal DECIMAL(10, 2) NOT NULL DEFAULT 0,
+	discount_amount DECIMAL(10, 2),
+	discount_type VARCHAR(50),
+	total_amount DECIMAL(10, 2) NOT NULL,
+	tax_amount DECIMAL(10, 2) DEFAULT 0,
+	payment_method VARCHAR(50),
+	payment_status VARCHAR(50) DEFAULT 'pending',
+	notes TEXT,
+	paid_at TIMESTAMP,
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-	createPermissionsTable = `
-	CREATE TABLE IF NOT EXISTS permissions (
-		id VARCHAR(100) PRIMARY KEY,
-		resource VARCHAR(50) NOT NULL,
-		action VARCHAR(50) NOT NULL,
-		description TEXT,
-		UNIQUE(resource, action)
-	);`
+CREATE TABLE IF NOT EXISTS transaction_items (
+	id VARCHAR(36) PRIMARY KEY,
+	transaction_id VARCHAR(36) NOT NULL REFERENCES transactions(id),
+	item_type VARCHAR(50) NOT NULL DEFAULT 'service',
+	service_id VARCHAR(36) REFERENCES services(id),
+	product_id VARCHAR(36) REFERENCES products(id),
+	quantity INTEGER DEFAULT 1,
+	unit_price DECIMAL(10, 2) NOT NULL,
+	discount_amount DECIMAL(10, 2),
+	total_price DECIMAL(10, 2) NOT NULL,
+	doctor_id VARCHAR(36) REFERENCES staff(id),
+	therapist_id VARCHAR(36) REFERENCES staff(id),
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-	createRolePermissionsTable = `
-	CREATE TABLE IF NOT EXISTS role_permissions (
-		id VARCHAR(36) PRIMARY KEY,
-		role VARCHAR(50) NOT NULL,
-		permission_id VARCHAR(100) NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
-		UNIQUE(role, permission_id)
-	);`
+CREATE TABLE IF NOT EXISTS commissions (
+	id VARCHAR(36) PRIMARY KEY,
+	staff_id VARCHAR(36) NOT NULL REFERENCES staff(id),
+	staff_role VARCHAR(50) NOT NULL,
+	transaction_id VARCHAR(36) NOT NULL REFERENCES transactions(id),
+	transaction_item_id VARCHAR(36) NOT NULL REFERENCES transaction_items(id),
+	base_amount DECIMAL(10, 2) NOT NULL,
+	commission_type VARCHAR(20) NOT NULL,
+	commission_value DECIMAL(10, 2) NOT NULL,
+	commission_amount DECIMAL(10, 2) NOT NULL,
+	status VARCHAR(50) DEFAULT 'pending',
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-	createUserPermissionsTable = `
-	CREATE TABLE IF NOT EXISTS user_permissions (
-		id VARCHAR(36) PRIMARY KEY,
-		user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-		org_id VARCHAR(36) NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-		permission_id VARCHAR(100) NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
-		granted_by VARCHAR(36) REFERENCES users(id),
-		granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(user_id, org_id, permission_id)
-	);`
+-- ── Settings and CMS ────────────────────────────────────────────────────
 
-	seedDefaultPermissions = `
-	INSERT INTO permissions (id, resource, action, description) VALUES
-		('patients:read',       'patients',     'read',   'View patients'),
-		('patients:write',      'patients',     'write',  'Create and edit patients'),
-		('patients:delete',     'patients',     'delete', 'Delete patients'),
-		('appointments:read',   'appointments', 'read',   'View appointments'),
-		('appointments:write',  'appointments', 'write',  'Create and edit appointments'),
-		('appointments:delete', 'appointments', 'delete', 'Delete appointments'),
-		('services:read',       'services',     'read',   'View services'),
-		('services:write',      'services',     'write',  'Create and edit services'),
-		('services:delete',     'services',     'delete', 'Delete services'),
-		('products:read',       'products',     'read',   'View products'),
-		('products:write',      'products',     'write',  'Create and edit products'),
-		('products:delete',     'products',     'delete', 'Delete products'),
-		('categories:read',     'categories',   'read',   'View categories'),
-		('categories:write',    'categories',   'write',  'Create and edit categories'),
-		('categories:delete',   'categories',   'delete', 'Delete categories'),
-		('transactions:read',   'transactions', 'read',   'View transactions'),
-		('transactions:write',  'transactions', 'write',  'Create and process transactions'),
-		('transactions:delete', 'transactions', 'delete', 'Delete transactions'),
-		('commissions:read',    'commissions',  'read',   'View commissions'),
-		('commissions:write',   'commissions',  'write',  'Update commission status'),
-		('staff:read',          'staff',        'read',   'View staff'),
-		('staff:write',         'staff',        'write',  'Create and edit staff'),
-		('staff:delete',        'staff',        'delete', 'Delete staff'),
-		('reports:read',        'reports',      'read',   'View reports and dashboard'),
-		('settings:read',       'settings',     'read',   'View clinic settings'),
-		('settings:write',      'settings',     'write',  'Update clinic settings'),
-		('cms:read',            'cms',          'read',   'View CMS content'),
-		('cms:write',           'cms',          'write',  'Edit CMS content'),
-		('rbac:read',           'rbac',         'read',   'View RBAC settings'),
-		('rbac:write',          'rbac',         'write',  'Manage roles and permissions'),
-		('organization:read',   'organization', 'read',   'View organization info'),
-		('organization:write',  'organization', 'write',  'Edit organization info'),
-		('organization:delete', 'organization', 'delete', 'Delete organization')
-	ON CONFLICT (id) DO NOTHING;
-	`
+CREATE TABLE IF NOT EXISTS clinic_settings (
+	id VARCHAR(36) PRIMARY KEY,
+	clinic_name VARCHAR(255),
+	address TEXT,
+	phone VARCHAR(20),
+	email VARCHAR(255),
+	tax_rate DECIMAL(5, 2),
+	tax_inclusive BOOLEAN,
+	low_stock_alerts BOOLEAN,
+	appointment_reminders BOOLEAN,
+	expiry_warnings BOOLEAN,
+	reminder_hours_before INTEGER,
+	whatsapp_reminder_enabled BOOLEAN,
+	email_reminder_enabled BOOLEAN,
+	whatsapp_business_phone_id VARCHAR(255),
+	logo_url TEXT,
+	invoice_header_title VARCHAR(255),
+	invoice_header_description TEXT,
+	invoice_footer_text TEXT,
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	UNIQUE(organization_id)
+);
 
-	seedRolePermissions = `
-	INSERT INTO role_permissions (id, role, permission_id) VALUES
-		-- admin: all permissions
-		(gen_random_uuid()::varchar, 'admin', 'patients:read'),
-		(gen_random_uuid()::varchar, 'admin', 'patients:write'),
-		(gen_random_uuid()::varchar, 'admin', 'patients:delete'),
-		(gen_random_uuid()::varchar, 'admin', 'appointments:read'),
-		(gen_random_uuid()::varchar, 'admin', 'appointments:write'),
-		(gen_random_uuid()::varchar, 'admin', 'appointments:delete'),
-		(gen_random_uuid()::varchar, 'admin', 'services:read'),
-		(gen_random_uuid()::varchar, 'admin', 'services:write'),
-		(gen_random_uuid()::varchar, 'admin', 'services:delete'),
-		(gen_random_uuid()::varchar, 'admin', 'products:read'),
-		(gen_random_uuid()::varchar, 'admin', 'products:write'),
-		(gen_random_uuid()::varchar, 'admin', 'products:delete'),
-		(gen_random_uuid()::varchar, 'admin', 'categories:read'),
-		(gen_random_uuid()::varchar, 'admin', 'categories:write'),
-		(gen_random_uuid()::varchar, 'admin', 'categories:delete'),
-		(gen_random_uuid()::varchar, 'admin', 'transactions:read'),
-		(gen_random_uuid()::varchar, 'admin', 'transactions:write'),
-		(gen_random_uuid()::varchar, 'admin', 'transactions:delete'),
-		(gen_random_uuid()::varchar, 'admin', 'commissions:read'),
-		(gen_random_uuid()::varchar, 'admin', 'commissions:write'),
-		(gen_random_uuid()::varchar, 'admin', 'staff:read'),
-		(gen_random_uuid()::varchar, 'admin', 'staff:write'),
-		(gen_random_uuid()::varchar, 'admin', 'staff:delete'),
-		(gen_random_uuid()::varchar, 'admin', 'reports:read'),
-		(gen_random_uuid()::varchar, 'admin', 'settings:read'),
-		(gen_random_uuid()::varchar, 'admin', 'settings:write'),
-		(gen_random_uuid()::varchar, 'admin', 'cms:read'),
-		(gen_random_uuid()::varchar, 'admin', 'cms:write'),
-		(gen_random_uuid()::varchar, 'admin', 'rbac:read'),
-		(gen_random_uuid()::varchar, 'admin', 'rbac:write'),
-		(gen_random_uuid()::varchar, 'admin', 'organization:read'),
-		(gen_random_uuid()::varchar, 'admin', 'organization:write'),
-		(gen_random_uuid()::varchar, 'admin', 'organization:delete'),
-		-- doctor
-		(gen_random_uuid()::varchar, 'doctor', 'patients:read'),
-		(gen_random_uuid()::varchar, 'doctor', 'patients:write'),
-		(gen_random_uuid()::varchar, 'doctor', 'appointments:read'),
-		(gen_random_uuid()::varchar, 'doctor', 'appointments:write'),
-		(gen_random_uuid()::varchar, 'doctor', 'services:read'),
-		(gen_random_uuid()::varchar, 'doctor', 'products:read'),
-		(gen_random_uuid()::varchar, 'doctor', 'transactions:read'),
-		(gen_random_uuid()::varchar, 'doctor', 'commissions:read'),
-		(gen_random_uuid()::varchar, 'doctor', 'reports:read'),
-		-- therapist
-		(gen_random_uuid()::varchar, 'therapist', 'patients:read'),
-		(gen_random_uuid()::varchar, 'therapist', 'appointments:read'),
-		(gen_random_uuid()::varchar, 'therapist', 'services:read'),
-		(gen_random_uuid()::varchar, 'therapist', 'products:read'),
-		(gen_random_uuid()::varchar, 'therapist', 'transactions:read'),
-		(gen_random_uuid()::varchar, 'therapist', 'commissions:read'),
-		-- cashier
-		(gen_random_uuid()::varchar, 'cashier', 'patients:read'),
-		(gen_random_uuid()::varchar, 'cashier', 'patients:write'),
-		(gen_random_uuid()::varchar, 'cashier', 'appointments:read'),
-		(gen_random_uuid()::varchar, 'cashier', 'appointments:write'),
-		(gen_random_uuid()::varchar, 'cashier', 'transactions:read'),
-		(gen_random_uuid()::varchar, 'cashier', 'transactions:write'),
-		(gen_random_uuid()::varchar, 'cashier', 'services:read'),
-		(gen_random_uuid()::varchar, 'cashier', 'products:read'),
-		(gen_random_uuid()::varchar, 'cashier', 'categories:read'),
-		(gen_random_uuid()::varchar, 'cashier', 'reports:read')
-	ON CONFLICT (role, permission_id) DO NOTHING;
-	`
+CREATE TABLE IF NOT EXISTS cms_pages (
+	id VARCHAR(36) PRIMARY KEY,
+	page_id VARCHAR(100) NOT NULL,
+	data JSONB NOT NULL DEFAULT '{}'::jsonb,
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	UNIQUE(page_id)
+);
 
-	alterTablesAddOrgID = `
-	ALTER TABLE patients           ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	ALTER TABLE service_categories ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	ALTER TABLE services           ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	ALTER TABLE product_categories ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	ALTER TABLE products           ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	ALTER TABLE staff              ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	ALTER TABLE appointments       ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	ALTER TABLE transactions       ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	ALTER TABLE transaction_items  ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	ALTER TABLE commissions        ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	ALTER TABLE clinic_settings    ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	ALTER TABLE cms_pages          ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	ALTER TABLE stock_movements    ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	ALTER TABLE service_consumables ADD COLUMN IF NOT EXISTS organization_id VARCHAR(36) REFERENCES organizations(id);
-	`
+-- ── Inventory and service consumables ─────────────────────────────────────
 
-	// alterTablesAddAuditTrail adds created_by, updated_by, deleted_at to all business tables.
-	// deleted_at enables proper soft-delete (NULL = active, NOT NULL = deleted).
-	// patients already has created_by; stock_movements are immutable (no update/delete).
-	alterTablesAddAuditTrail = `
-	-- patients: already has created_by
-	ALTER TABLE patients ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE patients ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS stock_movements (
+	id VARCHAR(36) PRIMARY KEY,
+	product_id VARCHAR(36) NOT NULL REFERENCES products(id),
+	movement_type VARCHAR(20) NOT NULL,
+	quantity INTEGER NOT NULL,
+	reason VARCHAR(255),
+	reference_id VARCHAR(36),
+	reference_type VARCHAR(50),
+	notes TEXT,
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-	ALTER TABLE services ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
-	ALTER TABLE services ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE services ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS service_consumables (
+	id VARCHAR(36) PRIMARY KEY,
+	service_id VARCHAR(36) NOT NULL REFERENCES services(id),
+	product_id VARCHAR(36) NOT NULL REFERENCES products(id),
+	quantity_used DECIMAL(10, 3) NOT NULL DEFAULT 1,
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	updated_by VARCHAR(36) REFERENCES users(id),
+	deleted_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	UNIQUE(service_id, product_id)
+);
+`
 
-	ALTER TABLE service_categories ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
-	ALTER TABLE service_categories ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE service_categories ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+const createIndexes = `
+CREATE INDEX IF NOT EXISTS idx_organizations_slug ON organizations(slug);
+CREATE INDEX IF NOT EXISTS idx_organizations_active ON organizations(is_active) WHERE deleted_at IS NULL;
 
-	ALTER TABLE products ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
-	ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE products ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_organization_members_user ON organization_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_organization_members_org ON organization_members(org_id);
+CREATE INDEX IF NOT EXISTS idx_organization_members_active ON organization_members(is_active) WHERE deleted_at IS NULL;
 
-	ALTER TABLE product_categories ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
-	ALTER TABLE product_categories ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE product_categories ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_user_permissions_user ON user_permissions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_permissions_org ON user_permissions(org_id);
 
-	ALTER TABLE staff ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
-	ALTER TABLE staff ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE staff ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_service_categories_org ON service_categories(organization_id);
+CREATE INDEX IF NOT EXISTS idx_service_categories_active ON service_categories(is_active) WHERE deleted_at IS NULL;
 
-	-- appointments: already has created_by
-	ALTER TABLE appointments ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE appointments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_services_org ON services(organization_id);
+CREATE INDEX IF NOT EXISTS idx_services_category ON services(category_id);
+CREATE INDEX IF NOT EXISTS idx_services_active ON services(is_active) WHERE deleted_at IS NULL;
 
-	-- transactions: already has created_by
-	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_product_categories_org ON product_categories(organization_id);
+CREATE INDEX IF NOT EXISTS idx_product_categories_active ON product_categories(is_active) WHERE deleted_at IS NULL;
 
-	ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
-	ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_products_org ON products(organization_id);
+CREATE INDEX IF NOT EXISTS idx_products_active ON products(is_active) WHERE deleted_at IS NULL;
 
-	ALTER TABLE commissions ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
-	ALTER TABLE commissions ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE commissions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_staff_org ON staff(organization_id);
+CREATE INDEX IF NOT EXISTS idx_staff_user ON staff(user_id);
+CREATE INDEX IF NOT EXISTS idx_staff_active ON staff(is_active) WHERE deleted_at IS NULL;
 
-	ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
-	ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_patients_org ON patients(organization_id);
+CREATE INDEX IF NOT EXISTS idx_patients_code ON patients(patient_code);
+CREATE INDEX IF NOT EXISTS idx_patients_active ON patients(is_active) WHERE deleted_at IS NULL;
 
-	ALTER TABLE cms_pages ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
-	ALTER TABLE cms_pages ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE cms_pages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_appointments_org ON appointments(organization_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_scheduled ON appointments(scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_appointments_active ON appointments(status) WHERE deleted_at IS NULL;
 
-	ALTER TABLE service_consumables ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
-	ALTER TABLE service_consumables ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE service_consumables ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_transactions_org ON transactions(organization_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_code ON transactions(transaction_code);
+CREATE INDEX IF NOT EXISTS idx_transactions_active ON transactions(payment_status) WHERE deleted_at IS NULL;
 
-	-- organizations: already has created_by (via owner_id logic, but add explicit column)
-	ALTER TABLE organizations ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE organizations ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_transaction_items_tx ON transaction_items(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_transaction_items_org ON transaction_items(organization_id);
 
-	ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
-	ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id);
-	ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_commissions_staff ON commissions(staff_id);
+CREATE INDEX IF NOT EXISTS idx_commissions_org ON commissions(organization_id);
+CREATE INDEX IF NOT EXISTS idx_commissions_active ON commissions(status) WHERE deleted_at IS NULL;
 
-	-- stock_movements intentionally skipped: immutable audit records by design
-	`
-)
+CREATE INDEX IF NOT EXISTS idx_clinic_settings_org ON clinic_settings(organization_id);
+CREATE INDEX IF NOT EXISTS idx_cms_pages_org ON cms_pages(organization_id);
+CREATE INDEX IF NOT EXISTS idx_cms_pages_page_id ON cms_pages(page_id);
+
+CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_org ON stock_movements(organization_id);
+
+CREATE INDEX IF NOT EXISTS idx_service_consumables_service ON service_consumables(service_id);
+CREATE INDEX IF NOT EXISTS idx_service_consumables_org ON service_consumables(organization_id);
+`
+
+const seedDefaultPermissions = `
+INSERT INTO permissions (id, resource, action, description) VALUES
+	('patients:read',       'patients',     'read',   'View patients'),
+	('patients:write',      'patients',     'write',  'Create and edit patients'),
+	('patients:delete',     'patients',     'delete', 'Delete patients'),
+	('appointments:read',   'appointments', 'read',   'View appointments'),
+	('appointments:write',  'appointments', 'write',  'Create and edit appointments'),
+	('appointments:delete', 'appointments', 'delete', 'Delete appointments'),
+	('services:read',       'services',     'read',   'View services'),
+	('services:write',      'services',     'write',  'Create and edit services'),
+	('services:delete',     'services',     'delete', 'Delete services'),
+	('products:read',       'products',     'read',   'View products'),
+	('products:write',      'products',     'write',  'Create and edit products'),
+	('products:delete',     'products',     'delete', 'Delete products'),
+	('categories:read',     'categories',   'read',   'View categories'),
+	('categories:write',    'categories',   'write',  'Create and edit categories'),
+	('categories:delete',   'categories',   'delete', 'Delete categories'),
+	('transactions:read',   'transactions', 'read',   'View transactions'),
+	('transactions:write',  'transactions', 'write',  'Create and process transactions'),
+	('transactions:delete', 'transactions', 'delete', 'Delete transactions'),
+	('commissions:read',    'commissions',  'read',   'View commissions'),
+	('commissions:write',   'commissions',  'write',  'Update commission status'),
+	('staff:read',          'staff',        'read',   'View staff'),
+	('staff:write',         'staff',        'write',  'Create and edit staff'),
+	('staff:delete',        'staff',        'delete', 'Delete staff'),
+	('reports:read',        'reports',      'read',   'View reports and dashboard'),
+	('settings:read',       'settings',     'read',   'View clinic settings'),
+	('settings:write',      'settings',     'write',  'Update clinic settings'),
+	('cms:read',            'cms',          'read',   'View CMS content'),
+	('cms:write',           'cms',          'write',  'Edit CMS content'),
+	('rbac:read',           'rbac',         'read',   'View RBAC settings'),
+	('rbac:write',          'rbac',         'write',  'Manage roles and permissions'),
+	('organization:read',   'organization', 'read',   'View organization info'),
+	('organization:write',  'organization', 'write',  'Edit organization info'),
+	('organization:delete', 'organization', 'delete', 'Delete organization')
+ON CONFLICT (id) DO NOTHING;
+`
+
+const seedRolePermissions = `
+INSERT INTO role_permissions (id, role, permission_id) VALUES
+	-- admin: all permissions
+	(gen_random_uuid()::varchar, 'admin', 'patients:read'),
+	(gen_random_uuid()::varchar, 'admin', 'patients:write'),
+	(gen_random_uuid()::varchar, 'admin', 'patients:delete'),
+	(gen_random_uuid()::varchar, 'admin', 'appointments:read'),
+	(gen_random_uuid()::varchar, 'admin', 'appointments:write'),
+	(gen_random_uuid()::varchar, 'admin', 'appointments:delete'),
+	(gen_random_uuid()::varchar, 'admin', 'services:read'),
+	(gen_random_uuid()::varchar, 'admin', 'services:write'),
+	(gen_random_uuid()::varchar, 'admin', 'services:delete'),
+	(gen_random_uuid()::varchar, 'admin', 'products:read'),
+	(gen_random_uuid()::varchar, 'admin', 'products:write'),
+	(gen_random_uuid()::varchar, 'admin', 'products:delete'),
+	(gen_random_uuid()::varchar, 'admin', 'categories:read'),
+	(gen_random_uuid()::varchar, 'admin', 'categories:write'),
+	(gen_random_uuid()::varchar, 'admin', 'categories:delete'),
+	(gen_random_uuid()::varchar, 'admin', 'transactions:read'),
+	(gen_random_uuid()::varchar, 'admin', 'transactions:write'),
+	(gen_random_uuid()::varchar, 'admin', 'transactions:delete'),
+	(gen_random_uuid()::varchar, 'admin', 'commissions:read'),
+	(gen_random_uuid()::varchar, 'admin', 'commissions:write'),
+	(gen_random_uuid()::varchar, 'admin', 'staff:read'),
+	(gen_random_uuid()::varchar, 'admin', 'staff:write'),
+	(gen_random_uuid()::varchar, 'admin', 'staff:delete'),
+	(gen_random_uuid()::varchar, 'admin', 'reports:read'),
+	(gen_random_uuid()::varchar, 'admin', 'settings:read'),
+	(gen_random_uuid()::varchar, 'admin', 'settings:write'),
+	(gen_random_uuid()::varchar, 'admin', 'cms:read'),
+	(gen_random_uuid()::varchar, 'admin', 'cms:write'),
+	(gen_random_uuid()::varchar, 'admin', 'rbac:read'),
+	(gen_random_uuid()::varchar, 'admin', 'rbac:write'),
+	(gen_random_uuid()::varchar, 'admin', 'organization:read'),
+	(gen_random_uuid()::varchar, 'admin', 'organization:write'),
+	(gen_random_uuid()::varchar, 'admin', 'organization:delete'),
+	-- doctor
+	(gen_random_uuid()::varchar, 'doctor', 'patients:read'),
+	(gen_random_uuid()::varchar, 'doctor', 'patients:write'),
+	(gen_random_uuid()::varchar, 'doctor', 'appointments:read'),
+	(gen_random_uuid()::varchar, 'doctor', 'appointments:write'),
+	(gen_random_uuid()::varchar, 'doctor', 'services:read'),
+	(gen_random_uuid()::varchar, 'doctor', 'products:read'),
+	(gen_random_uuid()::varchar, 'doctor', 'transactions:read'),
+	(gen_random_uuid()::varchar, 'doctor', 'commissions:read'),
+	(gen_random_uuid()::varchar, 'doctor', 'reports:read'),
+	-- therapist
+	(gen_random_uuid()::varchar, 'therapist', 'patients:read'),
+	(gen_random_uuid()::varchar, 'therapist', 'appointments:read'),
+	(gen_random_uuid()::varchar, 'therapist', 'services:read'),
+	(gen_random_uuid()::varchar, 'therapist', 'products:read'),
+	(gen_random_uuid()::varchar, 'therapist', 'transactions:read'),
+	(gen_random_uuid()::varchar, 'therapist', 'commissions:read'),
+	-- cashier
+	(gen_random_uuid()::varchar, 'cashier', 'patients:read'),
+	(gen_random_uuid()::varchar, 'cashier', 'patients:write'),
+	(gen_random_uuid()::varchar, 'cashier', 'appointments:read'),
+	(gen_random_uuid()::varchar, 'cashier', 'appointments:write'),
+	(gen_random_uuid()::varchar, 'cashier', 'transactions:read'),
+	(gen_random_uuid()::varchar, 'cashier', 'transactions:write'),
+	(gen_random_uuid()::varchar, 'cashier', 'services:read'),
+	(gen_random_uuid()::varchar, 'cashier', 'products:read'),
+	(gen_random_uuid()::varchar, 'cashier', 'categories:read'),
+	(gen_random_uuid()::varchar, 'cashier', 'reports:read')
+ON CONFLICT (role, permission_id) DO NOTHING;
+`

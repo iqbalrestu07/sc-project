@@ -343,46 +343,81 @@ Jika `WHATSAPP_API_URL` tidak diset, endpoint ini hanya simulasi (tidak benar-be
 ### Tabel Utama
 
 ```sql
-users              -- akun login (id, email, password_hash, role, created_at, updated_at)
-patients           -- data pasien (id, patient_code, full_name, phone, whatsapp, email,
-                   --   gender, date_of_birth, photo_url, allergy_history, medical_conditions,
-                   --   skin_type, notes, tags[], is_active, reminder_opt_in, created_by)
-service_categories -- (id, name, description, is_active, created_at, updated_at)
-services           -- (id, name, category_id FK→service_categories, base_price, duration_minutes,
-                   --   requires_doctor, doctor_commission_type, doctor_commission_value,
-                   --   therapist_commission_type, therapist_commission_value, is_active)
-product_categories -- (id, name, description, is_active, created_at, updated_at)  ← BARU
-products           -- (id, name, category_id FK→product_categories, sku, supplier,
-                   --   purchase_price, selling_price, current_stock, minimum_stock,
-                   --   unit, expiry_date, is_active)
-staff              -- (id, user_id, full_name, role, specialization, phone, is_active)
-appointments       -- (id, patient_id, service_id, staff_id, scheduled_at, duration_minutes,
-                   --   status, notes, created_by)
-transactions       -- (id, patient_id, staff_id, appointment_id, subtotal, discount_amount,
-                   --   discount_type, total_amount, payment_method, payment_status,
-                   --   paid_at, notes, created_by)
-transaction_items  -- (id, transaction_id, service_id, product_id, item_type, quantity,
-                   --   unit_price, discount_amount, total_price, doctor_id, therapist_id)
-commissions        -- (id, transaction_id, transaction_item_id, staff_id, staff_role,
-                   --   base_amount, commission_type, commission_value, commission_amount,
-                   --   status, created_at, updated_at)
-clinic_settings    -- (id, clinic_name, address, phone, email, logo_url, ...)
-cms_pages          -- (id, page_id varchar unique, content jsonb, updated_at)
-stock_movements    -- (id, product_id, movement_type, quantity, reason, reference_id,
-                   --   reference_type, notes, created_by, created_at)
-service_consumables-- (id, service_id, product_id, quantity_used, created_at) UNIQUE(service_id, product_id)
+users                -- akun login (id, email, password, role, full_name, avatar_url, created_at, updated_at)
+organizations        -- unit tenant/bisnis SaaS (id, name, slug, description, logo_url, is_active,
+                     --   created_by, updated_by, deleted_at, created_at, updated_at)
+organization_members -- relasi user <-> org (id, org_id, user_id, role, is_active, joined_at,
+                     --   created_by, updated_by, deleted_at, created_at, updated_at)
+permissions          -- daftar permission granular (id, resource, action, description)
+role_permissions     -- mapping role default → permission (id, role, permission_id)
+user_permissions     -- extra grant per user per org (id, user_id, org_id, permission_id,
+                     --   granted_by, granted_at)
+
+service_categories   -- (id, name, description, is_active, organization_id,
+                     --   created_by, updated_by, deleted_at, created_at, updated_at)
+services             -- (id, name, category_id, description, duration_minutes, base_price,
+                     --   doctor_commission_type, doctor_commission_value,
+                     --   therapist_commission_type, therapist_commission_value, requires_doctor,
+                     --   is_active, organization_id, created_by, updated_by, deleted_at,
+                     --   created_at, updated_at)
+product_categories   -- (id, name, description, is_active, organization_id,
+                     --   created_by, updated_by, deleted_at, created_at, updated_at)
+products             -- (id, name, category, sku, supplier, purchase_price, selling_price,
+                     --   current_stock, minimum_stock, unit, expiry_date, is_active,
+                     --   organization_id, created_by, updated_by, deleted_at, created_at, updated_at)
+staff                -- (id, user_id, full_name, role, phone, email, specialization,
+                     --   is_active, organization_id, created_by, updated_by, deleted_at,
+                     --   created_at, updated_at)
+patients             -- (id, patient_code, full_name, photo_url, date_of_birth, gender,
+                     --   phone, whatsapp, email, address, allergy_history, medical_conditions,
+                     --   skin_type, notes, tags[], is_active, reminder_opt_in, organization_id,
+                     --   created_by, updated_by, deleted_at, created_at, updated_at)
+appointments         -- (id, patient_id, service_id, doctor_id, therapist_id, scheduled_at,
+                     --   duration_minutes, status, notes, organization_id, created_by, updated_by,
+                     --   deleted_at, created_at, updated_at)
+transactions         -- (id, transaction_code, appointment_id, patient_id, subtotal,
+                     --   discount_amount, discount_type, total_amount, tax_amount,
+                     --   payment_method, payment_status, notes, paid_at, organization_id,
+                     --   created_by, updated_by, deleted_at, created_at, updated_at)
+transaction_items    -- (id, transaction_id, item_type, service_id, product_id, quantity,
+                     --   unit_price, discount_amount, total_price, doctor_id, therapist_id,
+                     --   organization_id, created_by, updated_by, deleted_at, created_at)
+commissions          -- (id, staff_id, staff_role, transaction_id, transaction_item_id,
+                     --   base_amount, commission_type, commission_value, commission_amount,
+                     --   status, organization_id, created_by, updated_by, deleted_at,
+                     --   created_at, updated_at)
+clinic_settings      -- (id, clinic_name, address, phone, email, tax_rate, tax_inclusive,
+                     --   low_stock_alerts, appointment_reminders, expiry_warnings,
+                     --   reminder_hours_before, whatsapp_reminder_enabled, email_reminder_enabled,
+                     --   whatsapp_business_phone_id, logo_url, invoice_header_title,
+                     --   invoice_header_description, invoice_footer_text, organization_id,
+                     --   created_by, updated_by, deleted_at, created_at, updated_at)
+cms_pages            -- (id, page_id, data JSONB, organization_id, created_by, updated_by,
+                     --   deleted_at, created_at, updated_at)
+stock_movements      -- (id, product_id, movement_type, quantity, reason, reference_id,
+                     --   reference_type, notes, organization_id, created_by, created_at)
+service_consumables  -- (id, service_id, product_id, quantity_used, organization_id, created_by,
+                     --   updated_by, deleted_at, created_at, updated_at)
+                     --   UNIQUE(service_id, product_id)
 ```
 
 ### Notes Penting DB
 
 - `patients.tags` → tipe `TEXT[]` PostgreSQL, di Go gunakan `pq.Array(&patient.Tags)`
-- `cms_pages.content` → tipe `JSONB`
+- `cms_pages.data` → tipe `JSONB`
 - `appointments.status` → `scheduled | confirmed | completed | cancelled | no_show`
 - `transactions.payment_status` → `pending | paid | cancelled | refunded`
 - `commissions.status` → `pending | paid | cancelled`
 - `stock_movements.movement_type` → `in | out | adjustment`
-- Semua delete pasien adalah **soft delete** (`is_active = false`)
-- Migration **tidak menggunakan file terpisah** — semua dalam `migrations.go` sebagai SQL string constants
+- **Semua tabel bisnis** memiliki kolom audit: `created_by`, `updated_by`, `deleted_at`.
+  - `deleted_at IS NULL` berarti record masih aktif.
+  - `deleted_at IS NOT NULL` berarti record sudah di-soft-delete.
+  - `stock_movements` sengaja tidak punya `updated_by`/`deleted_at` karena record stok bersifat immutable.
+- **Semua tabel bisnis** memiliki `organization_id` FK ke `organizations(id)` untuk multi-tenant.
+- `users.id` dan semua FK user/audit adalah `VARCHAR(36)` (bukan UUID), supaya konsisten dengan Go UUID string.
+- `permissions.id` memakai format `resource:action` (contoh: `patients:read`).
+- Migration **tidak menggunakan file terpisah** — semua dalam `migrations.go` sebagai SQL string constants.
+- Schema saat ini adalah **fresh consolidated schema** (4 migration steps: create schema, indexes, seed permissions, seed role permissions). Setelah refactor ini, direkomendasikan membuat database baru dari nol.
 
 ---
 
