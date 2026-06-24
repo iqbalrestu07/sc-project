@@ -183,10 +183,10 @@ Semua endpoint menggunakan `utils.SuccessResponse` / `utils.ErrorResponse`:
 
 #### Patients (tambahan)
 
-| Method | Path                         | Role  | Notes                                                    |
-| ------ | ---------------------------- | ----- | -------------------------------------------------------- |
-| GET    | `/patients/:id/visits`       | Semua | Riwayat kunjungan (JOIN appointments + services + staff) |
-| GET    | `/patients/:id/transactions` | Semua | Riwayat transaksi pasien                                 |
+| Method | Path                         | Role  | Notes                                                                 |
+| ------ | ---------------------------- | ----- | --------------------------------------------------------------------- |
+| GET    | `/patients/:id/visits`       | Semua | Riwayat kunjungan: service, doctor_name, therapist_name               |
+| GET    | `/patients/:id/transactions` | Semua | Riwayat transaksi: doctor_name + therapist_name (agregasi dari items) |
 
 #### Services
 
@@ -241,11 +241,11 @@ Semua endpoint menggunakan `utils.SuccessResponse` / `utils.ErrorResponse`:
 #### Transactions
 
 | Method | Path                      | Role  |
-| ------ | ------------------------- | ----- |
+| ------ | ------------------------- | ----- | -------------------------------------------------------------------------- |
 | GET    | `/transactions`           | Semua |
-| POST   | `/transactions`           | Semua |
+| POST   | `/transactions`           | Semua | Jika `payment_status = paid`, otomatis generate commission & kurangi stock |
 | GET    | `/transactions/:id`       | Semua |
-| GET    | `/transactions/:id/items` | Semua |
+| GET    | `/transactions/:id/items` | Semua | Setiap item include service/product + doctor/therapist                     |
 | PUT    | `/transactions/:id`       | Semua |
 | DELETE | `/transactions/:id`       | Semua |
 
@@ -298,9 +298,9 @@ File disimpan ke `./uploads/cms/<folder>/` dan dapat diakses via `GET /uploads/.
 #### Settings
 
 | Method | Path                    | Role  |
-| ------ | ----------------------- | ----- |
+| ------ | ----------------------- | ----- | ----------------------------------------------------------------------------------------------------- |
 | GET    | `/settings/clinic`      | Semua |
-| PUT    | `/settings/clinic`      | Admin |
+| PUT    | `/settings/clinic`      | Admin | `invoice_header_title`, `invoice_header_description`, `invoice_footer_text` dipakai untuk cetak struk |
 | POST   | `/settings/clinic/logo` | Admin |
 
 #### Stock Movements
@@ -739,6 +739,16 @@ psql -U postgres -d sc_pos        # connect
 ## 10. Git History Ringkas
 
 ```
+6dd3a06 - feat: commissions on paid transaction creation, patient history staff names, transaction detail + print receipt
+          Backend: Create paid transaction otomatis generate commission & kurangi stock.
+                   Patient visits/transactions sertakan doctor_name + therapist_name.
+          Frontend: TransactionDetailDialog dengan Print Receipt. Receipt header/footer
+                   pakai clinic_settings.invoice_header_* / invoice_footer_text.
+
+36fea2a - fix(frontend): show gender in patient list even when date of birth is empty
+          Cell Age/Gender di PatientList tadinya tidak render apa-apa kalau age null.
+          Sekarang gender tetap tampil meskipun DOB kosong.
+
 68af740 - fix(models): handle empty string dates for optional date fields
           Buat models.NullableTime. Apply ke Patient.DateOfBirth & Product.ExpiryDate.
           Menerima null, "", date-only (YYYY-MM-DD), dan RFC3339.
@@ -802,7 +812,7 @@ ca2cdde - Add AGENTS.md
 
 ---
 
-_Terakhir diupdate: commit 68af740 — consolidated schema, audit trail, RBAC fix, NullableTime date handling, user existence check_
+_Terakhir diupdate: commit 6dd3a06 — transaction commission on creation, patient history staff names, transaction detail dialog + print receipt_
 
 ---
 
