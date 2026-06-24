@@ -196,7 +196,8 @@ func RequirePermission(permissionID string) gin.HandlerFunc {
 }
 
 // checkPermission queries role_permissions + user_permissions for a specific permission.
-// user_permissions are also soft-deleted (deleted_at IS NULL).
+// user_permissions are granted/revoked via hard DELETE in the RBAC repository, so no
+// deleted_at filter is needed here.
 func checkPermission(userID, orgID, role, permissionID string) (bool, error) {
 	var exists bool
 	err := database.DB.QueryRow(`
@@ -204,7 +205,7 @@ func checkPermission(userID, orgID, role, permissionID string) (bool, error) {
 			SELECT 1 FROM role_permissions WHERE role = $1 AND permission_id = $4
 			UNION ALL
 			SELECT 1 FROM user_permissions
-			WHERE user_id = $2 AND org_id = $3 AND permission_id = $4 AND deleted_at IS NULL
+			WHERE user_id = $2 AND org_id = $3 AND permission_id = $4
 		)`, role, userID, orgID, permissionID,
 	).Scan(&exists)
 	return exists, err
