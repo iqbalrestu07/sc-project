@@ -249,7 +249,7 @@ type paidItemRow struct {
 	doctorValue, therapistValue float64
 }
 
-func (r *Repository) MarkPaidEffects(transactionID, userByID string) error {
+func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin payment effects: %w", err)
@@ -297,12 +297,12 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID string) error {
 			}
 		}
 		if row.serviceID.Valid && row.doctorID.Valid {
-			if err := r.insertCommission(tx, row.doctorID.String, "doctor", transactionID, row.itemID, userByID, row.totalPrice, row.doctorType, row.doctorValue); err != nil {
+			if err := r.insertCommission(tx, row.doctorID.String, "doctor", transactionID, row.itemID, userByID, orgID, row.totalPrice, row.doctorType, row.doctorValue); err != nil {
 				return err
 			}
 		}
 		if row.serviceID.Valid && row.therapistID.Valid {
-			if err := r.insertCommission(tx, row.therapistID.String, "therapist", transactionID, row.itemID, userByID, row.totalPrice, row.therapistType, row.therapistValue); err != nil {
+			if err := r.insertCommission(tx, row.therapistID.String, "therapist", transactionID, row.itemID, userByID, orgID, row.totalPrice, row.therapistType, row.therapistValue); err != nil {
 				return err
 			}
 		}
@@ -310,7 +310,7 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID string) error {
 	return tx.Commit()
 }
 
-func (r *Repository) insertCommission(tx *sql.Tx, staffID, staffRole, transactionID, itemID, createdBy string, baseAmount float64, commissionType string, commissionValue float64) error {
+func (r *Repository) insertCommission(tx *sql.Tx, staffID, staffRole, transactionID, itemID, createdBy, orgID string, baseAmount float64, commissionType string, commissionValue float64) error {
 	var exists bool
 	if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM commissions WHERE staff_id = $1 AND transaction_item_id = $2)`, staffID, itemID).Scan(&exists); err != nil {
 		return fmt.Errorf("failed to check commission: %w", err)
@@ -325,10 +325,10 @@ func (r *Repository) insertCommission(tx *sql.Tx, staffID, staffRole, transactio
 	_, err := tx.Exec(`
 		INSERT INTO commissions (
 			id, staff_id, staff_role, transaction_id, transaction_item_id, base_amount,
-			commission_type, commission_value, commission_amount, status, created_by, created_at, updated_at
+			commission_type, commission_value, commission_amount, status, organization_id, created_by, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, uuid.New().String(), staffID, staffRole, transactionID, itemID, baseAmount, commissionType, commissionValue, amount, nullableString(createdBy))
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, uuid.New().String(), staffID, staffRole, transactionID, itemID, baseAmount, commissionType, commissionValue, amount, nullableString(orgID), nullableString(createdBy))
 	if err != nil {
 		return fmt.Errorf("failed to insert commission: %w", err)
 	}

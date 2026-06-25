@@ -755,6 +755,12 @@ psql -U postgres -d sc_pos        # connect
 ## 10. Git History Ringkas
 
 ```
+<latest-commit> - fix: commissions missing organization_id
+          Backend: `commissions` sekarang menyimpan `organization_id` saat transaksi
+                   menjadi paid. Migration backfill data lama yang `organization_id` NULL.
+                   Hal ini memperbaiki list Commissions dan widget Dashboard yang
+                   tadinya kosong meskipun row di DB sudah ada.
+
 87ffce2 - fix: role-based default routes + guard API calls + mandatory form validation
           Backend: Dashboard routes sekarang pakai permission `reports:read` (bukan admin-only).
           Frontend: Default redirect setelah login berdasarkan role (admin→dashboard,
@@ -849,7 +855,7 @@ ca2cdde - Add AGENTS.md
 
 ---
 
-_Terakhir diupdate: commit 87ffce2 — role-based default routes, guard API calls, mandatory form validation_
+_Terakhir diupdate: commit <latest-commit> — commissions missing organization_id fix_
 
 ---
 

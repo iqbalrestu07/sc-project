@@ -13,6 +13,7 @@ func RunMigrations() error {
 	migrations := []string{
 		createSchema,
 		createIndexes,
+		backfillCommissionOrgID,
 		seedDefaultPermissions,
 		seedRolePermissions,
 	}
@@ -426,6 +427,15 @@ CREATE INDEX IF NOT EXISTS idx_stock_movements_org ON stock_movements(organizati
 
 CREATE INDEX IF NOT EXISTS idx_service_consumables_service ON service_consumables(service_id);
 CREATE INDEX IF NOT EXISTS idx_service_consumables_org ON service_consumables(organization_id);
+`
+
+const backfillCommissionOrgID = `
+-- Backfill commissions created before organization_id was set on insert
+UPDATE commissions
+SET organization_id = t.organization_id
+FROM transactions t
+WHERE commissions.transaction_id = t.id
+  AND commissions.organization_id IS NULL;
 `
 
 const seedDefaultPermissions = `

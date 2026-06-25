@@ -5,6 +5,7 @@ import "time"
 // Commission represents commission earned by staff
 type Commission struct {
 	ID                string     `json:"id" db:"id"`
+	OrganizationID    string     `json:"organization_id,omitempty" db:"organization_id"`
 	StaffID           string     `json:"staff_id" db:"staff_id"`
 	StaffRole         string     `json:"staff_role" db:"staff_role"`
 	TransactionID     string     `json:"transaction_id" db:"transaction_id"`

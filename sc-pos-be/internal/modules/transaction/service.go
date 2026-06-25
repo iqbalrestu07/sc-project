@@ -92,7 +92,7 @@ func (s *Service) Create(req CreateRequest, userID *string, orgID string) (*Tran
 		if userID != nil {
 			createdBy = *userID
 		}
-		if err := s.repo.MarkPaidEffects(req.Transaction.ID, createdBy); err != nil {
+		if err := s.repo.MarkPaidEffects(req.Transaction.ID, createdBy, orgID); err != nil {
 			return nil, err
 		}
 		return s.Get(req.Transaction.ID, orgID)
@@ -117,7 +117,7 @@ func (s *Service) Update(id, orgID, userID string, req models.Transaction) (*Tra
 		return nil, err
 	}
 	if req.PaymentStatus == "paid" && !wasPaid {
-		if err := s.repo.MarkPaidEffects(id, userID); err != nil {
+		if err := s.repo.MarkPaidEffects(id, userID, orgID); err != nil {
 			return nil, err
 		}
 	}
