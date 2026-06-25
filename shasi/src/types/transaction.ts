@@ -34,6 +34,23 @@ export interface TransactionItem {
   created_at: string;
 }
 
+export interface Commission {
+  id: string;
+  staff_id: string;
+  staff_role: string;
+  transaction_id: string;
+  transaction_item_id: string;
+  base_amount: number;
+  commission_type: string;
+  commission_value: number;
+  commission_amount: number;
+  status: "pending" | "paid";
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TransactionWithRelations extends Transaction {
   patient?: { id: string; full_name: string; patient_code: string } | null;
   items?: (TransactionItem & {
