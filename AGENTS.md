@@ -755,7 +755,7 @@ psql -U postgres -d sc_pos        # connect
 ## 10. Git History Ringkas
 
 ```
-<latest-commit> - fix: commissions missing organization_id
+d3a2814 - fix: commissions missing organization_id
           Backend: `commissions` sekarang menyimpan `organization_id` saat transaksi
                    menjadi paid. Migration backfill data lama yang `organization_id` NULL.
                    Hal ini memperbaiki list Commissions dan widget Dashboard yang
@@ -855,7 +855,7 @@ ca2cdde - Add AGENTS.md
 
 ---
 
-_Terakhir diupdate: commit <latest-commit> — commissions missing organization_id fix_
+_Terakhir diupdate: commit d3a2814 — commissions missing organization_id fix_
 
 ---
 
