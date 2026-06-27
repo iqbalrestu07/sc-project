@@ -13,6 +13,10 @@ export interface StockMovement {
   notes: string | null;
   created_by: string | null;
   created_at: string;
+  // enriched by backend JOIN
+  product_name: string;
+  product_unit: string;
+  transaction_code?: string | null;
 }
 
 export interface StockMovementInsert {
@@ -23,16 +27,27 @@ export interface StockMovementInsert {
   notes?: string;
 }
 
-export function useStockMovements(productId?: string) {
+export interface StockMovementFilters {
+  productId?: string;
+  referenceType?: "manual" | "transaction" | "";
+  from?: string; // YYYY-MM-DD
+  to?: string;   // YYYY-MM-DD
+}
+
+export function useStockMovements(filters: StockMovementFilters = {}) {
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["stock-movements", productId ?? "all"],
+    queryKey: ["stock-movements", filters],
     queryFn: async (): Promise<StockMovement[]> => {
-      const params = productId ? { product_id: productId } : undefined;
+      const params: Record<string, string> = {};
+      if (filters.productId)     params.product_id      = filters.productId;
+      if (filters.referenceType) params.reference_type  = filters.referenceType;
+      if (filters.from)          params.from             = filters.from;
+      if (filters.to)            params.to               = filters.to;
       const data = await apiClient.get<{ data: StockMovement[] }>(
         API_ENDPOINTS.STOCK_MOVEMENTS.LIST,
-        params
+        Object.keys(params).length ? params : undefined
       );
       return data.data || [];
     },
@@ -48,7 +63,6 @@ export function useStockMovements(productId?: string) {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
-      // Refresh product list so current_stock reflects immediately
       queryClient.invalidateQueries({ queryKey: ["products"] });
       const typeLabel =
         variables.movement_type === "in"

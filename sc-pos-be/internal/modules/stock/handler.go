@@ -2,6 +2,7 @@ package stock
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sc-pos/backend/internal/models"
@@ -18,7 +19,28 @@ func NewModule() *Handler {
 
 func (h *Handler) List(c *gin.Context) {
 	orgID := c.GetString("org_id")
-	movements, err := h.repo.List(c.Query("product_id"), orgID)
+
+	params := ListParams{
+		ProductID:     c.Query("product_id"),
+		ReferenceType: c.Query("reference_type"), // "manual" | "transaction" | ""
+		OrgID:         orgID,
+	}
+
+	// Optional date range — accept YYYY-MM-DD
+	if from := c.Query("from"); from != "" {
+		if t, err := time.Parse("2006-01-02", from); err == nil {
+			params.From = &t
+		}
+	}
+	if to := c.Query("to"); to != "" {
+		if t, err := time.Parse("2006-01-02", to); err == nil {
+			// Include the full end day (23:59:59)
+			end := t.Add(24*time.Hour - time.Second)
+			params.To = &end
+		}
+	}
+
+	movements, err := h.repo.List(params)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return

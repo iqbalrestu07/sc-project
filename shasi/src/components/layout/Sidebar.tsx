@@ -54,7 +54,7 @@ const NAV_STRUCTURE: NavEntry[] = [
   {
     kind: "group",
     group: {
-      label: "Manage Product",
+      label: "Inventory Management",
       icon: FolderOpen,
       items: [
         { to: "/services",      icon: Sparkles,      label: "Services",      permission: "services:read" },

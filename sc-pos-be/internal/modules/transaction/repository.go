@@ -296,6 +296,20 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) erro
 			if _, err := tx.Exec(`UPDATE products SET current_stock = GREATEST(COALESCE(current_stock, 0) - $1, 0), updated_at = CURRENT_TIMESTAMP WHERE id = $2`, row.quantity, row.productID.String); err != nil {
 				return fmt.Errorf("failed to decrease stock: %w", err)
 			}
+			// Record stock movement for audit trail
+			refType := "transaction"
+			reason := "usage"
+			movID := uuid.New().String()
+			negQty := -row.quantity // store as negative so direction is explicit
+			if _, err := tx.Exec(`
+				INSERT INTO stock_movements
+					(id, product_id, movement_type, quantity, reason, reference_id, reference_type,
+					 created_by, organization_id, created_at)
+				VALUES ($1, $2, 'out', $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+			`, movID, row.productID.String, negQty, reason, transactionID, refType,
+				nullableString(userByID), nullableString(orgID)); err != nil {
+				return fmt.Errorf("failed to record stock movement: %w", err)
+			}
 		}
 		if row.serviceID.Valid && row.doctorID.Valid {
 			if err := r.insertCommission(tx, row.doctorID.String, "doctor", transactionID, row.itemID, userByID, orgID, row.totalPrice, row.doctorType, row.doctorValue); err != nil {

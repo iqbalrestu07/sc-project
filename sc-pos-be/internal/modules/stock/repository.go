@@ -18,25 +18,74 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) List(productID, orgID string) ([]models.StockMovement, error) {
-	baseQuery := `
-		SELECT id, product_id, movement_type, quantity, reason,
-		       reference_id, reference_type, notes, created_by, created_at
-		FROM stock_movements`
+// StockMovementWithRelations embeds the base model and adds denormalised fields.
+type StockMovementWithRelations struct {
+	models.StockMovement
+	ProductName     string  `json:"product_name"`
+	ProductUnit     string  `json:"product_unit"`
+	TransactionCode *string `json:"transaction_code,omitempty"`
+}
+
+// ListParams holds all optional filter parameters for List.
+type ListParams struct {
+	ProductID     string
+	ReferenceType string // "manual" | "transaction" | "" (all)
+	From          *time.Time
+	To            *time.Time
+	OrgID         string
+}
+
+func (r *Repository) List(params ListParams) ([]StockMovementWithRelations, error) {
 	args := []interface{}{}
-	argIdx := 1
-	var where string
-	if productID != "" {
-		where = fmt.Sprintf(" WHERE product_id = $%d", argIdx)
-		args = append(args, productID)
-		argIdx++
-		where += fmt.Sprintf(" AND (organization_id = $%d OR ($%d::text = '' AND organization_id IS NULL))", argIdx, argIdx)
-		args = append(args, orgID)
-	} else {
-		where = fmt.Sprintf(" WHERE (organization_id = $%d OR ($%d::text = '' AND organization_id IS NULL))", argIdx, argIdx)
-		args = append(args, orgID)
+	idx := 1
+
+	// Build WHERE clauses incrementally
+	where := fmt.Sprintf(
+		`(sm.organization_id = $%d OR ($%d::text = '' AND sm.organization_id IS NULL))`,
+		idx, idx,
+	)
+	args = append(args, params.OrgID)
+	idx++
+
+	if params.ProductID != "" {
+		where += fmt.Sprintf(` AND sm.product_id = $%d`, idx)
+		args = append(args, params.ProductID)
+		idx++
 	}
-	query := baseQuery + where + " ORDER BY created_at DESC"
+
+	// "manual" means no reference_type (created from the opname UI)
+	// "transaction" means reference_type = 'transaction'
+	switch params.ReferenceType {
+	case "manual":
+		where += ` AND (sm.reference_type IS NULL OR sm.reference_type = '')`
+	case "transaction":
+		where += fmt.Sprintf(` AND sm.reference_type = $%d`, idx)
+		args = append(args, "transaction")
+		idx++
+	}
+
+	if params.From != nil {
+		where += fmt.Sprintf(` AND sm.created_at >= $%d`, idx)
+		args = append(args, params.From)
+		idx++
+	}
+	if params.To != nil {
+		where += fmt.Sprintf(` AND sm.created_at <= $%d`, idx)
+		args = append(args, params.To)
+		idx++
+	}
+
+	query := `
+		SELECT sm.id, sm.product_id, sm.movement_type, sm.quantity, sm.reason,
+		       sm.reference_id, sm.reference_type, sm.notes, sm.created_by, sm.created_at,
+		       COALESCE(p.name, ''),
+		       COALESCE(p.unit, 'pcs'),
+		       t.transaction_code
+		FROM stock_movements sm
+		LEFT JOIN products p  ON p.id = sm.product_id
+		LEFT JOIN transactions t ON t.id = sm.reference_id AND sm.reference_type = 'transaction'
+		WHERE ` + where + `
+		ORDER BY sm.created_at DESC`
 
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
@@ -44,13 +93,20 @@ func (r *Repository) List(productID, orgID string) ([]models.StockMovement, erro
 	}
 	defer rows.Close()
 
-	var movements []models.StockMovement
+	var movements []StockMovementWithRelations
 	for rows.Next() {
-		var m models.StockMovement
-		if err := rows.Scan(&m.ID, &m.ProductID, &m.MovementType, &m.Quantity,
+		var m StockMovementWithRelations
+		var txCode sql.NullString
+		if err := rows.Scan(
+			&m.ID, &m.ProductID, &m.MovementType, &m.Quantity,
 			&m.Reason, &m.ReferenceID, &m.ReferenceType, &m.Notes,
-			&m.CreatedBy, &m.CreatedAt); err != nil {
+			&m.CreatedBy, &m.CreatedAt,
+			&m.ProductName, &m.ProductUnit, &txCode,
+		); err != nil {
 			return nil, fmt.Errorf("failed to scan stock movement: %w", err)
+		}
+		if txCode.Valid {
+			m.TransactionCode = &txCode.String
 		}
 		movements = append(movements, m)
 	}
@@ -58,7 +114,7 @@ func (r *Repository) List(productID, orgID string) ([]models.StockMovement, erro
 		return nil, fmt.Errorf("failed to read stock movements: %w", err)
 	}
 	if movements == nil {
-		movements = []models.StockMovement{}
+		movements = []StockMovementWithRelations{}
 	}
 	return movements, nil
 }
@@ -85,21 +141,26 @@ func (r *Repository) Create(m *models.StockMovement, orgID string) error {
 
 	// Adjust product stock.
 	// "in"         → delta = +quantity (always positive)
-	// "out"        → delta = -quantity (always positive quantity, negate here)
-	// "adjustment" → delta = quantity as-is (can be negative to reduce stock)
+	// "out"        → delta = -|quantity| (force negative regardless of sign)
+	// "adjustment" → delta = quantity as-is (signed; negative = reduce stock)
 	var delta int
 	switch m.MovementType {
 	case "in":
 		delta = m.Quantity
+		if delta < 0 {
+			delta = -delta
+		}
 	case "out":
-		delta = -m.Quantity
+		// quantity stored as negative in adjustment context; ensure we subtract
+		if m.Quantity > 0 {
+			delta = -m.Quantity
+		} else {
+			delta = m.Quantity
+		}
 	case "adjustment":
-		delta = m.Quantity // caller passes signed value; negative = reduce stock
+		delta = m.Quantity
 	}
 
-	// For in/out we floor at 0 to avoid negative stock.
-	// For adjustment we also floor at 0 so the database never goes negative,
-	// but we allow the delta itself to be negative.
 	if _, err := tx.Exec(`
 		UPDATE products
 		SET current_stock = GREATEST(0, COALESCE(current_stock, 0) + $1),

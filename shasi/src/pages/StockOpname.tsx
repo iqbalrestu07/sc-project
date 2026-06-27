@@ -44,6 +44,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   PackagePlus,
   PackageMinus,
@@ -56,10 +57,13 @@ import {
   ChevronsUpDown,
   ClipboardList,
   History,
+  ShoppingBag,
+  CalendarIcon,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProducts } from "@/hooks/useProducts";
-import { useStockMovements, type StockMovementInsert } from "@/hooks/useStockMovements";
+import { useStockMovements, type StockMovementInsert, type StockMovement } from "@/hooks/useStockMovements";
 import type { Product } from "@/types/product";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -106,17 +110,23 @@ const MOVEMENT_REASONS: Record<MovementType, { value: string; label: string }[]>
 };
 
 const MOVEMENT_TYPE_META: Record<MovementType, { label: string; color: string; icon: React.ElementType }> = {
-  in: { label: "Stok Masuk", color: "bg-green-100 text-green-800", icon: TrendingUp },
-  out: { label: "Stok Keluar", color: "bg-red-100 text-red-800", icon: TrendingDown },
-  adjustment: { label: "Penyesuaian", color: "bg-blue-100 text-blue-800", icon: SlidersHorizontal },
+  in:         { label: "Stok Masuk",   color: "bg-green-100 text-green-800", icon: TrendingUp },
+  out:        { label: "Stok Keluar",  color: "bg-red-100 text-red-800",     icon: TrendingDown },
+  adjustment: { label: "Penyesuaian",  color: "bg-blue-100 text-blue-800",   icon: SlidersHorizontal },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function stockStatusBadge(current: number, minimum: number) {
-  if (current === 0) return <Badge variant="destructive">Habis</Badge>;
-  if (current <= minimum) return <Badge className="bg-orange-100 text-orange-800">Hampir Habis</Badge>;
+  if (current === 0)        return <Badge variant="destructive">Habis</Badge>;
+  if (current <= minimum)   return <Badge className="bg-orange-100 text-orange-800">Hampir Habis</Badge>;
   return <Badge className="bg-green-100 text-green-800">Tersedia</Badge>;
+}
+
+function reasonLabel(m: StockMovement): string {
+  if (!m.reason) return "—";
+  const list = MOVEMENT_REASONS[m.movement_type] ?? [];
+  return list.find((r) => r.value === m.reason)?.label ?? m.reason;
 }
 
 // ─── Product Combobox ──────────────────────────────────────────────────────────
@@ -147,9 +157,7 @@ function ProductCombobox({ products, value, onChange }: ProductComboboxProps) {
                 (Stok: {selected.current_stock ?? 0} {selected.unit ?? "pcs"})
               </span>
             </span>
-          ) : (
-            "Pilih produk..."
-          )}
+          ) : "Pilih produk..."}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -163,10 +171,7 @@ function ProductCombobox({ products, value, onChange }: ProductComboboxProps) {
                 <CommandItem
                   key={p.id}
                   value={`${p.name} ${p.sku ?? ""}`}
-                  onSelect={() => {
-                    onChange(p.id);
-                    setOpen(false);
-                  }}
+                  onSelect={() => { onChange(p.id); setOpen(false); }}
                 >
                   <Check className={cn("mr-2 h-4 w-4", p.id === value ? "opacity-100" : "opacity-0")} />
                   <div className="flex-1 min-w-0">
@@ -204,7 +209,6 @@ function MovementDialog({
 }: MovementDialogProps) {
   const [form, setForm] = useState<MovementFormState>(EMPTY_FORM);
 
-  // Setiap kali dialog dibuka, sinkronkan form dengan produk & tipe yang dipilih dari baris tabel
   useEffect(() => {
     if (open) {
       setForm({
@@ -215,22 +219,16 @@ function MovementDialog({
     }
   }, [open, initialProductId, initialType]);
 
-  const handleOpenChange = (v: boolean) => {
-    onOpenChange(v);
-  };
-
   const selectedProduct = products.find((p) => p.id === form.product_id);
   const reasons = MOVEMENT_REASONS[form.movement_type];
   const typeMeta = MOVEMENT_TYPE_META[form.movement_type];
 
-  // Projected stock after movement
   const projectedStock = useMemo(() => {
     const current = selectedProduct?.current_stock ?? 0;
     const qty = parseInt(form.quantity);
     if (isNaN(qty) || qty === 0) return null;
-    if (form.movement_type === "in") return current + qty;
+    if (form.movement_type === "in")  return current + qty;
     if (form.movement_type === "out") return Math.max(0, current - Math.abs(qty));
-    // adjustment: qty adalah delta, bisa + atau -
     return Math.max(0, current + qty);
   }, [selectedProduct, form.quantity, form.movement_type]);
 
@@ -238,7 +236,6 @@ function MovementDialog({
     if (!form.product_id || form.quantity === "") return false;
     const qty = parseInt(form.quantity);
     if (isNaN(qty) || qty === 0) return false;
-    // in/out hanya boleh positif
     if (form.movement_type !== "adjustment" && qty < 1) return false;
     return true;
   };
@@ -257,7 +254,7 @@ function MovementDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Catat Pergerakan Stok</DialogTitle>
@@ -299,7 +296,9 @@ function MovementDialog({
             {selectedProduct && (
               <p className="text-xs text-muted-foreground">
                 Stok saat ini:{" "}
-                <span className="font-semibold">{selectedProduct.current_stock ?? 0} {selectedProduct.unit ?? "pcs"}</span>
+                <span className="font-semibold">
+                  {selectedProduct.current_stock ?? 0} {selectedProduct.unit ?? "pcs"}
+                </span>
               </p>
             )}
           </div>
@@ -331,7 +330,7 @@ function MovementDialog({
             </div>
             {form.movement_type === "adjustment" && (
               <p className="text-xs text-muted-foreground">
-                Masukkan nilai positif untuk menambah, negatif untuk mengurangi stok.
+                Nilai positif untuk menambah, negatif untuk mengurangi stok.
               </p>
             )}
           </div>
@@ -339,13 +338,8 @@ function MovementDialog({
           {/* Alasan */}
           <div className="space-y-2">
             <Label>Alasan</Label>
-            <Select
-              value={form.reason}
-              onValueChange={(v) => setForm((f) => ({ ...f, reason: v }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Pilih alasan..." />
-              </SelectTrigger>
+            <Select value={form.reason} onValueChange={(v) => setForm((f) => ({ ...f, reason: v }))}>
+              <SelectTrigger><SelectValue placeholder="Pilih alasan..." /></SelectTrigger>
               <SelectContent>
                 {reasons.map((r) => (
                   <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
@@ -366,15 +360,13 @@ function MovementDialog({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Batal
-            </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Batal</Button>
             <Button
               type="submit"
               disabled={!isFormValid() || isPending}
               className={cn(
                 typeMeta.color.includes("green") && "bg-green-600 hover:bg-green-700",
-                typeMeta.color.includes("red") && "bg-red-600 hover:bg-red-700"
+                typeMeta.color.includes("red")   && "bg-red-600 hover:bg-red-700"
               )}
             >
               {isPending ? "Menyimpan..." : `Catat ${typeMeta.label}`}
@@ -386,27 +378,124 @@ function MovementDialog({
   );
 }
 
+// ─── History Table ─────────────────────────────────────────────────────────────
+
+interface HistoryTableProps {
+  movements: StockMovement[];
+  isLoading: boolean;
+  isTransaction: boolean;
+}
+
+function HistoryTable({ movements, isLoading, isTransaction }: HistoryTableProps) {
+  if (isLoading) {
+    return (
+      <TableRow>
+        <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+          Memuat riwayat...
+        </TableCell>
+      </TableRow>
+    );
+  }
+  if (movements.length === 0) {
+    return (
+      <TableRow>
+        <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+          Belum ada riwayat{isTransaction ? " dari transaksi" : " manual"}.
+        </TableCell>
+      </TableRow>
+    );
+  }
+  return (
+    <>
+      {movements.map((m) => {
+        const meta = MOVEMENT_TYPE_META[m.movement_type];
+        const Icon = meta.icon;
+        const absQty = Math.abs(m.quantity);
+        const qtyPrefix = m.movement_type === "in" ? "+" : m.movement_type === "out" ? "−" : m.quantity > 0 ? "+" : "−";
+        const qtyColor  = m.movement_type === "in" ? "text-green-600" : m.movement_type === "out" ? "text-red-600" : "text-blue-600";
+        return (
+          <TableRow key={m.id}>
+            <TableCell>
+              <p className="font-medium text-sm">{m.product_name || m.product_id}</p>
+              <p className="text-xs text-muted-foreground">{m.product_unit}</p>
+            </TableCell>
+            <TableCell>
+              <Badge className={cn("gap-1 text-xs", meta.color)}>
+                <Icon className="h-3 w-3" />
+                {meta.label}
+              </Badge>
+            </TableCell>
+            <TableCell className="text-center">
+              <span className={cn("font-semibold", qtyColor)}>
+                {qtyPrefix}{absQty}
+              </span>
+            </TableCell>
+            {isTransaction ? (
+              <TableCell className="text-sm">
+                {m.transaction_code ? (
+                  <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                    {m.transaction_code}
+                  </span>
+                ) : "—"}
+              </TableCell>
+            ) : (
+              <TableCell className="text-sm text-muted-foreground">
+                {reasonLabel(m)}
+              </TableCell>
+            )}
+            <TableCell className="text-sm text-muted-foreground max-w-[160px] truncate">
+              {m.notes ?? "—"}
+            </TableCell>
+            <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+              {format(new Date(m.created_at), "dd MMM yyyy, HH:mm", { locale: idLocale })}
+            </TableCell>
+          </TableRow>
+        );
+      })}
+    </>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function StockOpname() {
   const { products, isLoading: productsLoading, lowStockProducts } = useProducts();
-  const { movements, isLoading: movementsLoading, createMovement } = useStockMovements();
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogType, setDialogType] = useState<MovementType>("in");
-  const [dialogProductId, setDialogProductId] = useState<string>("");
+  // Shared date range (applied to both tabs)
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo,   setDateTo]   = useState("");
 
-  const [searchProduct, setSearchProduct] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | "low" | "out">("all");
-  const [historyProductFilter, setHistoryProductFilter] = useState("");
+  // Tab-specific filters (frontend-side after data fetched)
+  const [historySearch,    setHistorySearch]    = useState("");
   const [historyTypeFilter, setHistoryTypeFilter] = useState<"all" | MovementType>("all");
 
-  // Summary stats
-  const totalProducts = products.length;
-  const outOfStockCount = products.filter((p) => (p.current_stock ?? 0) === 0).length;
-  const lowStockCount = lowStockProducts.length;
+  // Fetch manual movements
+  const manualQuery = useStockMovements({
+    referenceType: "manual",
+    from: dateFrom || undefined,
+    to:   dateTo   || undefined,
+  });
 
-  // Filtered product list for inventory table
+  // Fetch transaction-driven movements
+  const txQuery = useStockMovements({
+    referenceType: "transaction",
+    from: dateFrom || undefined,
+    to:   dateTo   || undefined,
+  });
+
+  // Dialog state
+  const [dialogOpen,      setDialogOpen]      = useState(false);
+  const [dialogType,      setDialogType]      = useState<MovementType>("in");
+  const [dialogProductId, setDialogProductId] = useState<string>("");
+
+  // Inventory table filters
+  const [searchProduct, setSearchProduct] = useState("");
+  const [filterStatus,  setFilterStatus]  = useState<"all" | "low" | "out">("all");
+
+  const totalProducts   = products.length;
+  const outOfStockCount = products.filter((p) => (p.current_stock ?? 0) === 0).length;
+  const lowStockCount   = lowStockProducts.length;
+
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       const matchSearch =
@@ -423,19 +512,23 @@ export default function StockOpname() {
     });
   }, [products, searchProduct, filterStatus]);
 
-  // Filtered movement history
-  const filteredMovements = useMemo(() => {
-    return movements.filter((m) => {
-      const product = products.find((p) => p.id === m.product_id);
-      const matchProduct =
-        !historyProductFilter ||
-        product?.name.toLowerCase().includes(historyProductFilter.toLowerCase()) ||
-        false;
-      const matchType =
-        historyTypeFilter === "all" || m.movement_type === historyTypeFilter;
-      return matchProduct && matchType;
+  // Client-side search + type filter on top of server-filtered results
+  const filterMovements = (movements: StockMovement[]) =>
+    movements.filter((m) => {
+      const name = (m.product_name || "").toLowerCase();
+      const matchSearch = !historySearch || name.includes(historySearch.toLowerCase());
+      const matchType   = historyTypeFilter === "all" || m.movement_type === historyTypeFilter;
+      return matchSearch && matchType;
     });
-  }, [movements, products, historyProductFilter, historyTypeFilter]);
+
+  const filteredManual = useMemo(
+    () => filterMovements(manualQuery.movements),
+    [manualQuery.movements, historySearch, historyTypeFilter]
+  );
+  const filteredTx = useMemo(
+    () => filterMovements(txQuery.movements),
+    [txQuery.movements, historySearch, historyTypeFilter]
+  );
 
   const openDialog = (type: MovementType, productId = "") => {
     setDialogType(type);
@@ -443,11 +536,7 @@ export default function StockOpname() {
     setDialogOpen(true);
   };
 
-  const productName = (productId: string) =>
-    products.find((p) => p.id === productId)?.name ?? productId;
-
-  const productUnit = (productId: string) =>
-    products.find((p) => p.id === productId)?.unit ?? "pcs";
+  const clearDates = () => { setDateFrom(""); setDateTo(""); };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 pt-16 lg:pt-8 animate-fade-in space-y-6">
@@ -526,9 +615,7 @@ export default function StockOpname() {
                 />
               </div>
               <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as typeof filterStatus)}>
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Semua Status</SelectItem>
                   <SelectItem value="low">Hampir Habis</SelectItem>
@@ -593,32 +680,17 @@ export default function StockOpname() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-1 justify-end">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1 text-xs h-7"
-                              onClick={() => openDialog("in", product.id)}
-                            >
-                              <TrendingUp className="h-3 w-3 text-green-600" />
-                              Masuk
+                            <Button size="sm" variant="outline" className="gap-1 text-xs h-7"
+                              onClick={() => openDialog("in", product.id)}>
+                              <TrendingUp className="h-3 w-3 text-green-600" />Masuk
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1 text-xs h-7"
-                              onClick={() => openDialog("out", product.id)}
-                            >
-                              <TrendingDown className="h-3 w-3 text-red-600" />
-                              Keluar
+                            <Button size="sm" variant="outline" className="gap-1 text-xs h-7"
+                              onClick={() => openDialog("out", product.id)}>
+                              <TrendingDown className="h-3 w-3 text-red-600" />Keluar
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1 text-xs h-7"
-                              onClick={() => openDialog("adjustment", product.id)}
-                            >
-                              <SlidersHorizontal className="h-3 w-3 text-blue-600" />
-                              Sesuai
+                            <Button size="sm" variant="outline" className="gap-1 text-xs h-7"
+                              onClick={() => openDialog("adjustment", product.id)}>
+                              <SlidersHorizontal className="h-3 w-3 text-blue-600" />Sesuai
                             </Button>
                           </div>
                         </TableCell>
@@ -634,29 +706,59 @@ export default function StockOpname() {
 
       <Separator />
 
-      {/* ── Movement History ───────────────────────────────────────────────── */}
+      {/* ── History Section with Tabs ──────────────────────────────────────── */}
       <Card className="shadow-clinic">
         <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
               <History className="h-4 w-4" />
-              Riwayat Pergerakan Stok
-            </CardTitle>
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base">Riwayat Pergerakan Stok</CardTitle>
+            </div>
+
+            {/* Global filters: date range + search + type */}
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* Date From */}
+              <div className="flex items-center gap-1.5">
+                <CalendarIcon className="h-4 w-4 text-muted-foreground shrink-0" />
                 <Input
-                  placeholder="Filter nama produk..."
-                  value={historyProductFilter}
-                  onChange={(e) => setHistoryProductFilter(e.target.value)}
-                  className="pl-9 w-full sm:w-48"
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="h-8 w-36 text-sm"
+                  placeholder="Dari tanggal"
+                />
+                <span className="text-muted-foreground text-sm">–</span>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="h-8 w-36 text-sm"
+                  placeholder="Sampai tanggal"
+                />
+                {(dateFrom || dateTo) && (
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={clearDates}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Search by product name */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Cari produk..."
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  className="pl-8 h-8 w-40 text-sm"
                 />
               </div>
+
+              {/* Movement type filter */}
               <Select
                 value={historyTypeFilter}
                 onValueChange={(v) => setHistoryTypeFilter(v as typeof historyTypeFilter)}
               >
-                <SelectTrigger className="w-full sm:w-40">
+                <SelectTrigger className="h-8 w-38 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -669,77 +771,78 @@ export default function StockOpname() {
             </div>
           </div>
         </CardHeader>
+
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Produk</TableHead>
-                  <TableHead>Tipe</TableHead>
-                  <TableHead className="text-center">Jumlah</TableHead>
-                  <TableHead>Alasan</TableHead>
-                  <TableHead>Catatan</TableHead>
-                  <TableHead>Waktu</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {movementsLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                      Memuat riwayat...
-                    </TableCell>
-                  </TableRow>
-                ) : filteredMovements.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                      Belum ada riwayat pergerakan stok.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredMovements.map((m) => {
-                    const meta = MOVEMENT_TYPE_META[m.movement_type];
-                    const Icon = meta.icon;
-                    const qtyPrefix = m.movement_type === "out" ? "−" : m.movement_type === "in" ? "+" : "±";
-                    const qtyColor =
-                      m.movement_type === "in"
-                        ? "text-green-600"
-                        : m.movement_type === "out"
-                        ? "text-red-600"
-                        : "text-blue-600";
-                    return (
-                      <TableRow key={m.id}>
-                        <TableCell>
-                          <p className="font-medium text-sm">{productName(m.product_id)}</p>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={cn("gap-1", meta.color)}>
-                            <Icon className="h-3 w-3" />
-                            {meta.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <span className={cn("font-semibold", qtyColor)}>
-                            {qtyPrefix}{m.quantity} {productUnit(m.product_id)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {m.reason
-                            ? MOVEMENT_REASONS[m.movement_type].find((r) => r.value === m.reason)?.label ?? m.reason
-                            : "—"}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-[160px] truncate">
-                          {m.notes ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {format(new Date(m.created_at), "dd MMM yyyy, HH:mm", { locale: idLocale })}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          <Tabs defaultValue="manual">
+            <div className="px-4 pt-1 pb-0 border-b">
+              <TabsList className="h-9">
+                <TabsTrigger value="manual" className="gap-1.5 text-sm">
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  Manual
+                  <Badge variant="secondary" className="ml-1 text-xs px-1.5">
+                    {filteredManual.length}
+                  </Badge>
+                </TabsTrigger>
+                <TabsTrigger value="transaction" className="gap-1.5 text-sm">
+                  <ShoppingBag className="h-3.5 w-3.5" />
+                  Dari Transaksi
+                  <Badge variant="secondary" className="ml-1 text-xs px-1.5">
+                    {filteredTx.length}
+                  </Badge>
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            {/* Tab: Manual */}
+            <TabsContent value="manual" className="m-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Produk</TableHead>
+                      <TableHead>Tipe</TableHead>
+                      <TableHead className="text-center">Jumlah</TableHead>
+                      <TableHead>Alasan</TableHead>
+                      <TableHead>Catatan</TableHead>
+                      <TableHead>Waktu</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <HistoryTable
+                      movements={filteredManual}
+                      isLoading={manualQuery.isLoading}
+                      isTransaction={false}
+                    />
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+
+            {/* Tab: Dari Transaksi */}
+            <TabsContent value="transaction" className="m-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Produk</TableHead>
+                      <TableHead>Tipe</TableHead>
+                      <TableHead className="text-center">Jumlah</TableHead>
+                      <TableHead>No. Transaksi</TableHead>
+                      <TableHead>Catatan</TableHead>
+                      <TableHead>Waktu</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <HistoryTable
+                      movements={filteredTx}
+                      isLoading={txQuery.isLoading}
+                      isTransaction={true}
+                    />
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
@@ -750,8 +853,8 @@ export default function StockOpname() {
         initialProductId={dialogProductId}
         initialType={dialogType}
         products={products}
-        onSubmit={(payload) => createMovement.mutate(payload)}
-        isPending={createMovement.isPending}
+        onSubmit={(payload) => manualQuery.createMovement.mutate(payload)}
+        isPending={manualQuery.createMovement.isPending}
       />
     </div>
   );
