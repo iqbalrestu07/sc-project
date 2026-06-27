@@ -1,0 +1,98 @@
+services:
+  # ─────────────────────────── PostgreSQL ────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: sc_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-sc_pos}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Hanya expose ke LAN jika perlu akses DB langsung (misal dari DBeaver)
+    # Komentar baris ini jika tidak perlu akses DB dari luar
+    ports:
+      - "127.0.0.1:${DB_PORT_EXPOSE:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-sc_pos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────── Backend (Go) ──────────────────────────────────
+  backend:
+    build:
+      context: ./sc-pos-be
+      dockerfile: Dockerfile
+    container_name: sc_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVER_HOST: "0.0.0.0"
+      SERVER_PORT: "8080"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-sc_pos}
+      DB_SSLMODE: disable
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
+      BASE_URL: ${BACKEND_BASE_URL:-http://localhost:8080}
+      UPLOAD_DIR: uploads/cms
+      WHATSAPP_API_URL: ${WHATSAPP_API_URL:-}
+      WHATSAPP_API_TOKEN: ${WHATSAPP_API_TOKEN:-}
+    volumes:
+      - backend_uploads:/app/uploads
+    # Expose ke semua interface agar bisa diakses dari LAN
+    ports:
+      - "0.0.0.0:${BACKEND_PORT_EXPOSE:-8080}:8080"
+
+  # ─────────────────────────── Frontend (React + Nginx) ──────────────────────
+  frontend:
+    build:
+      context: ./shasi
+      dockerfile: Dockerfile
+      args:
+        # PENTING: isi dengan IP LAN komputer ini atau domain Cloudflare kamu
+        # Contoh LAN  : http://192.168.1.100:8080/api
+        # Contoh CF   : https://api.namadomain.com/api
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api}
+    container_name: sc_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    # Expose ke semua interface agar bisa diakses dari LAN
+    ports:
+      - "0.0.0.0:${FRONTEND_PORT_EXPOSE:-3000}:80"
+
+  # ─────────────────────────── Cloudflare Tunnel ─────────────────────────────
+  # Tunnel ini menggantikan kebutuhan port forwarding di router.
+  # Cocok untuk IndiHome / provider CGNAT yang tidak support port forwarding.
+  #
+  # Cara mendapatkan CLOUDFLARE_TUNNEL_TOKEN:
+  #   1. Buka https://one.dash.cloudflare.com
+  #   2. Networks → Tunnels → Create a tunnel → pilih Cloudflared
+  #   3. Beri nama tunnel (misal: sc-klinik)
+  #   4. Copy token yang muncul, masukkan ke .env sebagai CLOUDFLARE_TUNNEL_TOKEN
+  #   5. Di halaman yang sama, tambahkan 2 public hostname:
+  #      - app.namadomain.com  → Service: HTTP  → URL: frontend:80
+  #      - api.namadomain.com  → Service: HTTP  → URL: backend:8080
+  #
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: sc_cloudflared
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    # Tidak perlu expose port apapun — tunnel berjalan outbound dari dalam container
+
+volumes:
+  postgres_data:
+  backend_uploads:
