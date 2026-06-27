@@ -99,12 +99,28 @@ export default {
           from: { opacity: "0", transform: "translateX(20px)" },
           to: { opacity: "1", transform: "translateX(0)" },
         },
+        twinkle: {
+          "0%, 100%": { opacity: "0", transform: "scale(0.5)" },
+          "50%": { opacity: "1", transform: "scale(1)" },
+        },
+        "float-up": {
+          "0%": { opacity: "0", transform: "translateY(0) scale(0.8)" },
+          "50%": { opacity: "1" },
+          "100%": { opacity: "0", transform: "translateY(-60px) scale(1.1)" },
+        },
+        "glow-pulse": {
+          "0%, 100%": { opacity: "0.6", boxShadow: "0 0 6px 2px rgba(253,186,210,0.4)" },
+          "50%": { opacity: "1", boxShadow: "0 0 14px 5px rgba(253,186,210,0.8)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.3s ease-out",
         "slide-in-right": "slide-in-right 0.3s ease-out",
+        twinkle: "twinkle var(--twinkle-duration, 3s) ease-in-out infinite var(--twinkle-delay, 0s)",
+        "float-up": "float-up var(--float-duration, 6s) ease-in-out infinite var(--float-delay, 0s)",
+        "glow-pulse": "glow-pulse var(--glow-duration, 4s) ease-in-out infinite var(--glow-delay, 0s)",
       },
     },
   },
