@@ -34,6 +34,7 @@ type TransactionItem struct {
 	Quantity       int        `json:"quantity" db:"quantity"`
 	UnitPrice      float64    `json:"unit_price" db:"unit_price"`
 	DiscountAmount *float64   `json:"discount_amount" db:"discount_amount"`
+	DiscountType   *string    `json:"discount_type" db:"discount_type"` // "fixed" | "percentage"
 	TotalPrice     float64    `json:"total_price" db:"total_price"`
 	DoctorID       *string    `json:"doctor_id" db:"doctor_id"`
 	TherapistID    *string    `json:"therapist_id" db:"therapist_id"`

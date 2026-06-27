@@ -28,6 +28,7 @@ export interface TransactionItem {
   quantity: number;
   unit_price: number;
   discount_amount: number | null;
+  discount_type: "fixed" | "percentage" | null;
   total_price: number;
   doctor_id: string | null;
   therapist_id: string | null;
@@ -91,6 +92,8 @@ export interface CartItem {
   name: string;
   unitPrice: number;
   quantity: number;
+  discountAmount?: number;
+  discountType?: "fixed" | "percentage";
   doctorId?: string;
   therapistId?: string;
   doctorName?: string;

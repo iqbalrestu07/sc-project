@@ -151,11 +151,12 @@ func (r *Repository) Create(req CreateRequest, orgID string) (*TransactionWithRe
 		if _, err := tx.Exec(`
 			INSERT INTO transaction_items (
 				id, transaction_id, item_type, service_id, product_id, quantity,
-				unit_price, discount_amount, total_price, doctor_id, therapist_id, created_at, created_by
+				unit_price, discount_amount, discount_type, total_price,
+				doctor_id, therapist_id, created_at, created_by
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		`, item.ID, req.Transaction.ID, item.ItemType, item.ServiceID, item.ProductID,
-			item.Quantity, item.UnitPrice, item.DiscountAmount, item.TotalPrice,
+			item.Quantity, item.UnitPrice, item.DiscountAmount, item.DiscountType, item.TotalPrice,
 			item.DoctorID, item.TherapistID, item.CreatedAt, item.CreatedBy); err != nil {
 			return nil, fmt.Errorf("failed to create transaction item: %w", err)
 		}
@@ -206,7 +207,7 @@ func (r *Repository) Delete(id, orgID, userByID string) error {
 func (r *Repository) Items(transactionID string) ([]TransactionItemWithRelations, error) {
 	rows, err := r.db.Query(`
 		SELECT ti.id, ti.transaction_id, ti.item_type, ti.service_id, ti.product_id,
-		       ti.quantity, ti.unit_price, ti.discount_amount, ti.total_price,
+		       ti.quantity, ti.unit_price, ti.discount_amount, ti.discount_type, ti.total_price,
 		       ti.doctor_id, ti.therapist_id, ti.created_at,
 		       s.id, s.name, p.id, p.name, d.id, d.full_name, th.id, th.full_name
 		FROM transaction_items ti
@@ -371,7 +372,7 @@ func scanTransactionItem(scanner txScanner) (TransactionItemWithRelations, error
 	err := scanner.Scan(
 		&result.ID, &result.TransactionID, &result.ItemType, &result.ServiceID,
 		&result.ProductID, &result.Quantity, &result.UnitPrice, &result.DiscountAmount,
-		&result.TotalPrice, &result.DoctorID, &result.TherapistID, &result.CreatedAt,
+		&result.DiscountType, &result.TotalPrice, &result.DoctorID, &result.TherapistID, &result.CreatedAt,
 		&serviceID, &serviceName, &productID, &productName, &doctorID, &doctorName,
 		&therapistID, &therapistName,
 	)

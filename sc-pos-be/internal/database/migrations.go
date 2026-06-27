@@ -14,6 +14,7 @@ func RunMigrations() error {
 		createSchema,
 		createIndexes,
 		backfillCommissionOrgID,
+		addItemDiscountType,
 		seedDefaultPermissions,
 		seedRolePermissions,
 	}
@@ -268,6 +269,7 @@ CREATE TABLE IF NOT EXISTS transaction_items (
 	quantity INTEGER DEFAULT 1,
 	unit_price DECIMAL(10, 2) NOT NULL,
 	discount_amount DECIMAL(10, 2),
+	discount_type VARCHAR(50),
 	total_price DECIMAL(10, 2) NOT NULL,
 	doctor_id VARCHAR(36) REFERENCES staff(id),
 	therapist_id VARCHAR(36) REFERENCES staff(id),
@@ -427,6 +429,11 @@ CREATE INDEX IF NOT EXISTS idx_stock_movements_org ON stock_movements(organizati
 
 CREATE INDEX IF NOT EXISTS idx_service_consumables_service ON service_consumables(service_id);
 CREATE INDEX IF NOT EXISTS idx_service_consumables_org ON service_consumables(organization_id);
+`
+
+// addItemDiscountType adds discount_type column to transaction_items if it does not already exist.
+const addItemDiscountType = `
+ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS discount_type VARCHAR(50);
 `
 
 const backfillCommissionOrgID = `

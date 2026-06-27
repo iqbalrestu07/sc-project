@@ -105,6 +105,8 @@ export function TransactionDetailDialog({
                 const staff = [item.doctor?.full_name, item.therapist?.full_name]
                   .filter(Boolean)
                   .join(" · ");
+                const hasItemDiscount = (item.discount_amount ?? 0) > 0;
+                const grossPrice = item.unit_price * item.quantity;
                 return (
                   <div
                     key={item.id}
@@ -120,14 +122,28 @@ export function TransactionDetailDialog({
                       {staff && (
                         <p className="text-xs text-muted-foreground">Handled by: {staff}</p>
                       )}
+                      {hasItemDiscount && (
+                        <p className="text-xs text-destructive">
+                          Diskon{" "}
+                          {item.discount_type === "percentage"
+                            ? `${item.discount_amount}%`
+                            : `Rp ${Number(item.discount_amount).toLocaleString("id-ID")}`}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="font-medium">
                         Rp {Number(item.total_price).toLocaleString("id-ID")}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.quantity} x Rp {Number(item.unit_price).toLocaleString("id-ID")}
-                      </p>
+                      {hasItemDiscount ? (
+                        <p className="text-xs text-muted-foreground line-through">
+                          Rp {Number(grossPrice).toLocaleString("id-ID")}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          {item.quantity} x Rp {Number(item.unit_price).toLocaleString("id-ID")}
+                        </p>
+                      )}
                     </div>
                   </div>
                 );
@@ -172,86 +188,195 @@ export function TransactionDetailDialog({
   );
 }
 
+/**
+ * Print a thermal receipt for a PO 58mm printer.
+ * Paper width  : 58 mm
+ * Print area   : 48 mm  (5 mm margins each side)
+ * Font         : Courier New / monospace — fixed-width characters align cleanly
+ * Font size    : 9–10 px — fits ~32 chars per line at 48 mm
+ * @page rule   : size 58mm auto — eliminates browser-added margins and
+ *               forces the correct paper size when printing to a thermal driver.
+ */
 export function printTransactionReceipt(
   transaction: TransactionWithRelations,
   settings: ClinicSettings
 ) {
-  const headerTitle = settings.invoice_header_title || settings.clinic_name || "Clinic";
+  const headerTitle = settings.invoice_header_title || settings.clinic_name || "Klinik";
   const headerDescription = settings.invoice_header_description || "";
-  const footerText = settings.invoice_footer_text || "Thank you for your visit";
+  const footerText = settings.invoice_footer_text || "Terima kasih atas kunjungan Anda!";
+  const fmt = (n: number) => `Rp ${Number(n).toLocaleString("id-ID")}`;
 
-  const itemsHtml = transaction.items
-    ?.map((item) => {
-      const name = item.service?.name || item.product?.name || "—";
-      const staff = [item.doctor?.full_name, item.therapist?.full_name]
-        .filter(Boolean)
-        .join(" / ");
-      return `
-        <tr>
-          <td>
-            ${name}<br/>
-            <small>${item.quantity} x Rp ${Number(item.unit_price).toLocaleString("id-ID")}${staff ? " — " + staff : ""}</small>
-          </td>
-          <td style="text-align:right">Rp ${Number(item.total_price).toLocaleString("id-ID")}</td>
-        </tr>
-      `;
-    })
-    .join("") || "";
+  // Build item rows — each item gets name, qty x price, optional staff & item discount
+  const itemsHtml = (transaction.items ?? []).map((item) => {
+    const name = escapeHtml(item.service?.name || item.product?.name || "—");
+    const staff = [item.doctor?.full_name, item.therapist?.full_name]
+      .filter(Boolean)
+      .map(escapeHtml)
+      .join(" / ");
+    const gross = item.unit_price * item.quantity;
+    const hasItemDisc = (item.discount_amount ?? 0) > 0;
+    const discLabel = hasItemDisc
+      ? item.discount_type === "percentage"
+        ? `Disc ${item.discount_amount}%`
+        : `Disc -${fmt(item.discount_amount!)}`
+      : "";
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>Receipt ${transaction.transaction_code}</title>
-        <style>
-          body { font-family: sans-serif; padding: 16px; max-width: 320px; margin: 0 auto; font-size: 13px; }
-          .center { text-align: center; }
-          .header { margin-bottom: 12px; }
-          .header h2 { margin: 0; font-size: 16px; }
-          .header p { margin: 2px 0; }
-          .line { border-top: 1px dashed #000; margin: 10px 0; }
-          table { width: 100%; border-collapse: collapse; }
-          td { vertical-align: top; padding: 4px 0; }
-          .right { text-align: right; }
-          .footer { margin-top: 12px; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="header center">
-          <h2>${escapeHtml(headerTitle)}</h2>
-          ${headerDescription ? `<p>${escapeHtml(headerDescription)}</p>` : ""}
-          ${settings.address ? `<p>${escapeHtml(settings.address)}</p>` : ""}
-          ${settings.phone ? `<p>${escapeHtml(settings.phone)}</p>` : ""}
-        </div>
-        <div class="line"></div>
-        <p><strong>Receipt:</strong> ${transaction.transaction_code}</p>
-        <p><strong>Date:</strong> ${transaction.paid_at ? format(new Date(transaction.paid_at), "dd MMM yyyy HH:mm") : format(new Date(transaction.created_at), "dd MMM yyyy HH:mm")}</p>
-        <p><strong>Patient:</strong> ${transaction.patient?.full_name ? escapeHtml(transaction.patient.full_name) : "—"}</p>
-        <div class="line"></div>
-        <table>
-          <tbody>${itemsHtml}</tbody>
-        </table>
-        <div class="line"></div>
-        <p class="right"><strong>Subtotal:</strong> Rp ${Number(transaction.subtotal).toLocaleString("id-ID")}</p>
-        ${transaction.tax_amount > 0 ? `<p class="right"><strong>Tax:</strong> Rp ${Number(transaction.tax_amount).toLocaleString("id-ID")}</p>` : ""}
-        ${(transaction.discount_amount ?? 0) > 0 ? `<p class="right"><strong>Discount:</strong> -Rp ${Number(transaction.discount_amount).toLocaleString("id-ID")}</p>` : ""}
-        <p class="right"><strong>Total:</strong> Rp ${Number(transaction.total_amount).toLocaleString("id-ID")}</p>
-        <p class="right"><strong>Payment:</strong> ${transaction.payment_method ? transaction.payment_method : "—"}</p>
-        <div class="line"></div>
-        <div class="footer center">
-          <p>${escapeHtml(footerText)}</p>
-        </div>
-      </body>
-    </html>
-  `;
+    return `
+      <tr>
+        <td colspan="2" style="padding:3px 0 0;">
+          <span style="font-weight:700;">${name}</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:0 0 1px;font-size:9px;color:#444;">
+          ${item.quantity}x ${fmt(item.unit_price)}${staff ? `<br>${staff}` : ""}${discLabel ? `<br><span style="color:#c00;">${discLabel}</span>` : ""}
+        </td>
+        <td style="padding:0 0 1px;text-align:right;vertical-align:bottom;font-weight:600;">
+          ${hasItemDisc ? `<span style="text-decoration:line-through;color:#999;font-size:8px;">${fmt(gross)}</span><br>` : ""}${fmt(item.total_price)}
+        </td>
+      </tr>`;
+  }).join("");
 
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) return;
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
-  printWindow.close();
+  // Header description — line breaks preserved
+  const headerDescHtml = headerDescription
+    .split("\n")
+    .map((l) => `<p>${escapeHtml(l)}</p>`)
+    .join("");
+
+  const footerHtml = footerText
+    .split("\n")
+    .map((l) => `<p>${escapeHtml(l)}</p>`)
+    .join("");
+
+  const txDate = transaction.paid_at
+    ? format(new Date(transaction.paid_at), "dd/MM/yyyy HH:mm")
+    : format(new Date(transaction.created_at), "dd/MM/yyyy HH:mm");
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Struk ${transaction.transaction_code}</title>
+  <style>
+    /* ── Page setup: 58mm paper, zero browser margins ── */
+    @page {
+      size: 58mm auto;
+      margin: 0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 10px;
+      color: #000;
+      width: 48mm;           /* print area (58mm - 5mm each side) */
+      margin: 0 auto;
+      padding: 3mm 0 4mm;
+      line-height: 1.35;
+    }
+
+    /* ── Layout helpers ── */
+    .center  { text-align: center; }
+    .right   { text-align: right; }
+    .bold    { font-weight: 700; }
+    .divider { border-top: 1px dashed #000; margin: 3px 0; }
+
+    /* ── Header ── */
+    .header h2 { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+    .header p  { font-size: 9px; margin: 1px 0; }
+
+    /* ── Meta (receipt no / date / patient) ── */
+    .meta      { font-size: 9px; margin: 1px 0; }
+
+    /* ── Items table ── */
+    table { width: 100%; border-collapse: collapse; }
+    td    { vertical-align: top; font-size: 10px; }
+
+    /* ── Summary rows ── */
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      padding: 1px 0;
+    }
+    .summary-row.total {
+      font-size: 12px;
+      font-weight: 700;
+      border-top: 1px dashed #000;
+      padding-top: 3px;
+      margin-top: 2px;
+    }
+    .summary-row.disc { color: #c00; }
+
+    /* ── Footer ── */
+    .footer    { margin-top: 5px; }
+    .footer p  { font-size: 9px; margin: 1px 0; }
+    .print-ts  { font-size: 8px; color: #666; margin-top: 3px; }
+
+    /* ── Print-only: auto-trigger, hide scrollbar ── */
+    @media print {
+      body { width: 48mm; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header center">
+    <h2>${escapeHtml(headerTitle)}</h2>
+    ${headerDescHtml}
+    ${settings.address ? `<p>${escapeHtml(settings.address)}</p>` : ""}
+    ${settings.phone ? `<p>Telp: ${escapeHtml(settings.phone)}</p>` : ""}
+  </div>
+
+  <div class="divider"></div>
+
+  <p class="meta">No : ${transaction.transaction_code}</p>
+  <p class="meta">Tgl: ${txDate}</p>
+  <p class="meta">Px : ${escapeHtml(transaction.patient?.full_name ?? "Walk-in")}</p>
+
+  <div class="divider"></div>
+
+  <table><tbody>${itemsHtml}</tbody></table>
+
+  <div class="divider"></div>
+
+  <div class="summary-row">
+    <span>Subtotal</span><span>${fmt(transaction.subtotal)}</span>
+  </div>
+  ${(transaction.discount_amount ?? 0) > 0
+    ? `<div class="summary-row disc">
+        <span>Diskon</span><span>-${fmt(transaction.discount_amount!)}</span>
+       </div>`
+    : ""}
+  ${transaction.tax_amount > 0
+    ? `<div class="summary-row">
+        <span>Pajak</span><span>${fmt(transaction.tax_amount)}</span>
+       </div>`
+    : ""}
+  <div class="summary-row total">
+    <span>TOTAL</span><span>${fmt(transaction.total_amount)}</span>
+  </div>
+  ${transaction.payment_method
+    ? `<div class="summary-row">
+        <span>Bayar</span><span style="text-transform:capitalize;">${escapeHtml(transaction.payment_method)}</span>
+       </div>`
+    : ""}
+
+  <div class="divider"></div>
+
+  <div class="footer center">
+    ${footerHtml}
+    <p class="print-ts">Dicetak: ${format(new Date(), "dd/MM/yyyy HH:mm")}</p>
+  </div>
+
+  <script>window.onload = function(){ window.print(); }</script>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank", "width=300,height=600");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
 }
 
 function escapeHtml(text: string): string {

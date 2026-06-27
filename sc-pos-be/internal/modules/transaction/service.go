@@ -47,17 +47,7 @@ func (s *Service) Create(req CreateRequest, userID *string, orgID string) (*Tran
 	if req.Transaction.PaymentStatus == "" {
 		req.Transaction.PaymentStatus = "pending"
 	}
-	if req.Transaction.Subtotal == 0 {
-		for _, item := range req.Items {
-			req.Transaction.Subtotal += item.TotalPrice
-		}
-	}
-	if req.Transaction.TotalAmount == 0 {
-		req.Transaction.TotalAmount = req.Transaction.Subtotal + req.Transaction.TaxAmount
-		if req.Transaction.DiscountAmount != nil {
-			req.Transaction.TotalAmount -= *req.Transaction.DiscountAmount
-		}
-	}
+	// Set up items: assign IDs, resolve types, and compute item-level totals
 	for i := range req.Items {
 		req.Items[i].ID = uuid.New().String()
 		req.Items[i].TransactionID = req.Transaction.ID
@@ -73,8 +63,59 @@ func (s *Service) Create(req CreateRequest, userID *string, orgID string) (*Tran
 				req.Items[i].ItemType = "service"
 			}
 		}
-		if req.Items[i].TotalPrice == 0 {
-			req.Items[i].TotalPrice = req.Items[i].UnitPrice * float64(req.Items[i].Quantity)
+		// Recalculate item total_price honoring item-level discount
+		lineGross := req.Items[i].UnitPrice * float64(req.Items[i].Quantity)
+		if req.Items[i].DiscountAmount != nil && *req.Items[i].DiscountAmount > 0 {
+			switch {
+			case req.Items[i].DiscountType != nil && *req.Items[i].DiscountType == "percentage":
+				discValue := *req.Items[i].DiscountAmount
+				if discValue > 100 {
+					discValue = 100
+				}
+				req.Items[i].TotalPrice = lineGross * (1 - discValue/100)
+			default: // "fixed" or unset
+				disc := *req.Items[i].DiscountAmount
+				if disc > lineGross {
+					disc = lineGross
+				}
+				req.Items[i].TotalPrice = lineGross - disc
+			}
+		} else {
+			req.Items[i].TotalPrice = lineGross
+		}
+	}
+
+	// Subtotal = sum of item totals (after item discounts)
+	if req.Transaction.Subtotal == 0 {
+		for _, item := range req.Items {
+			req.Transaction.Subtotal += item.TotalPrice
+		}
+	}
+
+	// Order-level discount then tax → grand total
+	if req.Transaction.TotalAmount == 0 {
+		orderDisc := 0.0
+		if req.Transaction.DiscountAmount != nil && *req.Transaction.DiscountAmount > 0 {
+			switch {
+			case req.Transaction.DiscountType != nil && *req.Transaction.DiscountType == "percentage":
+				pct := *req.Transaction.DiscountAmount
+				if pct > 100 {
+					pct = 100
+				}
+				orderDisc = req.Transaction.Subtotal * pct / 100
+				// Store resolved absolute value so receipt is unambiguous
+				req.Transaction.DiscountAmount = &orderDisc
+			default: // "fixed"
+				orderDisc = *req.Transaction.DiscountAmount
+				if orderDisc > req.Transaction.Subtotal {
+					orderDisc = req.Transaction.Subtotal
+					req.Transaction.DiscountAmount = &orderDisc
+				}
+			}
+		}
+		req.Transaction.TotalAmount = req.Transaction.Subtotal + req.Transaction.TaxAmount - orderDisc
+		if req.Transaction.TotalAmount < 0 {
+			req.Transaction.TotalAmount = 0
 		}
 	}
 

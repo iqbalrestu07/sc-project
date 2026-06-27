@@ -67,6 +67,7 @@ export function POSInterface() {
   const [activeTab, setActiveTab] = useState<"services" | "products">("services");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [discount, setDiscount] = useState(0);
+  const [discountType, setDiscountType] = useState<"fixed" | "percentage">("fixed");
   const [showPrintPrompt, setShowPrintPrompt] = useState(false);
   const [completedTransaction, setCompletedTransaction] = useState<TransactionWithRelations | null>(null);
 
@@ -151,11 +152,42 @@ export function POSInterface() {
     );
   };
 
-  const subtotal = cart.reduce(
-    (sum, item) => sum + item.unitPrice * item.quantity,
-    0
-  );
-  const total = subtotal - discount;
+  const updateCartItemDiscount = (
+    id: string,
+    amount: number,
+    type: "fixed" | "percentage"
+  ) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, discountAmount: amount, discountType: type }
+          : item
+      )
+    );
+  };
+
+  // Calculate item line total respecting per-item discount
+  const itemTotal = (item: (typeof cart)[0]) => {
+    const gross = item.unitPrice * item.quantity;
+    if (!item.discountAmount || item.discountAmount <= 0) return gross;
+    if (item.discountType === "percentage") {
+      const pct = Math.min(item.discountAmount, 100);
+      return gross * (1 - pct / 100);
+    }
+    return Math.max(0, gross - item.discountAmount);
+  };
+
+  const subtotal = cart.reduce((sum, item) => sum + itemTotal(item), 0);
+
+  // Order-level discount (resolved to absolute value for display)
+  const orderDiscountAbs =
+    discount > 0
+      ? discountType === "percentage"
+        ? subtotal * Math.min(discount, 100) / 100
+        : Math.min(discount, subtotal)
+      : 0;
+
+  const total = Math.max(0, subtotal - orderDiscountAbs);
 
   const handleCheckout = async () => {
     if (!selectedPatientId) {
@@ -172,8 +204,8 @@ export function POSInterface() {
         transaction: {
           patient_id: selectedPatientId,
           subtotal,
-          discount_amount: discount,
-          discount_type: discount > 0 ? "fixed" : null,
+          discount_amount: discount > 0 ? discount : null,
+          discount_type: discount > 0 ? discountType : null,
           total_amount: total,
           payment_status: "pending",
         },
@@ -185,8 +217,9 @@ export function POSInterface() {
           therapist_id: item.therapistId || null,
           quantity: item.quantity,
           unit_price: item.unitPrice,
-          discount_amount: 0,
-          total_price: item.unitPrice * item.quantity,
+          discount_amount: item.discountAmount && item.discountAmount > 0 ? item.discountAmount : null,
+          discount_type: item.discountAmount && item.discountAmount > 0 ? (item.discountType ?? "fixed") : null,
+          total_price: itemTotal(item),
         })),
       });
 
@@ -201,6 +234,7 @@ export function POSInterface() {
       setCart([]);
       setSelectedPatientId("");
       setDiscount(0);
+      setDiscountType("fixed");
 
       // Ask user whether to print receipt
       setCompletedTransaction(paidTransaction);
@@ -413,9 +447,14 @@ export function POSInterface() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-semibold text-sm">
-                        {formatPrice(item.unitPrice * item.quantity)}
+                      <div className="font-semibold text-sm text-primary">
+                        {formatPrice(itemTotal(item))}
                       </div>
+                      {item.discountAmount && item.discountAmount > 0 && (
+                        <div className="text-xs text-destructive line-through">
+                          {formatPrice(item.unitPrice * item.quantity)}
+                        </div>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -446,6 +485,35 @@ export function POSInterface() {
                     >
                       <Plus className="h-3 w-3" />
                     </Button>
+                  </div>
+
+                  {/* Per-item discount */}
+                  <div className="flex items-center gap-1 pt-1">
+                    <Select
+                      value={item.discountType ?? "fixed"}
+                      onValueChange={(v) =>
+                        updateCartItemDiscount(item.id, item.discountAmount ?? 0, v as "fixed" | "percentage")
+                      }
+                    >
+                      <SelectTrigger className="h-7 w-[70px] text-xs px-2">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fixed">Rp</SelectItem>
+                        <SelectItem value="percentage">%</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={item.discountType === "percentage" ? 100 : undefined}
+                      placeholder="Diskon item"
+                      value={item.discountAmount ?? ""}
+                      onChange={(e) =>
+                        updateCartItemDiscount(item.id, Number(e.target.value), item.discountType ?? "fixed")
+                      }
+                      className="h-7 text-xs flex-1"
+                    />
                   </div>
 
                   {/* Staff Assignment for Services */}
@@ -513,19 +581,46 @@ export function POSInterface() {
           {/* Totals */}
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span>Subtotal</span>
+              <span className="text-muted-foreground">Subtotal</span>
               <span>{formatPrice(subtotal)}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm">Discount</span>
+
+            {/* Order-level discount */}
+            <div className="flex items-center gap-1">
+              <span className="text-sm text-muted-foreground shrink-0">Diskon Order</span>
+              <Select
+                value={discountType}
+                onValueChange={(v) => setDiscountType(v as "fixed" | "percentage")}
+              >
+                <SelectTrigger className="h-7 w-[60px] text-xs px-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed">Rp</SelectItem>
+                  <SelectItem value="percentage">%</SelectItem>
+                </SelectContent>
+              </Select>
               <Input
                 type="number"
-                value={discount}
-                onChange={(e) => setDiscount(Number(e.target.value))}
-                className="h-8 w-24 text-right"
                 min={0}
+                max={discountType === "percentage" ? 100 : undefined}
+                value={discount || ""}
+                onChange={(e) => setDiscount(Number(e.target.value))}
+                className="h-7 text-xs flex-1 text-right"
+                placeholder="0"
               />
             </div>
+
+            {/* Show resolved discount value when percentage */}
+            {orderDiscountAbs > 0 && (
+              <div className="flex justify-between text-sm text-destructive">
+                <span>
+                  Diskon{discountType === "percentage" ? ` (${discount}%)` : ""}
+                </span>
+                <span>-{formatPrice(orderDiscountAbs)}</span>
+              </div>
+            )}
+
             <Separator />
             <div className="flex justify-between font-semibold text-lg">
               <span>Total</span>
