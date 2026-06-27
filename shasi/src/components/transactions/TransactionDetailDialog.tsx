@@ -32,16 +32,21 @@ export function TransactionDetailDialog({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (open && transactionId) {
-      setLoading(true);
-      fetchTransactionDetail(transactionId)
-        .then(setTransaction)
-        .catch(console.error)
-        .finally(() => setLoading(false));
-    } else {
+    if (!open || !transactionId) {
       setTransaction(null);
+      return;
     }
-  }, [open, transactionId, fetchTransactionDetail]);
+    let cancelled = false;
+    setLoading(true);
+    fetchTransactionDetail(transactionId)
+      .then((data) => { if (!cancelled) setTransaction(data); })
+      .catch(console.error)
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // fetchTransactionDetail is stable (useCallback in hook), but intentionally
+    // omitted here so only open/transactionId changes trigger a new fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, transactionId]);
 
   const handlePrint = () => {
     if (!transaction || !settings) return;

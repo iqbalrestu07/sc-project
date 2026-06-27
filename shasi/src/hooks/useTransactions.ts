@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { apiClient, API_ENDPOINTS } from "@/integrations/api";
 import type {
   TransactionInsert,
@@ -27,8 +28,10 @@ export function useTransactions() {
     },
   });
 
-  // Fetch transaction with items for detail view
-  const fetchTransactionDetail = async (id: string): Promise<TransactionWithRelations> => {
+  // Fetch transaction with items for detail view.
+  // Wrapped in useCallback so the reference stays stable across re-renders,
+  // preventing the useEffect in TransactionDetailDialog from firing in a loop.
+  const fetchTransactionDetail = useCallback(async (id: string): Promise<TransactionWithRelations> => {
     try {
       const data = await apiClient.get<{ data: TransactionWithRelations }>(
         API_ENDPOINTS.TRANSACTIONS.DETAIL(id)
@@ -38,7 +41,7 @@ export function useTransactions() {
       console.error("Error fetching transaction detail:", error);
       throw error;
     }
-  };
+  }, []);
 
   const createTransaction = useMutation({
     mutationFn: async ({
