@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { PageHeader } from "@/components/layout";
@@ -202,21 +202,20 @@ interface MovementDialogProps {
 function MovementDialog({
   open, onOpenChange, initialProductId, initialType, products, onSubmit, isPending,
 }: MovementDialogProps) {
-  const [form, setForm] = useState<MovementFormState>({
-    ...EMPTY_FORM,
-    product_id: initialProductId ?? "",
-    movement_type: initialType ?? "in",
-  });
+  const [form, setForm] = useState<MovementFormState>(EMPTY_FORM);
 
-  // Reset form setiap kali dialog dibuka
-  const handleOpenChange = (v: boolean) => {
-    if (v) {
+  // Setiap kali dialog dibuka, sinkronkan form dengan produk & tipe yang dipilih dari baris tabel
+  useEffect(() => {
+    if (open) {
       setForm({
         ...EMPTY_FORM,
         product_id: initialProductId ?? "",
         movement_type: initialType ?? "in",
       });
     }
+  }, [open, initialProductId, initialType]);
+
+  const handleOpenChange = (v: boolean) => {
     onOpenChange(v);
   };
 
