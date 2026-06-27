@@ -1,18 +1,18 @@
 import { useCmsContact } from "@/hooks/useCmsData";
-import { useClinicSettings } from "@/hooks/useClinicSettings";
+import { usePublicClinicInfo } from "@/hooks/usePublicClinicInfo";
 import { MapPin, Phone, Mail, Instagram, Facebook } from "lucide-react";
 
 export function ContactSection() {
   const { data: contact } = useCmsContact();
-  const { settings: clinicSettings } = useClinicSettings();
+  const { data: publicClinic } = usePublicClinicInfo();
 
   // Resolve maps src URL:
-  // Priority 1 — clinic_settings.maps_embed_url (may be full <iframe> or bare src URL)
+  // Priority 1 — clinic_settings.maps_embed_url from public endpoint
+  //              (may be full <iframe> tag or bare src URL)
   // Priority 2 — CMS contact.google_maps_embed (bare src URL, legacy)
   const resolveMapsSrc = (): string | null => {
-    const raw = clinicSettings?.maps_embed_url?.trim();
+    const raw = publicClinic?.maps_embed_url?.trim();
     if (raw) {
-      // If it's a full <iframe> tag, extract the src attribute
       const match = raw.match(/src="([^"]+)"/);
       return match ? match[1] : raw;
     }

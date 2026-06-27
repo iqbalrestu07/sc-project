@@ -35,6 +35,7 @@ func SetupRoutes(router *gin.Engine) {
 	{
 		authModule.RegisterPublicRoutes(api)
 		cms.RegisterPublicRoutes(api)
+		settings.RegisterPublicRoutes(api)
 	}
 
 	// Protected API routes — JWT required, org context optional but resolved if header present
