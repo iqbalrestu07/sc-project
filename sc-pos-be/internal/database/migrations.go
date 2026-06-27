@@ -15,6 +15,7 @@ func RunMigrations() error {
 		createIndexes,
 		backfillCommissionOrgID,
 		addItemDiscountType,
+		addClinicSettingsMapsEmbed,
 		seedDefaultPermissions,
 		seedRolePermissions,
 	}
@@ -434,6 +435,12 @@ CREATE INDEX IF NOT EXISTS idx_service_consumables_org ON service_consumables(or
 // addItemDiscountType adds discount_type column to transaction_items if it does not already exist.
 const addItemDiscountType = `
 ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS discount_type VARCHAR(50);
+`
+
+// addClinicSettingsMapsEmbed adds maps_embed_url column to clinic_settings for the Google Maps
+// embed iframe src URL that is displayed on the landing page contact section.
+const addClinicSettingsMapsEmbed = `
+ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS maps_embed_url TEXT;
 `
 
 const backfillCommissionOrgID = `

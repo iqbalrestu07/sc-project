@@ -1,8 +1,24 @@
 import { useCmsContact } from "@/hooks/useCmsData";
+import { useClinicSettings } from "@/hooks/useClinicSettings";
 import { MapPin, Phone, Mail, Instagram, Facebook } from "lucide-react";
 
 export function ContactSection() {
   const { data: contact } = useCmsContact();
+  const { settings: clinicSettings } = useClinicSettings();
+
+  // Resolve maps src URL:
+  // Priority 1 — clinic_settings.maps_embed_url (may be full <iframe> or bare src URL)
+  // Priority 2 — CMS contact.google_maps_embed (bare src URL, legacy)
+  const resolveMapsSrc = (): string | null => {
+    const raw = clinicSettings?.maps_embed_url?.trim();
+    if (raw) {
+      // If it's a full <iframe> tag, extract the src attribute
+      const match = raw.match(/src="([^"]+)"/);
+      return match ? match[1] : raw;
+    }
+    return contact?.google_maps_embed ?? null;
+  };
+  const mapsSrc = resolveMapsSrc();
 
   const whatsappNumber = contact?.whatsapp_number || "6282123523139";
 
@@ -113,16 +129,16 @@ export function ContactSection() {
 
           {/* Map */}
           <div className="h-[400px] bg-card rounded-xl shadow-sm overflow-hidden">
-            {contact?.google_maps_embed ? (
+            {mapsSrc ? (
               <iframe
-                src={contact.google_maps_embed}
+                src={mapsSrc}
                 width="100%"
                 height="100%"
                 style={{ border: 0 }}
                 allowFullScreen
                 loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                title="Lokasi Shasi Beauty Care"
+                referrerPolicy="strict-origin-when-cross-origin"
+                title="Lokasi Klinik"
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">

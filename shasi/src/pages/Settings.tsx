@@ -16,7 +16,8 @@ import {
   Mail,
   Save,
   Loader2,
-  FileText
+  FileText,
+  MapPin,
 } from "lucide-react";
 import { useClinicSettings, ClinicSettings } from "@/hooks/useClinicSettings";
 
@@ -46,6 +47,7 @@ export default function SettingsPage() {
         invoice_header_title: settings.invoice_header_title || "",
         invoice_header_description: settings.invoice_header_description || "",
         invoice_footer_text: settings.invoice_footer_text || "",
+        maps_embed_url: settings.maps_embed_url || "",
       });
     }
   }, [settings]);
@@ -424,6 +426,62 @@ export default function SettingsPage() {
                 💡 Invoice dioptimalkan untuk printer thermal 58mm. Lebar kertas ±48mm area cetak.
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Google Maps Embed */}
+        <Card className="shadow-clinic">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              Lokasi Maps (Landing Page)
+            </CardTitle>
+            <CardDescription>
+              URL embed Google Maps yang ditampilkan di halaman kontak landing page
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="mapsEmbedUrl">URL Embed Google Maps</Label>
+              <Textarea
+                id="mapsEmbedUrl"
+                placeholder={`<iframe src="https://www.google.com/maps/embed?pb=..." width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>`}
+                value={formData.maps_embed_url || ""}
+                onChange={(e) => handleChange("maps_embed_url", e.target.value)}
+                rows={4}
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                Paste seluruh tag &lt;iframe&gt; dari Google Maps → Bagikan → Embed peta
+              </p>
+            </div>
+
+            {/* Preview */}
+            {formData.maps_embed_url && (() => {
+              const match = formData.maps_embed_url.match(/src="([^"]+)"/);
+              const srcUrl = match?.[1];
+              return srcUrl ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Preview:</p>
+                  <div className="rounded-lg overflow-hidden border aspect-video w-full">
+                    <iframe
+                      src={srcUrl}
+                      width="100%"
+                      height="100%"
+                      style={{ border: 0 }}
+                      allowFullScreen
+                      loading="lazy"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      title="Maps Preview"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-destructive">
+                  Format tidak valid — pastikan paste tag &lt;iframe&gt; lengkap dari Google Maps.
+                </p>
+              );
+            })()}
           </CardContent>
         </Card>
 

@@ -20,6 +20,7 @@ export interface ClinicSettings {
   invoice_header_title: string | null;
   invoice_header_description: string | null;
   invoice_footer_text: string | null;
+  maps_embed_url: string | null;
   created_at: string | null;
   updated_at: string | null;
 }

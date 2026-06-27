@@ -22,7 +22,8 @@ func (r *Repository) GetClinic(orgID string) (*models.ClinicSettings, error) {
 		       low_stock_alerts, appointment_reminders, expiry_warnings,
 		       reminder_hours_before, whatsapp_reminder_enabled, email_reminder_enabled,
 		       whatsapp_business_phone_id, invoice_header_title,
-		       invoice_header_description, invoice_footer_text, created_at, updated_at
+		       invoice_header_description, invoice_footer_text, maps_embed_url,
+		       created_at, updated_at
 		FROM clinic_settings
 		WHERE (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
 		  AND deleted_at IS NULL
@@ -46,15 +47,15 @@ func (r *Repository) Create(settings *models.ClinicSettings, orgID string) error
 			low_stock_alerts, appointment_reminders, expiry_warnings,
 			reminder_hours_before, whatsapp_reminder_enabled, email_reminder_enabled,
 			whatsapp_business_phone_id, invoice_header_title, invoice_header_description,
-			invoice_footer_text, created_at, updated_at, organization_id, created_by
+			invoice_footer_text, maps_embed_url, created_at, updated_at, organization_id, created_by
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 	`, settings.ID, settings.ClinicName, settings.Address, settings.Phone, settings.Email,
 		settings.TaxRate, settings.TaxInclusive, settings.LowStockAlerts,
 		settings.AppointmentReminders, settings.ExpiryWarnings, settings.ReminderHoursBefore,
 		settings.WhatsAppReminderEnabled, settings.EmailReminderEnabled,
 		settings.WhatsAppBusinessPhoneID, settings.InvoiceHeaderTitle,
-		settings.InvoiceHeaderDescription, settings.InvoiceFooterText,
+		settings.InvoiceHeaderDescription, settings.InvoiceFooterText, settings.MapsEmbedUrl,
 		settings.CreatedAt, settings.UpdatedAt, orgID, settings.CreatedBy)
 	if err != nil {
 		return fmt.Errorf("failed to create clinic settings: %w", err)
@@ -71,14 +72,15 @@ func (r *Repository) Update(id string, settings *models.ClinicSettings, userByID
 		    whatsapp_reminder_enabled = $11, email_reminder_enabled = $12,
 		    whatsapp_business_phone_id = $13, invoice_header_title = $14,
 		    invoice_header_description = $15, invoice_footer_text = $16,
-		    updated_at = NOW(), updated_by = $17
-		WHERE id = $18
+		    maps_embed_url = $17,
+		    updated_at = NOW(), updated_by = $18
+		WHERE id = $19
 	`, settings.ClinicName, settings.Address, settings.Phone, settings.Email,
 		settings.TaxRate, settings.TaxInclusive, settings.LowStockAlerts,
 		settings.AppointmentReminders, settings.ExpiryWarnings, settings.ReminderHoursBefore,
 		settings.WhatsAppReminderEnabled, settings.EmailReminderEnabled,
 		settings.WhatsAppBusinessPhoneID, settings.InvoiceHeaderTitle,
-		settings.InvoiceHeaderDescription, settings.InvoiceFooterText,
+		settings.InvoiceHeaderDescription, settings.InvoiceFooterText, settings.MapsEmbedUrl,
 		nullableString(userByID), id)
 	if err != nil {
 		return fmt.Errorf("failed to update clinic settings: %w", err)
@@ -106,7 +108,7 @@ func scanClinicSettings(scanner settingsScanner) (models.ClinicSettings, error) 
 		&settings.ExpiryWarnings, &settings.ReminderHoursBefore,
 		&settings.WhatsAppReminderEnabled, &settings.EmailReminderEnabled,
 		&settings.WhatsAppBusinessPhoneID, &settings.InvoiceHeaderTitle,
-		&settings.InvoiceHeaderDescription, &settings.InvoiceFooterText,
+		&settings.InvoiceHeaderDescription, &settings.InvoiceFooterText, &settings.MapsEmbedUrl,
 		&settings.CreatedAt, &settings.UpdatedAt,
 	)
 	if err != nil {
