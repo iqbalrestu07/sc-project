@@ -37,6 +37,15 @@ func (h *Handler) Create(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusBadRequest, "movement_type is required (in, out, adjustment)")
 		return
 	}
+	// in/out must be positive; adjustment can be any non-zero signed integer
+	if req.MovementType != "adjustment" && req.Quantity <= 0 {
+		utils.ErrorResponse(c, http.StatusBadRequest, "quantity must be greater than 0 for in/out movements")
+		return
+	}
+	if req.MovementType == "adjustment" && req.Quantity == 0 {
+		utils.ErrorResponse(c, http.StatusBadRequest, "adjustment quantity must be non-zero")
+		return
+	}
 
 	userID, _ := c.Get("user_id")
 	if uid, ok := userID.(string); ok && uid != "" {

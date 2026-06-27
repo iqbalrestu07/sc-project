@@ -226,16 +226,26 @@ function MovementDialog({
   // Projected stock after movement
   const projectedStock = useMemo(() => {
     const current = selectedProduct?.current_stock ?? 0;
-    const qty = parseInt(form.quantity) || 0;
-    if (qty <= 0) return null;
+    const qty = parseInt(form.quantity);
+    if (isNaN(qty) || qty === 0) return null;
     if (form.movement_type === "in") return current + qty;
-    if (form.movement_type === "out") return Math.max(0, current - qty);
-    return qty; // adjustment = new delta
+    if (form.movement_type === "out") return Math.max(0, current - Math.abs(qty));
+    // adjustment: qty adalah delta, bisa + atau -
+    return Math.max(0, current + qty);
   }, [selectedProduct, form.quantity, form.movement_type]);
+
+  const isFormValid = () => {
+    if (!form.product_id || form.quantity === "") return false;
+    const qty = parseInt(form.quantity);
+    if (isNaN(qty) || qty === 0) return false;
+    // in/out hanya boleh positif
+    if (form.movement_type !== "adjustment" && qty < 1) return false;
+    return true;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.product_id || !form.quantity || parseInt(form.quantity) <= 0) return;
+    if (!isFormValid()) return;
     onSubmit({
       product_id: form.product_id,
       movement_type: form.movement_type,
@@ -361,7 +371,7 @@ function MovementDialog({
             </Button>
             <Button
               type="submit"
-              disabled={!form.product_id || !form.quantity || isPending}
+              disabled={!isFormValid() || isPending}
               className={cn(
                 typeMeta.color.includes("green") && "bg-green-600 hover:bg-green-700",
                 typeMeta.color.includes("red") && "bg-red-600 hover:bg-red-700"

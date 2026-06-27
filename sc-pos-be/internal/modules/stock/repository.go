@@ -83,7 +83,10 @@ func (r *Repository) Create(m *models.StockMovement, orgID string) error {
 		return fmt.Errorf("failed to insert stock movement: %w", err)
 	}
 
-	// Adjust product stock
+	// Adjust product stock.
+	// "in"         → delta = +quantity (always positive)
+	// "out"        → delta = -quantity (always positive quantity, negate here)
+	// "adjustment" → delta = quantity as-is (can be negative to reduce stock)
 	var delta int
 	switch m.MovementType {
 	case "in":
@@ -91,10 +94,12 @@ func (r *Repository) Create(m *models.StockMovement, orgID string) error {
 	case "out":
 		delta = -m.Quantity
 	case "adjustment":
-		// For adjustment, quantity is the absolute new value delta
-		delta = m.Quantity
+		delta = m.Quantity // caller passes signed value; negative = reduce stock
 	}
 
+	// For in/out we floor at 0 to avoid negative stock.
+	// For adjustment we also floor at 0 so the database never goes negative,
+	// but we allow the delta itself to be negative.
 	if _, err := tx.Exec(`
 		UPDATE products
 		SET current_stock = GREATEST(0, COALESCE(current_stock, 0) + $1),
