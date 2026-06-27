@@ -29,6 +29,14 @@ export interface TopProductItem {
   revenue: number;
 }
 
+export interface TopCustomerItem {
+  patient_id: string;
+  patient_code: string;
+  full_name: string;
+  total_spend: number;
+  tx_count: number;
+}
+
 export interface AppointmentTodayItem {
   id: string;
   scheduled_at: string;
@@ -96,6 +104,19 @@ export function useDashboardTopProducts(dr?: DateRangeParams) {
     queryFn: async (): Promise<TopProductItem[]> => {
       const data = await apiClient.get<{ data: TopProductItem[] }>(
         API_ENDPOINTS.DASHBOARD.TOP_PRODUCTS,
+        buildDateParams(dr)
+      );
+      return data.data || [];
+    },
+  });
+}
+
+export function useDashboardTopCustomers(dr?: DateRangeParams) {
+  return useQuery({
+    queryKey: ["dashboard-top-customers", dr?.from?.toISOString(), dr?.to?.toISOString()],
+    queryFn: async (): Promise<TopCustomerItem[]> => {
+      const data = await apiClient.get<{ data: TopCustomerItem[] }>(
+        API_ENDPOINTS.DASHBOARD.TOP_CUSTOMERS,
         buildDateParams(dr)
       );
       return data.data || [];

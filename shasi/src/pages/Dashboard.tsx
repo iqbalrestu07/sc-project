@@ -13,10 +13,11 @@ import {
   ShoppingCart,
   TrendingUp,
   Receipt,
+  Crown,
 } from "lucide-react";
 import { PatientFormDialog } from "@/components/patients";
 import { useAuth } from "@/contexts/AuthContext";
-import { useDashboardStats, useDashboardRevenue, useDashboardAppointmentsToday } from "@/hooks/useDashboard";
+import { useDashboardStats, useDashboardRevenue, useDashboardAppointmentsToday, useDashboardTopCustomers } from "@/hooks/useDashboard";
 import { useCommissions } from "@/hooks/useCommissions";
 import { useProducts } from "@/hooks/useProducts";
 import { DateRangeFilter, type PeriodPreset } from "@/components/filters";
@@ -56,6 +57,7 @@ export default function Dashboard() {
   const { data: stats } = useDashboardStats(backendDateRange);
   const { data: revenuePoints } = useDashboardRevenue(backendDateRange);
   const { data: appointmentsToday } = useDashboardAppointmentsToday();
+  const { data: topCustomers } = useDashboardTopCustomers(backendDateRange);
   const { commissions } = useCommissions(hasPermission("commissions:read"));
   const { products } = useProducts(hasPermission("products:read"));
 
@@ -374,6 +376,82 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Top Customers */}
+      <div className="mt-6">
+        <Card className="shadow-clinic">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Crown className="h-5 w-5 text-yellow-500" />
+              Top 5 Customer
+            </CardTitle>
+            <CardDescription>
+              Pelanggan dengan total pengeluaran tertinggi
+              {dateFilter.preset !== "all" && dateFilter.from && dateFilter.to
+                ? ` · ${format(dateFilter.from, "dd MMM", { locale: id })} – ${format(dateFilter.to, "dd MMM yyyy", { locale: id })}`
+                : " · Sepanjang waktu"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!topCustomers || topCustomers.length === 0 ? (
+              <div className="py-10 flex items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/30">
+                <p className="text-muted-foreground text-sm">Belum ada data transaksi</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {topCustomers.map((customer, idx) => {
+                  const rankColors = [
+                    "text-yellow-500",
+                    "text-slate-400",
+                    "text-amber-600",
+                    "text-muted-foreground",
+                    "text-muted-foreground",
+                  ];
+                  const rankBg = [
+                    "bg-yellow-50 border-yellow-200",
+                    "bg-slate-50 border-slate-200",
+                    "bg-amber-50 border-amber-200",
+                    "bg-muted/40 border-border",
+                    "bg-muted/40 border-border",
+                  ];
+                  return (
+                    <div
+                      key={customer.patient_id}
+                      className={`flex items-center gap-3 p-3 rounded-lg border ${rankBg[idx] ?? "bg-muted/40 border-border"}`}
+                    >
+                      {/* Rank number */}
+                      <span className={`text-lg font-bold w-6 text-center shrink-0 ${rankColors[idx] ?? "text-muted-foreground"}`}>
+                        {idx + 1}
+                      </span>
+
+                      {/* Avatar placeholder */}
+                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <span className="text-sm font-semibold text-primary">
+                          {customer.full_name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+
+                      {/* Name + code */}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate">{customer.full_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {customer.patient_code} · {customer.tx_count} transaksi
+                        </p>
+                      </div>
+
+                      {/* Spending */}
+                      <div className="text-right shrink-0">
+                        <p className="font-bold text-sm">{formatPrice(customer.total_spend)}</p>
+                        <p className="text-xs text-muted-foreground">total spend</p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>

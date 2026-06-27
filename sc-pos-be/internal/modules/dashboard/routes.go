@@ -11,5 +11,6 @@ func RegisterRoutes(router gin.IRouter, canReadReports gin.HandlerFunc) {
 	router.GET("/dashboard/revenue", canReadReports, handler.Revenue)
 	router.GET("/dashboard/top-services", canReadReports, handler.TopServices)
 	router.GET("/dashboard/top-products", canReadReports, handler.TopProducts)
+	router.GET("/dashboard/top-customers", canReadReports, handler.TopCustomers)
 	router.GET("/dashboard/appointments-today", canReadReports, handler.AppointmentsToday)
 }

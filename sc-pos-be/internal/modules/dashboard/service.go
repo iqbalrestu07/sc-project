@@ -27,6 +27,10 @@ func (s *Service) TopProducts(dr DateRange, orgID string) ([]TopItem, error) {
 	return s.repo.TopProducts(dr, orgID)
 }
 
+func (s *Service) TopCustomers(dr DateRange, orgID string, limit int) ([]TopCustomerRow, error) {
+	return s.repo.TopCustomers(dr, orgID, limit)
+}
+
 func (s *Service) AppointmentsToday(orgID string) ([]AppointmentTodayRow, error) {
 	return s.repo.AppointmentsToday(orgID)
 }

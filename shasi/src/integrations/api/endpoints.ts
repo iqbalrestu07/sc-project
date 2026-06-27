@@ -96,6 +96,7 @@ export const API_ENDPOINTS = {
         REVENUE: "/dashboard/revenue",
         TOP_SERVICES: "/dashboard/top-services",
         TOP_PRODUCTS: "/dashboard/top-products",
+        TOP_CUSTOMERS: "/dashboard/top-customers",
         APPOINTMENTS_TODAY: "/dashboard/appointments-today",
     },
 

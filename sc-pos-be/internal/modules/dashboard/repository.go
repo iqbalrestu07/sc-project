@@ -237,6 +237,70 @@ func scanTopItems(rows *sql.Rows) ([]TopItem, error) {
 	return result, nil
 }
 
+// TopCustomerRow holds aggregated spending data per patient.
+type TopCustomerRow struct {
+	PatientID   string  `json:"patient_id"`
+	PatientCode string  `json:"patient_code"`
+	FullName    string  `json:"full_name"`
+	TotalSpend  float64 `json:"total_spend"`
+	TxCount     int     `json:"tx_count"`
+}
+
+func (r *Repository) TopCustomers(dr DateRange, orgID string, limit int) ([]TopCustomerRow, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+	var rows *sql.Rows
+	var err error
+	if dr.From != nil && dr.To != nil {
+		rows, err = r.db.Query(`
+			SELECT p.id, p.patient_code, p.full_name,
+			       COALESCE(SUM(t.total_amount), 0)::float8  AS total_spend,
+			       COUNT(t.id)                               AS tx_count
+			FROM transactions t
+			JOIN patients p ON p.id = t.patient_id
+			WHERE t.payment_status = 'paid'
+			  AND COALESCE(t.paid_at, t.updated_at) >= $1
+			  AND COALESCE(t.paid_at, t.updated_at) < $2
+			  AND (t.organization_id = $3 OR ($3::text = '' AND t.organization_id IS NULL))
+			GROUP BY p.id, p.patient_code, p.full_name
+			ORDER BY total_spend DESC
+			LIMIT $4
+		`, dr.From, dr.To, orgID, limit)
+	} else {
+		rows, err = r.db.Query(`
+			SELECT p.id, p.patient_code, p.full_name,
+			       COALESCE(SUM(t.total_amount), 0)::float8  AS total_spend,
+			       COUNT(t.id)                               AS tx_count
+			FROM transactions t
+			JOIN patients p ON p.id = t.patient_id
+			WHERE t.payment_status = 'paid'
+			  AND (t.organization_id = $1 OR ($1::text = '' AND t.organization_id IS NULL))
+			GROUP BY p.id, p.patient_code, p.full_name
+			ORDER BY total_spend DESC
+			LIMIT $2
+		`, orgID, limit)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query top customers: %w", err)
+	}
+	defer rows.Close()
+
+	var result []TopCustomerRow
+	for rows.Next() {
+		var row TopCustomerRow
+		if err := rows.Scan(&row.PatientID, &row.PatientCode, &row.FullName,
+			&row.TotalSpend, &row.TxCount); err != nil {
+			return nil, fmt.Errorf("failed to scan top customer: %w", err)
+		}
+		result = append(result, row)
+	}
+	if result == nil {
+		result = []TopCustomerRow{}
+	}
+	return result, nil
+}
+
 type AppointmentTodayRow struct {
 	ID          string    `json:"id"`
 	ScheduledAt time.Time `json:"scheduled_at"`

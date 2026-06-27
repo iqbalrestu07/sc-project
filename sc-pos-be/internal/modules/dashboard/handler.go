@@ -71,6 +71,12 @@ func (h *Handler) TopProducts(c *gin.Context) {
 	respond(c, data, err)
 }
 
+func (h *Handler) TopCustomers(c *gin.Context) {
+	orgID := c.GetString("org_id")
+	data, err := h.service.TopCustomers(parseDateRange(c), orgID, 5)
+	respond(c, data, err)
+}
+
 func (h *Handler) AppointmentsToday(c *gin.Context) {
 	orgID := c.GetString("org_id")
 	data, err := h.service.AppointmentsToday(orgID)
