@@ -52,21 +52,23 @@ func (h *Handler) UploadLogo(c *gin.Context) {
 
 // PublicClinicInfo returns a safe subset of clinic settings for public pages
 // (landing page etc.) — no authentication required.
+// It reads directly from the repository to avoid the auto-create side-effect
+// that GetClinic() triggers when no row exists yet.
 func (h *Handler) PublicClinicInfo(c *gin.Context) {
-	// Try to resolve org from query param or X-Organization-ID header
-	// so multi-tenant landing pages work correctly.
-	orgID := c.GetString("org_id")
-	if orgID == "" {
-		orgID = c.Query("org_id")
-	}
-
-	s, err := h.service.GetClinic(orgID)
+	s, err := h.service.GetClinicPublic()
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if s == nil {
-		utils.SuccessResponse(c, http.StatusOK, gin.H{})
+		// No settings configured yet — return empty object so frontend handles gracefully.
+		utils.SuccessResponse(c, http.StatusOK, gin.H{
+			"clinic_name":    nil,
+			"address":        nil,
+			"phone":          nil,
+			"email":          nil,
+			"maps_embed_url": nil,
+		})
 		return
 	}
 	utils.SuccessResponse(c, http.StatusOK, gin.H{

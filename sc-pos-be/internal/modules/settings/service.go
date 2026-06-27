@@ -33,6 +33,13 @@ func (s *Service) GetClinic(orgID string) (*models.ClinicSettings, error) {
 	return defaults, nil
 }
 
+// GetClinicPublic returns the first clinic settings without org filtering
+// and without auto-creating a default row.
+// Use this for public/unauthenticated endpoints (e.g. landing page).
+func (s *Service) GetClinicPublic() (*models.ClinicSettings, error) {
+	return s.repo.GetFirstClinic()
+}
+
 func (s *Service) UpdateClinic(req models.ClinicSettings, orgID, userByID string) (*models.ClinicSettings, error) {
 	current, err := s.GetClinic(orgID)
 	if err != nil {
@@ -85,4 +92,5 @@ func mergeClinicSettings(current *models.ClinicSettings, req models.ClinicSettin
 	current.InvoiceHeaderTitle = req.InvoiceHeaderTitle
 	current.InvoiceHeaderDescription = req.InvoiceHeaderDescription
 	current.InvoiceFooterText = req.InvoiceFooterText
+	current.MapsEmbedUrl = req.MapsEmbedUrl
 }

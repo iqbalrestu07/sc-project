@@ -30,6 +30,28 @@ func (r *Repository) GetClinic(orgID string) (*models.ClinicSettings, error) {
 		ORDER BY created_at ASC
 		LIMIT 1
 	`, orgID)
+	return scanAndReturn(row)
+}
+
+// GetFirstClinic returns the first active clinic settings regardless of org,
+// intended for public/unauthenticated access in single-tenant deployments.
+func (r *Repository) GetFirstClinic() (*models.ClinicSettings, error) {
+	row := r.db.QueryRow(`
+		SELECT id, clinic_name, address, phone, email, tax_rate, tax_inclusive,
+		       low_stock_alerts, appointment_reminders, expiry_warnings,
+		       reminder_hours_before, whatsapp_reminder_enabled, email_reminder_enabled,
+		       whatsapp_business_phone_id, invoice_header_title,
+		       invoice_header_description, invoice_footer_text, maps_embed_url,
+		       created_at, updated_at
+		FROM clinic_settings
+		WHERE deleted_at IS NULL
+		ORDER BY created_at ASC
+		LIMIT 1
+	`)
+	return scanAndReturn(row)
+}
+
+func scanAndReturn(row *sql.Row) (*models.ClinicSettings, error) {
 	settings, err := scanClinicSettings(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
