@@ -72,6 +72,36 @@ import type { Product } from "@/types/product";
 import type { ConsumableUsageFilters, UsagePurpose } from "@/types/consumable";
 import { USAGE_PURPOSES, CONSUMABLE_CATEGORIES } from "@/types/consumable";
 
+import { Component, ErrorInfo, ReactNode } from "react";
+
+class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean, error: Error | null}> {
+  constructor(props: {children: ReactNode}) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 m-4 bg-red-50 border border-red-200 rounded-lg text-red-900">
+          <h2 className="text-lg font-semibold mb-2">Terjadi Kesalahan di Tab Ini</h2>
+          <pre className="text-xs bg-white p-3 rounded overflow-auto border border-red-100">
+            {this.state.error?.toString()}
+            {"\n\n"}
+            {this.state.error?.stack}
+          </pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatDateSafe(dateString: string | undefined | null, formatStr: string): string {
@@ -580,16 +610,16 @@ function HistoryTab({ consumableProducts }: HistoryTabProps) {
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Produk</Label>
               <Select
-                value={tempFilters.productId ?? ""}
+                value={tempFilters.productId ?? "all"}
                 onValueChange={(v) =>
-                  setTempFilters((f) => ({ ...f, productId: v || undefined }))
+                  setTempFilters((f) => ({ ...f, productId: v === "all" ? undefined : v }))
                 }
               >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="Semua produk" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Semua produk</SelectItem>
+                  <SelectItem value="all">Semua produk</SelectItem>
                   {consumableProducts.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
@@ -603,11 +633,11 @@ function HistoryTab({ consumableProducts }: HistoryTabProps) {
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Tujuan</Label>
               <Select
-                value={tempFilters.purpose ?? ""}
+                value={tempFilters.purpose ?? "all"}
                 onValueChange={(v) =>
                   setTempFilters((f) => ({
                     ...f,
-                    purpose: (v || undefined) as any,
+                    purpose: v === "all" ? undefined : (v as any),
                   }))
                 }
               >
@@ -615,7 +645,7 @@ function HistoryTab({ consumableProducts }: HistoryTabProps) {
                   <SelectValue placeholder="Semua tujuan" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Semua tujuan</SelectItem>
+                  <SelectItem value="all">Semua tujuan</SelectItem>
                   {USAGE_PURPOSES.map((p) => (
                     <SelectItem key={p.value} value={p.value}>
                       {p.label}
@@ -1131,7 +1161,9 @@ export default function ConsumableItems() {
 
         {/* ═══ TAB 2: Riwayat Pemakaian ═══ */}
         <TabsContent value="history" className="mt-4">
-          <HistoryTab consumableProducts={consumableProducts} />
+          <ErrorBoundary>
+            <HistoryTab consumableProducts={consumableProducts} />
+          </ErrorBoundary>
         </TabsContent>
       </Tabs>
 
