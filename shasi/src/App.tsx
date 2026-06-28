@@ -32,6 +32,7 @@ import CmsManagement from "./pages/CmsManagement";
 import Categories from "./pages/Categories";
 import RBACManagement from "./pages/RBACManagement";
 import StockOpname from "./pages/StockOpname";
+import ConsumableItems from "./pages/ConsumableItems";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -110,6 +111,12 @@ function AppRoutes() {
       <Route path="/stock-opname" element={
         <ProtectedRoute requirePermission="products:write">
           <MainLayout onSignOut={signOut}><StockOpname /></MainLayout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/consumable-items" element={
+        <ProtectedRoute requirePermission="consumables:read">
+          <MainLayout onSignOut={signOut}><ConsumableItems /></MainLayout>
         </ProtectedRoute>
       } />
 

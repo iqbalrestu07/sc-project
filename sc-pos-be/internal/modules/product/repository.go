@@ -20,7 +20,9 @@ func (r *Repository) List(orgID string) ([]models.Product, error) {
 	rows, err := r.db.Query(`
 		SELECT id, name, category, sku, supplier, purchase_price, selling_price,
 		       COALESCE(current_stock, 0), COALESCE(minimum_stock, 5), unit,
-		       expiry_date, COALESCE(is_active, true), created_at, updated_at
+		       expiry_date, COALESCE(is_active, true),
+		       COALESCE(is_consumable, false), consumable_category,
+		       created_at, updated_at
 		FROM products
 		WHERE COALESCE(is_active, true) = true
 		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
@@ -53,7 +55,9 @@ func (r *Repository) Get(id, orgID string) (*models.Product, error) {
 	row := r.db.QueryRow(`
 		SELECT id, name, category, sku, supplier, purchase_price, selling_price,
 		       COALESCE(current_stock, 0), COALESCE(minimum_stock, 5), unit,
-		       expiry_date, COALESCE(is_active, true), created_at, updated_at
+		       expiry_date, COALESCE(is_active, true),
+		       COALESCE(is_consumable, false), consumable_category,
+		       created_at, updated_at
 		FROM products
 		WHERE id = $1 AND COALESCE(is_active, true) = true
 		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
@@ -77,13 +81,15 @@ func (r *Repository) Create(product *models.Product, orgID string) error {
 	_, err := r.db.Exec(`
 		INSERT INTO products (
 			id, name, category, sku, supplier, purchase_price, selling_price,
-			current_stock, minimum_stock, unit, expiry_date, is_active, created_at, updated_at,
-			organization_id, created_by
+			current_stock, minimum_stock, unit, expiry_date, is_active,
+			is_consumable, consumable_category,
+			created_at, updated_at, organization_id, created_by
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 	`, product.ID, product.Name, product.Category, product.Sku, product.Supplier,
 		product.PurchasePrice, product.SellingPrice, product.CurrentStock,
 		product.MinimumStock, product.Unit, product.ExpiryDate, product.IsActive,
+		product.IsConsumable, product.ConsumableCategory,
 		product.CreatedAt, product.UpdatedAt, nullableString(orgID), createdByVal)
 	if err != nil {
 		return fmt.Errorf("failed to create product: %w", err)
@@ -101,13 +107,16 @@ func (r *Repository) Update(id string, product *models.Product, orgID string) er
 		SET name = $1, category = $2, sku = $3, supplier = $4,
 		    purchase_price = $5, selling_price = $6, current_stock = $7,
 		    minimum_stock = $8, unit = $9, expiry_date = $10,
-		    updated_by = $11, updated_at = NOW()
-		WHERE id = $12 AND COALESCE(is_active, true) = true
-		  AND (organization_id = $13 OR ($13::text = '' AND organization_id IS NULL))
+		    is_consumable = $11, consumable_category = $12,
+		    updated_by = $13, updated_at = NOW()
+		WHERE id = $14 AND COALESCE(is_active, true) = true
+		  AND (organization_id = $15 OR ($15::text = '' AND organization_id IS NULL))
 		  AND deleted_at IS NULL`,
 		product.Name, product.Category, product.Sku, product.Supplier,
 		product.PurchasePrice, product.SellingPrice, product.CurrentStock,
-		product.MinimumStock, product.Unit, product.ExpiryDate, updatedByVal, id, orgID)
+		product.MinimumStock, product.Unit, product.ExpiryDate,
+		product.IsConsumable, product.ConsumableCategory,
+		updatedByVal, id, orgID)
 	if err != nil {
 		return fmt.Errorf("failed to update product: %w", err)
 	}
@@ -239,7 +248,9 @@ func scanProduct(scanner productScanner) (models.Product, error) {
 		&product.ID, &product.Name, &product.Category, &product.Sku,
 		&product.Supplier, &product.PurchasePrice, &product.SellingPrice,
 		&product.CurrentStock, &product.MinimumStock, &product.Unit,
-		&product.ExpiryDate, &product.IsActive, &product.CreatedAt, &product.UpdatedAt,
+		&product.ExpiryDate, &product.IsActive,
+		&product.IsConsumable, &product.ConsumableCategory,
+		&product.CreatedAt, &product.UpdatedAt,
 	)
 	if err != nil {
 		return models.Product{}, err

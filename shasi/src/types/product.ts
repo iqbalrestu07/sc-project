@@ -26,6 +26,8 @@ export interface Product {
   unit?: string | null;
   expiry_date?: string | null;
   is_active: boolean;
+  is_consumable?: boolean;
+  consumable_category?: string | null;
   created_at: string;
   updated_at: string;
 }

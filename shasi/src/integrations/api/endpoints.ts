@@ -122,6 +122,14 @@ export const API_ENDPOINTS = {
         CREATE: "/stock-movements",
     },
 
+    // Consumable Items (produk habis pakai)
+    CONSUMABLE_ITEMS: {
+        LIST: "/consumable-items",
+        USAGE_LIST: "/consumable-items/usage",
+        USAGE_CREATE: "/consumable-items/usage",
+        MARK_CONSUMABLE: (id: string) => `/products/${id}/mark-consumable`,
+    },
+
     // Service Consumables
     SERVICE_CONSUMABLES: {
         LIST: "/service-consumables",                         // ?service_id=uuid

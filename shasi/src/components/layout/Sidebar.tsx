@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Calendar, Sparkles, Package, Tag,
   ShoppingCart, DollarSign, UserCog, Settings, Menu, X, LogOut,
   ChevronLeft, Globe, MessageCircle, Shield, Building2, ChevronDown,
-  FolderOpen, ClipboardList,
+  FolderOpen, ClipboardList, FlaskConical,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { OrgSwitcher } from "./OrgSwitcher";
@@ -57,10 +57,11 @@ const NAV_STRUCTURE: NavEntry[] = [
       label: "Inventory Management",
       icon: FolderOpen,
       items: [
-        { to: "/services",      icon: Sparkles,      label: "Services",      permission: "services:read" },
-        { to: "/products",      icon: Package,       label: "Products",      permission: "products:read" },
-        { to: "/categories",    icon: Tag,           label: "Categories",    permission: "categories:read" },
-        { to: "/stock-opname",  icon: ClipboardList, label: "Stock Opname",  permission: "products:write" },
+        { to: "/services",          icon: Sparkles,      label: "Services",            permission: "services:read" },
+        { to: "/products",          icon: Package,       label: "Products",            permission: "products:read" },
+        { to: "/categories",        icon: Tag,           label: "Categories",          permission: "categories:read" },
+        { to: "/stock-opname",      icon: ClipboardList, label: "Stock Opname",        permission: "products:write" },
+        { to: "/consumable-items",  icon: FlaskConical,  label: "Produk Habis Pakai", permission: "consumables:read" },
       ],
     },
   },

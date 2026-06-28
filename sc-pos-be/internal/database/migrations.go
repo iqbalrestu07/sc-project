@@ -18,6 +18,9 @@ func RunMigrations() error {
 		addClinicSettingsMapsEmbed,
 		seedDefaultPermissions,
 		seedRolePermissions,
+		addConsumableFlag,
+		addConsumableUsageLogs,
+		addConsumablePermissions,
 	}
 
 	for i, migration := range migrations {
@@ -441,6 +444,54 @@ ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS discount_type VARCHAR(50)
 // embed iframe src URL that is displayed on the landing page contact section.
 const addClinicSettingsMapsEmbed = `
 ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS maps_embed_url TEXT;
+`
+
+// addConsumableFlag marks products as consumable items and tracks their usage category.
+const addConsumableFlag = `
+ALTER TABLE products ADD COLUMN IF NOT EXISTS is_consumable BOOLEAN DEFAULT false;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS consumable_category VARCHAR(100);
+CREATE INDEX IF NOT EXISTS idx_products_consumable ON products(is_consumable) WHERE deleted_at IS NULL;
+`
+
+// addConsumableUsageLogs creates the consumable_usage_logs table which stores detailed
+// records of when and why consumable products were used / dispensed.
+const addConsumableUsageLogs = `
+CREATE TABLE IF NOT EXISTS consumable_usage_logs (
+	id VARCHAR(36) PRIMARY KEY,
+	product_id VARCHAR(36) NOT NULL REFERENCES products(id),
+	quantity DECIMAL(10,3) NOT NULL,
+	usage_purpose VARCHAR(100) NOT NULL,
+	reference_id VARCHAR(36),
+	reference_type VARCHAR(50),
+	patient_name VARCHAR(255),
+	service_name VARCHAR(255),
+	notes TEXT,
+	organization_id VARCHAR(36) REFERENCES organizations(id),
+	created_by VARCHAR(36) REFERENCES users(id),
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_consumable_usage_product ON consumable_usage_logs(product_id);
+CREATE INDEX IF NOT EXISTS idx_consumable_usage_org ON consumable_usage_logs(organization_id);
+CREATE INDEX IF NOT EXISTS idx_consumable_usage_purpose ON consumable_usage_logs(usage_purpose);
+`
+
+// addConsumablePermissions seeds the consumables:read and consumables:write permissions
+// and assigns them to the appropriate roles.
+const addConsumablePermissions = `
+INSERT INTO permissions (id, resource, action, description) VALUES
+	('consumables:read',  'consumables', 'read',  'View consumable products and usage history'),
+	('consumables:write', 'consumables', 'write', 'Record consumable product usage')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO role_permissions (id, role, permission_id) VALUES
+	(gen_random_uuid()::varchar, 'admin',     'consumables:read'),
+	(gen_random_uuid()::varchar, 'admin',     'consumables:write'),
+	(gen_random_uuid()::varchar, 'doctor',    'consumables:read'),
+	(gen_random_uuid()::varchar, 'doctor',    'consumables:write'),
+	(gen_random_uuid()::varchar, 'therapist', 'consumables:read'),
+	(gen_random_uuid()::varchar, 'therapist', 'consumables:write'),
+	(gen_random_uuid()::varchar, 'cashier',   'consumables:read')
+ON CONFLICT (role, permission_id) DO NOTHING;
 `
 
 const backfillCommissionOrgID = `

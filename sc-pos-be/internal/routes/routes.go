@@ -8,6 +8,7 @@ import (
 	"github.com/sc-pos/backend/internal/modules/cms"
 	"github.com/sc-pos/backend/internal/modules/commission"
 	"github.com/sc-pos/backend/internal/modules/consumable"
+	consumableItem "github.com/sc-pos/backend/internal/modules/consumable_item"
 	"github.com/sc-pos/backend/internal/modules/dashboard"
 	orgModule "github.com/sc-pos/backend/internal/modules/organization"
 	"github.com/sc-pos/backend/internal/modules/patient"
@@ -76,6 +77,8 @@ func SetupRoutes(router *gin.Engine) {
 		canWriteCMS := middleware.RequirePermission("cms:write")
 		canWriteRBAC := middleware.RequirePermission("rbac:write")
 		canOrgAdmin := middleware.RequirePermission("organization:write")
+		canReadConsumables := middleware.RequirePermission("consumables:read")
+		canWriteConsumables := middleware.RequirePermission("consumables:write")
 		_ = canReadComm
 		_ = canReadReports
 		_ = canReadSettings
@@ -131,6 +134,9 @@ func SetupRoutes(router *gin.Engine) {
 
 		// ── Service consumables ───────────────────────────────────────────
 		consumable.RegisterRoutes(protectedAPI, adminOnly)
+
+		// ── Consumable items (habis pakai) ────────────────────────────────
+		consumableItem.RegisterRoutes(protectedAPI, canReadConsumables, canWriteConsumables)
 
 		// ── WhatsApp ──────────────────────────────────────────────────────
 		whatsapp.RegisterRoutes(protectedAPI, cashierAndAdmin)

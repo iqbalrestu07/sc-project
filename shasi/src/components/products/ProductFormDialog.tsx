@@ -15,9 +15,12 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -25,9 +28,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { FlaskConical } from "lucide-react";
 import { useProducts, useProductCategories } from "@/hooks/useProducts";
 import type { Product } from "@/types/product";
 import { PRODUCT_CATEGORIES, PRODUCT_UNITS } from "@/types/product";
+import { CONSUMABLE_CATEGORIES } from "@/types/consumable";
 
 const formSchema = z.object({
   name: z.string().min(1, "Product name is required"),
@@ -59,10 +65,15 @@ export function ProductFormDialog({
   const { categories: apiCategories } = useProductCategories();
   const isEditing = !!product;
 
+  // Consumable state — managed outside react-hook-form since it's a boolean + optional string
+  const [isConsumable, setIsConsumable] = useState(false);
+  const [consumableCategory, setConsumableCategory] = useState<string>("");
+
   // Use API categories if available, fall back to static list
-  const categoryOptions = apiCategories.length > 0
-    ? apiCategories.map((c) => ({ value: c.name.toLowerCase(), label: c.name }))
-    : PRODUCT_CATEGORIES;
+  const categoryOptions =
+    apiCategories.length > 0
+      ? apiCategories.map((c) => ({ value: c.name.toLowerCase(), label: c.name }))
+      : PRODUCT_CATEGORIES;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -94,6 +105,8 @@ export function ProductFormDialog({
         supplier: product.supplier || "",
         expiry_date: product.expiry_date || "",
       });
+      setIsConsumable(product.is_consumable ?? false);
+      setConsumableCategory(product.consumable_category ?? "");
     } else {
       form.reset({
         name: "",
@@ -107,18 +120,20 @@ export function ProductFormDialog({
         supplier: "",
         expiry_date: "",
       });
+      setIsConsumable(false);
+      setConsumableCategory("");
     }
   }, [product, form]);
 
   const onSubmit = async (values: FormValues) => {
     try {
-      // Clean up empty strings for optional fields
       const cleanedValues = {
         ...values,
-        name: values.name,
         sku: values.sku || null,
         supplier: values.supplier || null,
         expiry_date: values.expiry_date || null,
+        is_consumable: isConsumable,
+        consumable_category: isConsumable && consumableCategory ? consumableCategory : null,
       };
 
       if (isEditing && product) {
@@ -138,8 +153,17 @@ export function ProductFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
             {isEditing ? "Edit Product" : "Add New Product"}
+            {isConsumable && (
+              <Badge
+                variant="secondary"
+                className="bg-rose-100 text-rose-700 border-rose-200 gap-1 text-xs font-normal"
+              >
+                <FlaskConical className="h-3 w-3" />
+                Habis Pakai
+              </Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -228,7 +252,74 @@ export function ProductFormDialog({
               </div>
             </div>
 
+            {/* ── Consumable Section ─────────────────────────────────────── */}
+            <Separator />
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-muted-foreground">
+                Tipe Produk
+              </h3>
+
+              {/* Toggle */}
+              <div
+                className={`flex items-start gap-4 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
+                  isConsumable
+                    ? "border-rose-200 bg-rose-50/60"
+                    : "border-border bg-muted/30 hover:bg-muted/60"
+                }`}
+                onClick={() => setIsConsumable((v) => !v)}
+              >
+                <Switch
+                  id="is-consumable-toggle"
+                  checked={isConsumable}
+                  onCheckedChange={setIsConsumable}
+                  onClick={(e) => e.stopPropagation()}
+                  className="mt-0.5"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <FlaskConical
+                      className={`h-4 w-4 ${isConsumable ? "text-rose-600" : "text-muted-foreground"}`}
+                    />
+                    <span
+                      className={`text-sm font-medium ${isConsumable ? "text-rose-800" : "text-foreground"}`}
+                    >
+                      Produk Habis Pakai
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Aktifkan jika produk ini digunakan dalam treatment/layanan dan stoknya perlu ditracking per pemakaian
+                  </p>
+                </div>
+              </div>
+
+              {/* Consumable category — shown only when toggle is on */}
+              {isConsumable && (
+                <div className="space-y-1.5 pl-1">
+                  <label className="text-sm font-medium">
+                    Kategori Habis Pakai
+                    <span className="text-muted-foreground font-normal ml-1">(opsional)</span>
+                  </label>
+                  <Select
+                    value={consumableCategory}
+                    onValueChange={setConsumableCategory}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih kategori habis pakai..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CONSUMABLE_CATEGORIES.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>
+                          {c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
             {/* Pricing */}
+            <Separator />
             <div className="space-y-4">
               <h3 className="text-sm font-medium text-muted-foreground">
                 Pricing
@@ -263,7 +354,7 @@ export function ProductFormDialog({
               </div>
             </div>
 
-            {/* Stock */}
+            {/* Stock / Inventory */}
             <div className="space-y-4">
               <h3 className="text-sm font-medium text-muted-foreground">
                 Inventory
