@@ -11,21 +11,25 @@ import (
 )
 
 type Handler struct {
-	service *Service
-	orgRepo *organization.Repository
-	rbacSvc *rbac.Service
+	service Service
+	orgSvc  organization.Service
+	rbacSvc rbac.Service
 }
 
-func NewHandler(service *Service) *Handler {
+func NewHandler(service Service, orgSvc organization.Service, rbacSvc rbac.Service) *Handler {
 	return &Handler{
 		service: service,
-		orgRepo: organization.NewRepository(),
-		rbacSvc: rbac.NewService(rbac.NewRepository()),
+		orgSvc:  orgSvc,
+		rbacSvc: rbacSvc,
 	}
 }
 
 func NewModule() *Handler {
-	return NewHandler(NewService(NewRepository()))
+	return NewHandler(
+		NewService(NewRepository()),
+		organization.NewService(organization.NewRepository()),
+		rbac.NewService(rbac.NewRepository()),
+	)
 }
 
 func (h *Handler) Login(c *gin.Context) {
@@ -77,7 +81,7 @@ func (h *Handler) AdminRegister(c *gin.Context) {
 	// Auto-add newly created user to admin's current org
 	orgID, hasOrg := c.Get("org_id")
 	if hasOrg && orgID != "" {
-		_ = h.orgRepo.AddMember(orgID.(string), payload.User.ID, req.Role, "")
+		_ = h.orgSvc.AddMember(orgID.(string), payload.User.ID, req.Role, "")
 	}
 
 	authResponse(c, http.StatusCreated, payload)

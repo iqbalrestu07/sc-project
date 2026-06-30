@@ -12,11 +12,15 @@ import (
 )
 
 type Handler struct {
-	repo *Repository
+	service Service
+}
+
+func NewHandler(service Service) *Handler {
+	return &Handler{service: service}
 }
 
 func NewModule() *Handler {
-	return &Handler{repo: NewRepository()}
+	return NewHandler(NewService(NewRepository()))
 }
 
 // ListProducts godoc
@@ -24,7 +28,7 @@ func NewModule() *Handler {
 // Returns all products with is_consumable=true for the org.
 func (h *Handler) ListProducts(c *gin.Context) {
 	orgID := c.GetString("org_id")
-	products, err := h.repo.ListConsumableProducts(orgID)
+	products, err := h.service.ListConsumableProducts(orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -56,7 +60,7 @@ func (h *Handler) ListUsageLogs(c *gin.Context) {
 		}
 	}
 
-	logs, err := h.repo.ListUsageLogs(params)
+	logs, err := h.service.ListUsageLogs(params)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -97,7 +101,7 @@ func (h *Handler) CreateUsageLog(c *gin.Context) {
 		req.CreatedBy = &userID
 	}
 
-	if err := h.repo.CreateUsageLog(&req, orgID); err != nil {
+	if err := h.service.CreateUsageLog(&req, orgID); err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -121,7 +125,7 @@ func (h *Handler) MarkConsumable(c *gin.Context) {
 		return
 	}
 
-	if err := h.repo.MarkConsumable(productID, orgID, userID, req.IsConsumable, req.ConsumableCategory); err != nil {
+	if err := h.service.MarkConsumable(productID, orgID, userID, req.IsConsumable, req.ConsumableCategory); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			utils.ErrorResponse(c, http.StatusNotFound, "product not found")
 			return

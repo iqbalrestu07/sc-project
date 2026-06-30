@@ -11,22 +11,31 @@ import (
 
 var ErrNotFound = errors.New("appointment not found")
 
-type Service struct {
+// Service is the public interface for the appointment module business logic.
+type Service interface {
+	List(orgID string, start, end *time.Time) ([]AppointmentWithRelations, error)
+	Get(id, orgID string) (*AppointmentWithRelations, error)
+	Create(req models.Appointment, userID *string, orgID string) (*AppointmentWithRelations, error)
+	Update(id, orgID, userID string, req models.Appointment) (*AppointmentWithRelations, error)
+	Delete(id, orgID, userID string) error
+}
+
+type service struct {
 	repo *Repository
 }
 
-func NewService(repo ...*Repository) *Service {
+func NewService(repo ...*Repository) Service {
 	if len(repo) > 0 {
-		return &Service{repo: repo[0]}
+		return &service{repo: repo[0]}
 	}
-	return &Service{repo: NewRepository()}
+	return &service{repo: NewRepository()}
 }
 
-func (s *Service) List(orgID string, start, end *time.Time) ([]AppointmentWithRelations, error) {
+func (s *service) List(orgID string, start, end *time.Time) ([]AppointmentWithRelations, error) {
 	return s.repo.List(orgID, start, end)
 }
 
-func (s *Service) Get(id, orgID string) (*AppointmentWithRelations, error) {
+func (s *service) Get(id, orgID string) (*AppointmentWithRelations, error) {
 	appointment, err := s.repo.Get(id, orgID)
 	if err != nil {
 		return nil, err
@@ -37,7 +46,7 @@ func (s *Service) Get(id, orgID string) (*AppointmentWithRelations, error) {
 	return appointment, nil
 }
 
-func (s *Service) Create(req models.Appointment, userID *string, orgID string) (*AppointmentWithRelations, error) {
+func (s *service) Create(req models.Appointment, userID *string, orgID string) (*AppointmentWithRelations, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.CreatedBy = userID
@@ -52,7 +61,7 @@ func (s *Service) Create(req models.Appointment, userID *string, orgID string) (
 	return s.Get(req.ID, orgID)
 }
 
-func (s *Service) Update(id, orgID, userID string, req models.Appointment) (*AppointmentWithRelations, error) {
+func (s *service) Update(id, orgID, userID string, req models.Appointment) (*AppointmentWithRelations, error) {
 	current, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
@@ -93,7 +102,7 @@ func (s *Service) Update(id, orgID, userID string, req models.Appointment) (*App
 	return s.Get(id, orgID)
 }
 
-func (s *Service) Delete(id, orgID, userID string) error {
+func (s *service) Delete(id, orgID, userID string) error {
 	if err := s.repo.Delete(id, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound

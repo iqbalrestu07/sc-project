@@ -10,11 +10,15 @@ import (
 )
 
 type Handler struct {
-	repo *Repository
+	service Service
+}
+
+func NewHandler(service Service) *Handler {
+	return &Handler{service: service}
 }
 
 func NewModule() *Handler {
-	return &Handler{repo: NewRepository()}
+	return NewHandler(NewService(NewRepository()))
 }
 
 func (h *Handler) List(c *gin.Context) {
@@ -40,7 +44,7 @@ func (h *Handler) List(c *gin.Context) {
 		}
 	}
 
-	movements, err := h.repo.List(params)
+	movements, err := h.service.List(params)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -74,7 +78,7 @@ func (h *Handler) Create(c *gin.Context) {
 		req.CreatedBy = &uid
 	}
 
-	if err := h.repo.Create(&req, orgID); err != nil {
+	if err := h.service.Create(&req, orgID); err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}

@@ -16,15 +16,28 @@ var (
 	ErrLastAdmin        = errors.New("cannot remove the last admin of an organization")
 )
 
-type Service struct {
+// Service is the public contract for organization business logic.
+type Service interface {
+	CreateOrg(name, description, createdBy string) (*models.Organization, error)
+	GetByID(id string) (*models.Organization, error)
+	Update(org *models.Organization, userByID string) error
+	Delete(orgID, userByID string) error
+	GetUserOrganizations(userID string) ([]models.OrganizationWithRole, error)
+	ListMembers(orgID string) ([]models.OrganizationMember, error)
+	AddMember(orgID, userID, role, addedBy string) error
+	UpdateMemberRole(orgID, userID, role, userByID string) error
+	RemoveMember(orgID, userID, userByID string) error
+}
+
+type service struct {
 	repo *Repository
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository) Service {
+	return &service{repo: repo}
 }
 
-func (s *Service) CreateOrg(name, description, createdBy string) (*models.Organization, error) {
+func (s *service) CreateOrg(name, description, createdBy string) (*models.Organization, error) {
 	slug, err := s.repo.GenerateUniqueSlug(name)
 	if err != nil {
 		return nil, err
@@ -54,7 +67,7 @@ func (s *Service) CreateOrg(name, description, createdBy string) (*models.Organi
 	return org, nil
 }
 
-func (s *Service) GetByID(id string) (*models.Organization, error) {
+func (s *service) GetByID(id string) (*models.Organization, error) {
 	org, err := s.repo.GetByID(id)
 	if err != nil {
 		return nil, err
@@ -65,7 +78,7 @@ func (s *Service) GetByID(id string) (*models.Organization, error) {
 	return org, nil
 }
 
-func (s *Service) Update(org *models.Organization, userByID string) error {
+func (s *service) Update(org *models.Organization, userByID string) error {
 	existing, err := s.repo.GetByID(org.ID)
 	if err != nil {
 		return err
@@ -76,7 +89,7 @@ func (s *Service) Update(org *models.Organization, userByID string) error {
 	return s.repo.Update(org, userByID)
 }
 
-func (s *Service) Delete(orgID, userByID string) error {
+func (s *service) Delete(orgID, userByID string) error {
 	existing, err := s.repo.GetByID(orgID)
 	if err != nil {
 		return err
@@ -87,28 +100,28 @@ func (s *Service) Delete(orgID, userByID string) error {
 	return s.repo.Delete(orgID, userByID)
 }
 
-func (s *Service) GetUserOrganizations(userID string) ([]models.OrganizationWithRole, error) {
+func (s *service) GetUserOrganizations(userID string) ([]models.OrganizationWithRole, error) {
 	return s.repo.GetUserOrganizations(userID)
 }
 
-func (s *Service) ListMembers(orgID string) ([]models.OrganizationMember, error) {
+func (s *service) ListMembers(orgID string) ([]models.OrganizationMember, error) {
 	return s.repo.ListMembers(orgID)
 }
 
-func (s *Service) AddMember(orgID, userID, role, addedBy string) error {
+func (s *service) AddMember(orgID, userID, role, addedBy string) error {
 	if !middleware.IsValidRole(role) {
 		return errors.New("invalid role")
 	}
 	return s.repo.AddMember(orgID, userID, role, addedBy)
 }
 
-func (s *Service) UpdateMemberRole(orgID, userID, role, userByID string) error {
+func (s *service) UpdateMemberRole(orgID, userID, role, userByID string) error {
 	if !middleware.IsValidRole(role) {
 		return errors.New("invalid role")
 	}
 	return s.repo.UpdateMemberRole(orgID, userID, role, userByID)
 }
 
-func (s *Service) RemoveMember(orgID, userID, userByID string) error {
+func (s *service) RemoveMember(orgID, userID, userByID string) error {
 	return s.repo.RemoveMember(orgID, userID, userByID)
 }

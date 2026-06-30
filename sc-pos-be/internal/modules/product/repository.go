@@ -73,6 +73,29 @@ func (r *Repository) Get(id, orgID string) (*models.Product, error) {
 	return &product, nil
 }
 
+func (r *Repository) GetByName(name, orgID string) (*models.Product, error) {
+	row := r.db.QueryRow(`
+		SELECT id, name, category, sku, supplier, purchase_price, selling_price,
+		       COALESCE(current_stock, 0), COALESCE(minimum_stock, 5), unit,
+		       expiry_date, COALESCE(is_active, true),
+		       COALESCE(is_consumable, false), consumable_category,
+		       created_at, updated_at
+		FROM products
+		WHERE LOWER(name) = LOWER($1) AND COALESCE(is_active, true) = true
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL
+		LIMIT 1
+	`, name, orgID)
+	product, err := scanProduct(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &product, nil
+}
+
 func (r *Repository) Create(product *models.Product, orgID string) error {
 	var createdByVal interface{}
 	if product.CreatedBy != nil && *product.CreatedBy != "" {

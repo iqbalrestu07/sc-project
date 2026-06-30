@@ -13,19 +13,31 @@ import (
 var ErrNotFound = errors.New("patient not found")
 var ErrSearchRequired = errors.New("search query required")
 
-type Service struct {
+// Service is the public interface for the patient module business logic.
+type Service interface {
+	List(orgID string) ([]models.Patient, error)
+	Get(id, orgID string) (*models.Patient, error)
+	Create(req models.Patient, userID, orgID string) (*models.Patient, error)
+	Update(id string, req models.Patient, userID, orgID string) (*models.Patient, error)
+	Delete(id, orgID, userID string) error
+	Search(query, orgID string) ([]models.Patient, error)
+	GetVisits(patientID string) ([]VisitSummary, error)
+	GetTransactions(patientID string) ([]TransactionSummary, error)
+}
+
+type service struct {
 	repo *Repository
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository) Service {
+	return &service{repo: repo}
 }
 
-func (s *Service) List(orgID string) ([]models.Patient, error) {
+func (s *service) List(orgID string) ([]models.Patient, error) {
 	return s.repo.GetAll(orgID)
 }
 
-func (s *Service) Get(id, orgID string) (*models.Patient, error) {
+func (s *service) Get(id, orgID string) (*models.Patient, error) {
 	patient, err := s.repo.GetByID(id, orgID)
 	if err != nil {
 		return nil, err
@@ -37,7 +49,7 @@ func (s *Service) Get(id, orgID string) (*models.Patient, error) {
 	return patient, nil
 }
 
-func (s *Service) Create(req models.Patient, userID, orgID string) (*models.Patient, error) {
+func (s *service) Create(req models.Patient, userID, orgID string) (*models.Patient, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.PatientCode = "PAT-" + strings.ToUpper(uuid.New().String()[:8])
@@ -57,7 +69,7 @@ func (s *Service) Create(req models.Patient, userID, orgID string) (*models.Pati
 	return &req, nil
 }
 
-func (s *Service) Update(id string, req models.Patient, userID, orgID string) (*models.Patient, error) {
+func (s *service) Update(id string, req models.Patient, userID, orgID string) (*models.Patient, error) {
 	patient, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
@@ -95,7 +107,7 @@ func (s *Service) Update(id string, req models.Patient, userID, orgID string) (*
 	return patient, nil
 }
 
-func (s *Service) Delete(id, orgID, userID string) error {
+func (s *service) Delete(id, orgID, userID string) error {
 	if err := s.repo.Delete(id, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
@@ -106,15 +118,15 @@ func (s *Service) Delete(id, orgID, userID string) error {
 	return nil
 }
 
-func (s *Service) GetVisits(patientID string) ([]VisitSummary, error) {
+func (s *service) GetVisits(patientID string) ([]VisitSummary, error) {
 	return s.repo.GetVisits(patientID)
 }
 
-func (s *Service) GetTransactions(patientID string) ([]TransactionSummary, error) {
+func (s *service) GetTransactions(patientID string) ([]TransactionSummary, error) {
 	return s.repo.GetTransactions(patientID)
 }
 
-func (s *Service) Search(query, orgID string) ([]models.Patient, error) {
+func (s *service) Search(query, orgID string) ([]models.Patient, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, ErrSearchRequired

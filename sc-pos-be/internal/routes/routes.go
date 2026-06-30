@@ -10,6 +10,7 @@ import (
 	"github.com/sc-pos/backend/internal/modules/consumable"
 	consumableItem "github.com/sc-pos/backend/internal/modules/consumable_item"
 	"github.com/sc-pos/backend/internal/modules/dashboard"
+	"github.com/sc-pos/backend/internal/modules/migration"
 	orgModule "github.com/sc-pos/backend/internal/modules/organization"
 	"github.com/sc-pos/backend/internal/modules/patient"
 	"github.com/sc-pos/backend/internal/modules/product"
@@ -140,6 +141,9 @@ func SetupRoutes(router *gin.Engine) {
 
 		// ── WhatsApp ──────────────────────────────────────────────────────
 		whatsapp.RegisterRoutes(protectedAPI, cashierAndAdmin)
+
+		// ── Migration / Import Excel ──────────────────────────────────────
+		migration.RegisterRoutes(protectedAPI, adminOnly)
 
 		// Keep unused role/permission variables (suppresses "declared and not used" errors)
 		_ = medicalStaff

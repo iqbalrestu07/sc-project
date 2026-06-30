@@ -7,18 +7,25 @@ import (
 	"github.com/sc-pos/backend/internal/models"
 )
 
-type Service struct {
+// Service is the public interface for the settings module business logic.
+type Service interface {
+	GetClinic(orgID string) (*models.ClinicSettings, error)
+	GetClinicPublic() (*models.ClinicSettings, error)
+	UpdateClinic(req models.ClinicSettings, orgID, userByID string) (*models.ClinicSettings, error)
+}
+
+type service struct {
 	repo *Repository
 }
 
-func NewService(repo ...*Repository) *Service {
+func NewService(repo ...*Repository) Service {
 	if len(repo) > 0 {
-		return &Service{repo: repo[0]}
+		return &service{repo: repo[0]}
 	}
-	return &Service{repo: NewRepository()}
+	return &service{repo: NewRepository()}
 }
 
-func (s *Service) GetClinic(orgID string) (*models.ClinicSettings, error) {
+func (s *service) GetClinic(orgID string) (*models.ClinicSettings, error) {
 	settings, err := s.repo.GetClinic(orgID)
 	if err != nil {
 		return nil, err
@@ -36,11 +43,11 @@ func (s *Service) GetClinic(orgID string) (*models.ClinicSettings, error) {
 // GetClinicPublic returns the first clinic settings without org filtering
 // and without auto-creating a default row.
 // Use this for public/unauthenticated endpoints (e.g. landing page).
-func (s *Service) GetClinicPublic() (*models.ClinicSettings, error) {
+func (s *service) GetClinicPublic() (*models.ClinicSettings, error) {
 	return s.repo.GetFirstClinic()
 }
 
-func (s *Service) UpdateClinic(req models.ClinicSettings, orgID, userByID string) (*models.ClinicSettings, error) {
+func (s *service) UpdateClinic(req models.ClinicSettings, orgID, userByID string) (*models.ClinicSettings, error) {
 	current, err := s.GetClinic(orgID)
 	if err != nil {
 		return nil, err

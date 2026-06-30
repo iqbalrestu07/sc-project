@@ -8,15 +8,22 @@ import (
 	"strings"
 )
 
-type Service struct {
+// Service is the public interface for the whatsapp module business logic.
+type Service interface {
+	Send(to, message string) (*SendResult, error)
+	SendBulk(recipients []Recipient, message string) BulkSendResult
+	Templates() []Template
+}
+
+type service struct {
 	repo *Repository
 }
 
-func NewService(repo ...*Repository) *Service {
+func NewService(repo ...*Repository) Service {
 	if len(repo) > 0 {
-		return &Service{repo: repo[0]}
+		return &service{repo: repo[0]}
 	}
-	return &Service{repo: NewRepository()}
+	return &service{repo: NewRepository()}
 }
 
 type SendResult struct {
@@ -35,7 +42,7 @@ type BulkSendResult struct {
 // Send sends a WhatsApp message.
 // If WHATSAPP_API_URL env var is set, it calls the external API.
 // Otherwise it falls back to a wa.me deep-link style response (useful for dev/testing).
-func (s *Service) Send(to, message string) (*SendResult, error) {
+func (s *service) Send(to, message string) (*SendResult, error) {
 	apiURL := os.Getenv("WHATSAPP_API_URL")
 	apiToken := os.Getenv("WHATSAPP_API_TOKEN")
 
@@ -70,7 +77,7 @@ func (s *Service) Send(to, message string) (*SendResult, error) {
 }
 
 // SendBulk sends the same message to multiple recipients.
-func (s *Service) SendBulk(recipients []Recipient, message string) BulkSendResult {
+func (s *service) SendBulk(recipients []Recipient, message string) BulkSendResult {
 	result := BulkSendResult{
 		Total:   len(recipients),
 		Results: make([]SendResult, 0, len(recipients)),
@@ -90,6 +97,6 @@ func (s *Service) SendBulk(recipients []Recipient, message string) BulkSendResul
 	return result
 }
 
-func (s *Service) Templates() []Template {
+func (s *service) Templates() []Template {
 	return s.repo.Templates()
 }

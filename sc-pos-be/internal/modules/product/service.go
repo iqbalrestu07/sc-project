@@ -11,22 +11,37 @@ import (
 
 var ErrNotFound = errors.New("product not found")
 
-type Service struct {
+// Service is the public contract for product business logic.
+type Service interface {
+	List(orgID string) ([]models.Product, error)
+	Get(id, orgID string) (*models.Product, error)
+	GetByName(name, orgID string) (*models.Product, error)
+	Create(req models.Product, orgID, userID string) (*models.Product, error)
+	Update(id string, req models.Product, orgID, userID string) (*models.Product, error)
+	UpsertByName(req models.Product, orgID, userID string) (*models.Product, error)
+	Delete(id, orgID, userID string) error
+	ListCategories(orgID string) ([]models.ProductCategory, error)
+	CreateCategory(req models.ProductCategory, orgID, userID string) (*models.ProductCategory, error)
+	UpdateCategory(id string, req models.ProductCategory, orgID, userID string) (*models.ProductCategory, error)
+	DeleteCategory(id, orgID, userID string) error
+}
+
+type service struct {
 	repo *Repository
 }
 
-func NewService(repo ...*Repository) *Service {
+func NewService(repo ...*Repository) Service {
 	if len(repo) > 0 {
-		return &Service{repo: repo[0]}
+		return &service{repo: repo[0]}
 	}
-	return &Service{repo: NewRepository()}
+	return &service{repo: NewRepository()}
 }
 
-func (s *Service) List(orgID string) ([]models.Product, error) {
+func (s *service) List(orgID string) ([]models.Product, error) {
 	return s.repo.List(orgID)
 }
 
-func (s *Service) Get(id, orgID string) (*models.Product, error) {
+func (s *service) Get(id, orgID string) (*models.Product, error) {
 	product, err := s.repo.Get(id, orgID)
 	if err != nil {
 		return nil, err
@@ -37,7 +52,11 @@ func (s *Service) Get(id, orgID string) (*models.Product, error) {
 	return product, nil
 }
 
-func (s *Service) Create(req models.Product, orgID, userID string) (*models.Product, error) {
+func (s *service) GetByName(name, orgID string) (*models.Product, error) {
+	return s.repo.GetByName(name, orgID)
+}
+
+func (s *service) Create(req models.Product, orgID, userID string) (*models.Product, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.CreatedAt = now
@@ -53,7 +72,7 @@ func (s *Service) Create(req models.Product, orgID, userID string) (*models.Prod
 	return &req, nil
 }
 
-func (s *Service) Update(id string, req models.Product, orgID, userID string) (*models.Product, error) {
+func (s *service) Update(id string, req models.Product, orgID, userID string) (*models.Product, error) {
 	_, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
@@ -71,7 +90,23 @@ func (s *Service) Update(id string, req models.Product, orgID, userID string) (*
 	return s.Get(id, orgID)
 }
 
-func (s *Service) Delete(id, orgID, userID string) error {
+func (s *service) UpsertByName(req models.Product, orgID, userID string) (*models.Product, error) {
+	existing, err := s.GetByName(req.Name, orgID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		req.ID = existing.ID
+		req.CreatedAt = existing.CreatedAt
+		if userID != "" {
+			req.CreatedBy = existing.CreatedBy
+		}
+		return s.Update(existing.ID, req, orgID, userID)
+	}
+	return s.Create(req, orgID, userID)
+}
+
+func (s *service) Delete(id, orgID, userID string) error {
 	if err := s.repo.Delete(id, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
@@ -81,11 +116,11 @@ func (s *Service) Delete(id, orgID, userID string) error {
 	return nil
 }
 
-func (s *Service) ListCategories(orgID string) ([]models.ProductCategory, error) {
+func (s *service) ListCategories(orgID string) ([]models.ProductCategory, error) {
 	return s.repo.ListCategories(orgID)
 }
 
-func (s *Service) CreateCategory(req models.ProductCategory, orgID, userID string) (*models.ProductCategory, error) {
+func (s *service) CreateCategory(req models.ProductCategory, orgID, userID string) (*models.ProductCategory, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.IsActive = true
@@ -100,7 +135,7 @@ func (s *Service) CreateCategory(req models.ProductCategory, orgID, userID strin
 	return &req, nil
 }
 
-func (s *Service) UpdateCategory(id string, req models.ProductCategory, orgID, userID string) (*models.ProductCategory, error) {
+func (s *service) UpdateCategory(id string, req models.ProductCategory, orgID, userID string) (*models.ProductCategory, error) {
 	req.UpdatedAt = time.Now()
 	if userID != "" {
 		req.UpdatedBy = &userID
@@ -115,7 +150,7 @@ func (s *Service) UpdateCategory(id string, req models.ProductCategory, orgID, u
 	return &req, nil
 }
 
-func (s *Service) DeleteCategory(id, orgID, userID string) error {
+func (s *service) DeleteCategory(id, orgID, userID string) error {
 	if err := s.repo.DeleteCategory(id, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound

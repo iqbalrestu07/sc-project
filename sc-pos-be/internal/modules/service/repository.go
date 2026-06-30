@@ -81,6 +81,31 @@ func (r *Repository) Get(id, orgID string) (*models.Service, error) {
 	return &service, nil
 }
 
+func (r *Repository) GetByName(name, orgID string) (*models.Service, error) {
+	query := `
+		SELECT s.id, s.name, s.category_id, s.description, s.duration_minutes, s.base_price,
+		       COALESCE(s.doctor_commission_type, 'fixed'), COALESCE(s.doctor_commission_value, 0),
+		       COALESCE(s.therapist_commission_type, 'fixed'), COALESCE(s.therapist_commission_value, 0),
+		       COALESCE(s.requires_doctor, false), COALESCE(s.is_active, true), s.created_at, s.updated_at,
+		       c.id, c.name, c.description, COALESCE(c.is_active, true), c.created_at, c.updated_at
+		FROM services s
+		LEFT JOIN service_categories c ON c.id = s.category_id
+		WHERE LOWER(s.name) = LOWER($1) AND COALESCE(s.is_active, true) = true
+		  AND (s.organization_id = $2 OR ($2::text = '' AND s.organization_id IS NULL))
+		  AND s.deleted_at IS NULL
+		LIMIT 1
+	`
+	row := r.db.QueryRow(query, name, orgID)
+	service, err := scanService(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &service, nil
+}
+
 func (r *Repository) Create(service *models.Service, orgID string) error {
 	var createdByVal interface{}
 	if service.CreatedBy != nil && *service.CreatedBy != "" {

@@ -11,22 +11,32 @@ import (
 
 var ErrNotFound = errors.New("staff not found")
 
-type Service struct {
+// Service is the public contract for staff business logic.
+type Service interface {
+	List(orgID string) ([]models.Staff, error)
+	Get(id, orgID string) (*models.Staff, error)
+	GetByUserID(userID string) (*models.Staff, error)
+	Create(req models.Staff, userID, orgID string) (*models.Staff, error)
+	Update(id, orgID, userID string, req models.Staff) (*models.Staff, error)
+	Delete(id, orgID, userID string) error
+}
+
+type service struct {
 	repo *Repository
 }
 
-func NewService(repo ...*Repository) *Service {
+func NewService(repo ...*Repository) Service {
 	if len(repo) > 0 {
-		return &Service{repo: repo[0]}
+		return &service{repo: repo[0]}
 	}
-	return &Service{repo: NewRepository()}
+	return &service{repo: NewRepository()}
 }
 
-func (s *Service) List(orgID string) ([]models.Staff, error) {
+func (s *service) List(orgID string) ([]models.Staff, error) {
 	return s.repo.List(orgID)
 }
 
-func (s *Service) Get(id, orgID string) (*models.Staff, error) {
+func (s *service) Get(id, orgID string) (*models.Staff, error) {
 	staff, err := s.repo.Get(id, orgID)
 	if err != nil {
 		return nil, err
@@ -37,7 +47,11 @@ func (s *Service) Get(id, orgID string) (*models.Staff, error) {
 	return staff, nil
 }
 
-func (s *Service) Create(req models.Staff, userID, orgID string) (*models.Staff, error) {
+func (s *service) GetByUserID(userID string) (*models.Staff, error) {
+	return s.repo.GetByUserID(userID)
+}
+
+func (s *service) Create(req models.Staff, userID, orgID string) (*models.Staff, error) {
 	now := time.Now()
 	req.ID = uuid.New().String()
 	req.CreatedAt = now
@@ -52,7 +66,7 @@ func (s *Service) Create(req models.Staff, userID, orgID string) (*models.Staff,
 	return &req, nil
 }
 
-func (s *Service) Update(id, orgID, userID string, req models.Staff) (*models.Staff, error) {
+func (s *service) Update(id, orgID, userID string, req models.Staff) (*models.Staff, error) {
 	_, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
@@ -69,7 +83,7 @@ func (s *Service) Update(id, orgID, userID string, req models.Staff) (*models.St
 	return s.Get(id, orgID)
 }
 
-func (s *Service) Delete(id, orgID, userID string) error {
+func (s *service) Delete(id, orgID, userID string) error {
 	if err := s.repo.Delete(id, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound

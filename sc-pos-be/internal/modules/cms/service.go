@@ -1,21 +1,28 @@
 package cms
 
-type Service struct {
+// Service is the public interface for the cms module business logic.
+type Service interface {
+	ListPages(orgID string) ([]Page, error)
+	GetPage(pageID, orgID string) (interface{}, error)
+	UpsertPage(pageID, orgID string, data interface{}, userID string) (interface{}, error)
+}
+
+type service struct {
 	repo *Repository
 }
 
-func NewService(repo ...*Repository) *Service {
+func NewService(repo ...*Repository) Service {
 	if len(repo) > 0 {
-		return &Service{repo: repo[0]}
+		return &service{repo: repo[0]}
 	}
-	return &Service{repo: NewRepository()}
+	return &service{repo: NewRepository()}
 }
 
-func (s *Service) ListPages(orgID string) ([]Page, error) {
+func (s *service) ListPages(orgID string) ([]Page, error) {
 	return s.repo.ListPages(orgID)
 }
 
-func (s *Service) GetPage(pageID, orgID string) (interface{}, error) {
+func (s *service) GetPage(pageID, orgID string) (interface{}, error) {
 	page, err := s.repo.GetPage(pageID, orgID)
 	if err != nil {
 		return nil, err
@@ -26,7 +33,7 @@ func (s *Service) GetPage(pageID, orgID string) (interface{}, error) {
 	return page.Data, nil
 }
 
-func (s *Service) UpsertPage(pageID, orgID string, data interface{}, userID string) (interface{}, error) {
+func (s *service) UpsertPage(pageID, orgID string, data interface{}, userID string) (interface{}, error) {
 	page, err := s.repo.UpsertPage(pageID, orgID, data, userID)
 	if err != nil {
 		return nil, err

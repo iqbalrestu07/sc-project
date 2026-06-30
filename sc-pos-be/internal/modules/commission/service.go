@@ -2,25 +2,32 @@ package commission
 
 import staffmodule "github.com/sc-pos/backend/internal/modules/staff"
 
-type Service struct {
-	repo      *Repository
-	staffRepo *staffmodule.Repository
+// Service is the public contract for commission business logic.
+type Service interface {
+	List(orgID, userRole, userID string) ([]CommissionWithRelations, error)
+	ListByStaff(orgID, staffID string) ([]CommissionWithRelations, error)
+	UpdateStatus(ids []string, status, userID string) error
 }
 
-func NewService(repo ...*Repository) *Service {
-	staffRepo := staffmodule.NewRepository()
+type service struct {
+	repo     *Repository
+	staffSvc staffmodule.Service
+}
+
+func NewService(repo ...*Repository) Service {
+	staffSvc := staffmodule.NewService()
 	if len(repo) > 0 {
-		return &Service{repo: repo[0], staffRepo: staffRepo}
+		return &service{repo: repo[0], staffSvc: staffSvc}
 	}
-	return &Service{repo: NewRepository(), staffRepo: staffRepo}
+	return &service{repo: NewRepository(), staffSvc: staffSvc}
 }
 
-func (s *Service) List(orgID, userRole, userID string) ([]CommissionWithRelations, error) {
+func (s *service) List(orgID, userRole, userID string) ([]CommissionWithRelations, error) {
 	if userRole == "admin" {
 		return s.repo.List(orgID, "")
 	}
 
-	staff, err := s.staffRepo.GetByUserID(userID)
+	staff, err := s.staffSvc.GetByUserID(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -31,11 +38,11 @@ func (s *Service) List(orgID, userRole, userID string) ([]CommissionWithRelation
 	return s.repo.List(orgID, staff.ID)
 }
 
-func (s *Service) ListByStaff(orgID, staffID string) ([]CommissionWithRelations, error) {
+func (s *service) ListByStaff(orgID, staffID string) ([]CommissionWithRelations, error) {
 	return s.repo.List(orgID, staffID)
 }
 
-func (s *Service) UpdateStatus(ids []string, status, userID string) error {
+func (s *service) UpdateStatus(ids []string, status, userID string) error {
 	if status == "" {
 		status = "paid"
 	}

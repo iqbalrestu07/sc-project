@@ -11,22 +11,32 @@ import (
 
 var ErrNotFound = errors.New("transaction not found")
 
-type Service struct {
+// Service is the public interface for the transaction module business logic.
+type Service interface {
+	List(orgID string) ([]TransactionWithRelations, error)
+	Get(id, orgID string) (*TransactionWithRelations, error)
+	Create(req CreateRequest, userID *string, orgID string) (*TransactionWithRelations, error)
+	Update(id, orgID, userID string, req models.Transaction) (*TransactionWithRelations, error)
+	Delete(id, orgID, userID string) error
+	Items(id string) ([]TransactionItemWithRelations, error)
+}
+
+type service struct {
 	repo *Repository
 }
 
-func NewService(repo ...*Repository) *Service {
+func NewService(repo ...*Repository) Service {
 	if len(repo) > 0 {
-		return &Service{repo: repo[0]}
+		return &service{repo: repo[0]}
 	}
-	return &Service{repo: NewRepository()}
+	return &service{repo: NewRepository()}
 }
 
-func (s *Service) List(orgID string) ([]TransactionWithRelations, error) {
+func (s *service) List(orgID string) ([]TransactionWithRelations, error) {
 	return s.repo.List(orgID)
 }
 
-func (s *Service) Get(id, orgID string) (*TransactionWithRelations, error) {
+func (s *service) Get(id, orgID string) (*TransactionWithRelations, error) {
 	transaction, err := s.repo.Get(id, orgID)
 	if err != nil {
 		return nil, err
@@ -37,7 +47,7 @@ func (s *Service) Get(id, orgID string) (*TransactionWithRelations, error) {
 	return transaction, nil
 }
 
-func (s *Service) Create(req CreateRequest, userID *string, orgID string) (*TransactionWithRelations, error) {
+func (s *service) Create(req CreateRequest, userID *string, orgID string) (*TransactionWithRelations, error) {
 	now := time.Now()
 	req.Transaction.ID = uuid.New().String()
 	req.Transaction.TransactionCode = nextTransactionCode(now)
@@ -142,7 +152,7 @@ func (s *Service) Create(req CreateRequest, userID *string, orgID string) (*Tran
 	return result, nil
 }
 
-func (s *Service) Update(id, orgID, userID string, req models.Transaction) (*TransactionWithRelations, error) {
+func (s *service) Update(id, orgID, userID string, req models.Transaction) (*TransactionWithRelations, error) {
 	current, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
@@ -165,7 +175,7 @@ func (s *Service) Update(id, orgID, userID string, req models.Transaction) (*Tra
 	return s.Get(id, orgID)
 }
 
-func (s *Service) Delete(id, orgID, userID string) error {
+func (s *service) Delete(id, orgID, userID string) error {
 	if err := s.repo.Delete(id, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
@@ -175,6 +185,6 @@ func (s *Service) Delete(id, orgID, userID string) error {
 	return nil
 }
 
-func (s *Service) Items(id string) ([]TransactionItemWithRelations, error) {
+func (s *service) Items(id string) ([]TransactionItemWithRelations, error) {
 	return s.repo.Items(id)
 }

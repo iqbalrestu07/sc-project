@@ -16,9 +16,18 @@ var ErrInvalidCredentials = errors.New("invalid email or password")
 var ErrEmailAlreadyUsed = errors.New("email already registered")
 var ErrInvalidRole = errors.New("invalid role: must be admin, doctor, therapist, or cashier")
 
-type Service struct {
-	repo    *Repository
-	orgRepo *organization.Repository
+// Service is the public contract for authentication business logic.
+type Service interface {
+	Login(email, password string) (*AuthPayload, error)
+	Register(email, password, orgName, fullName string) (*AuthPayload, error)
+	AdminRegister(email, password, role string) (*AuthPayload, error)
+	FindUserByEmail(email string) (*models.User, error)
+	Refresh(refreshToken string) (*AuthPayload, error)
+}
+
+type service struct {
+	repo   *Repository
+	orgSvc organization.Service
 }
 
 type AuthPayload struct {
@@ -29,14 +38,14 @@ type AuthPayload struct {
 	NeedsOnboarding bool                          `json:"needs_onboarding"`
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{
-		repo:    repo,
-		orgRepo: organization.NewRepository(),
+func NewService(repo *Repository) Service {
+	return &service{
+		repo:   repo,
+		orgSvc: organization.NewService(organization.NewRepository()),
 	}
 }
 
-func (s *Service) Login(email, password string) (*AuthPayload, error) {
+func (s *service) Login(email, password string) (*AuthPayload, error) {
 	user, err := s.repo.GetByEmail(strings.TrimSpace(strings.ToLower(email)))
 	if err != nil {
 		return nil, err
@@ -45,7 +54,7 @@ func (s *Service) Login(email, password string) (*AuthPayload, error) {
 		return nil, ErrInvalidCredentials
 	}
 
-	orgs, err := s.orgRepo.GetUserOrganizations(user.ID)
+	orgs, err := s.orgSvc.GetUserOrganizations(user.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +64,7 @@ func (s *Service) Login(email, password string) (*AuthPayload, error) {
 
 // Register: public onboarding — creates user + first organization in one atomic operation.
 // The user becomes the admin of the newly created organization.
-func (s *Service) Register(email, password, orgName, fullName string) (*AuthPayload, error) {
+func (s *service) Register(email, password, orgName, fullName string) (*AuthPayload, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 
 	existing, err := s.repo.GetByEmail(email)
@@ -87,8 +96,7 @@ func (s *Service) Register(email, password, orgName, fullName string) (*AuthPayl
 	}
 
 	// Create the organization and add user as admin
-	orgSvc := organization.NewService(s.orgRepo)
-	orgModel, err := orgSvc.CreateOrg(orgName, "", user.ID)
+	orgModel, err := s.orgSvc.CreateOrg(orgName, "", user.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +118,7 @@ func (s *Service) Register(email, password, orgName, fullName string) (*AuthPayl
 
 // AdminRegister: admin invites a user to the current org with a specific role.
 // Called within org context (org_id from context).
-func (s *Service) AdminRegister(email, password, role string) (*AuthPayload, error) {
+func (s *service) AdminRegister(email, password, role string) (*AuthPayload, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	role = strings.TrimSpace(strings.ToLower(role))
 
@@ -148,7 +156,7 @@ func (s *Service) AdminRegister(email, password, role string) (*AuthPayload, err
 	return s.issueTokens(user, nil)
 }
 
-func (s *Service) FindUserByEmail(email string) (*models.User, error) {
+func (s *service) FindUserByEmail(email string) (*models.User, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	user, err := s.repo.GetByEmail(email)
 	if err != nil {
@@ -160,7 +168,7 @@ func (s *Service) FindUserByEmail(email string) (*models.User, error) {
 	return user, nil
 }
 
-func (s *Service) Refresh(refreshToken string) (*AuthPayload, error) {
+func (s *service) Refresh(refreshToken string) (*AuthPayload, error) {
 	claims, err := backendauth.VerifyToken(refreshToken)
 	if err != nil {
 		return nil, ErrInvalidCredentials
@@ -172,7 +180,7 @@ func (s *Service) Refresh(refreshToken string) (*AuthPayload, error) {
 		Role:  claims.Role,
 	}
 
-	orgs, err := s.orgRepo.GetUserOrganizations(user.ID)
+	orgs, err := s.orgSvc.GetUserOrganizations(user.ID)
 	if err != nil {
 		orgs = nil
 	}
@@ -180,7 +188,7 @@ func (s *Service) Refresh(refreshToken string) (*AuthPayload, error) {
 	return s.issueTokens(user, orgs)
 }
 
-func (s *Service) issueTokens(user models.User, orgs []models.OrganizationWithRole) (*AuthPayload, error) {
+func (s *service) issueTokens(user models.User, orgs []models.OrganizationWithRole) (*AuthPayload, error) {
 	accessToken, err := backendauth.GenerateToken(user.ID, user.Email, user.Role, 24)
 	if err != nil {
 		return nil, err
