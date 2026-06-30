@@ -9,6 +9,8 @@ import (
 	"github.com/sc-pos/backend/config"
 	"github.com/sc-pos/backend/internal/auth"
 	"github.com/sc-pos/backend/internal/database"
+	"github.com/sc-pos/backend/internal/modules/appointment"
+	"github.com/sc-pos/backend/internal/modules/whatsapp"
 	"github.com/sc-pos/backend/internal/routes"
 )
 
@@ -32,6 +34,15 @@ func main() {
 	if err := database.RunMigrations(); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
+
+	// Initialize WhatsApp Client Manager
+	if _, err := whatsapp.InitClientManager(cfg.Database.DSN()); err != nil {
+		log.Fatalf("Failed to initialize WhatsApp client manager: %v", err)
+	}
+
+	// Start appointment reminder cron job
+	appointment.StartReminderJob()
+	defer appointment.StopReminderJob()
 
 	// Create Gin router
 	router := gin.Default()

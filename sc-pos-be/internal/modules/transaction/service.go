@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/modules/whatsapp"
 )
 
 var ErrNotFound = errors.New("transaction not found")
@@ -146,7 +147,12 @@ func (s *service) Create(req CreateRequest, userID *string, orgID string) (*Tran
 		if err := s.repo.MarkPaidEffects(req.Transaction.ID, createdBy, orgID); err != nil {
 			return nil, err
 		}
-		return s.Get(req.Transaction.ID, orgID)
+		
+		createdTx, _ := s.Get(req.Transaction.ID, orgID)
+		if createdTx != nil {
+			go s.sendWhatsappInvoice(createdTx, orgID)
+		}
+		return createdTx, nil
 	}
 
 	return result, nil
@@ -171,6 +177,11 @@ func (s *service) Update(id, orgID, userID string, req models.Transaction) (*Tra
 		if err := s.repo.MarkPaidEffects(id, userID, orgID); err != nil {
 			return nil, err
 		}
+		
+		updatedTx, _ := s.Get(id, orgID)
+		if updatedTx != nil {
+			go s.sendWhatsappInvoice(updatedTx, orgID)
+		}
 	}
 	return s.Get(id, orgID)
 }
@@ -187,4 +198,34 @@ func (s *service) Delete(id, orgID, userID string) error {
 
 func (s *service) Items(id string) ([]TransactionItemWithRelations, error) {
 	return s.repo.Items(id)
+}
+
+func (s *service) sendWhatsappInvoice(tx *TransactionWithRelations, orgID string) {
+	if tx.Patient == nil || tx.Patient.WhatsApp == nil || *tx.Patient.WhatsApp == "" {
+		return
+	}
+
+	invoice := whatsapp.InvoiceData{
+		PatientWhatsApp: *tx.Patient.WhatsApp,
+		PatientName:     tx.Patient.FullName,
+		TransactionCode: tx.TransactionCode,
+		TotalAmount:     tx.TotalAmount,
+	}
+
+	for _, item := range tx.Items {
+		name := ""
+		if item.Product != nil {
+			name = item.Product.Name
+		} else if item.Service != nil {
+			name = item.Service.Name
+		}
+		invoice.Items = append(invoice.Items, whatsapp.InvoiceItem{
+			Name:       name,
+			Quantity:   item.Quantity,
+			TotalPrice: item.TotalPrice,
+		})
+	}
+
+	waService := whatsapp.NewService()
+	_ = waService.SendInvoice(orgID, invoice)
 }

@@ -1082,3 +1082,22 @@ Default role assignments (role_permissions):
 5. Backend OrgMiddleware verifikasi keanggotaan → set org_id + org_role di context
 6. Repository memfilter data by org_id
 ```
+
+---
+
+## 5. Development Guidelines & Best Practices
+
+### 5.1 Verifikasi TypeScript (Khusus Frontend Vite)
+
+Pada project berbasis **Vite + React + TypeScript** yang menggunakan arsitektur TypeScript 5 References (`tsconfig.json` memiliki `"files": []`), perintah standar `npx tsc --noEmit` **TIDAK AKAN** mengecek kode sumber (`src/`) secara menyeluruh. Hal ini dapat menyebabkan lolosnya error seperti *missing imports*, *undefined props*, atau masalah *type* lainnya (terutama saat memecah/modularisasi file).
+
+**ATURAN WAJIB SAAT REFACTOR / MODULARISASI:**
+Untuk melakukan pengecekan secara komprehensif, pastikan Anda menggunakan file konfigurasi yang benar:
+```bash
+# Lakukan pengecekan menyeluruh pada direktori frontend (shasi)
+npx tsc -p tsconfig.app.json --noEmit
+
+# Jangan lupa untuk juga menjalankan linter
+npm run lint
+```
+Selalu jalankan perintah ini setelah mengekstrak, memecah file monolitik, atau mengubah *props* antar komponen agar aplikasi dijamin stabil secara tipe (type-safe) dan terbebas dari *ReferenceError* atau variabel tidak terdefinisi di runtime.

@@ -25,7 +25,7 @@ import Products from "./pages/Products";
 import POS from "./pages/POS";
 import Commissions from "./pages/Commissions";
 import Transactions from "./pages/Transactions";
-import WhatsAppMessaging from "./pages/WhatsAppMessaging";
+import Messaging from "./pages/Messaging/index";
 import Staff from "./pages/Staff";
 import Members from "./pages/Members";
 import SettingsPage from "./pages/Settings";
@@ -33,7 +33,7 @@ import CmsManagement from "./pages/CmsManagement";
 import Categories from "./pages/Categories";
 import RBACManagement from "./pages/RBACManagement";
 import StockOpname from "./pages/StockOpname";
-import ConsumableItems from "./pages/ConsumableItems";
+import ConsumableItems from "./pages/ConsumableItems/index";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -151,9 +151,9 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
 
-      <Route path="/whatsapp" element={
+      <Route path="/messaging" element={
         <ProtectedRoute>
-          <MainLayout onSignOut={signOut}><WhatsAppMessaging /></MainLayout>
+          <MainLayout onSignOut={signOut}><Messaging /></MainLayout>
         </ProtectedRoute>
       } />
 

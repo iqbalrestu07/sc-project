@@ -49,6 +49,10 @@ const NAV_STRUCTURE: NavEntry[] = [
     kind: "item",
     item: { to: "/pos",          icon: ShoppingCart,    label: "Transactions", permission: "transactions:read" },
   },
+  {
+    kind: "item",
+    item: { to: "/messaging",    icon: MessageCircle,   label: "Messaging" }, // Available for all valid roles
+  },
 
   // ── Group 1: Katalog ──────────────────────────────────────────────────────
   {

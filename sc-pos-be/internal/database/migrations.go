@@ -21,6 +21,7 @@ func RunMigrations() error {
 		addConsumableFlag,
 		addConsumableUsageLogs,
 		addConsumablePermissions,
+		addWhatsappTables,
 	}
 
 	for i, migration := range migrations {
@@ -606,4 +607,22 @@ INSERT INTO role_permissions (id, role, permission_id) VALUES
 	(gen_random_uuid()::varchar, 'cashier', 'categories:read'),
 	(gen_random_uuid()::varchar, 'cashier', 'reports:read')
 ON CONFLICT (role, permission_id) DO NOTHING;
+`
+
+const addWhatsappTables = `
+CREATE TABLE IF NOT EXISTS clinic_whatsapp_devices (
+    organization_id VARCHAR(36) PRIMARY KEY REFERENCES organizations(id),
+    jid VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS whatsapp_templates (
+    id VARCHAR(36) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    content TEXT NOT NULL,
+    organization_id VARCHAR(36) NOT NULL REFERENCES organizations(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_templates_org ON whatsapp_templates(organization_id);
 `
