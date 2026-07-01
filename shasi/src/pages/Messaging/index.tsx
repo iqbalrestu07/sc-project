@@ -7,7 +7,7 @@ import { DirectMessageTab } from "./DirectMessageTab";
 
 export default function Messaging() {
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <PageHeader 
         title="WhatsApp Messaging" 
         description="Manage WhatsApp device connection, message templates, and run blast campaigns." 

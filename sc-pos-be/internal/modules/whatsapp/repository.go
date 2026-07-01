@@ -69,10 +69,40 @@ func (r *Repository) CreateTemplate(t *Template) error {
 
 // ── Devices ─────────────────────────────────────────────────────────────────
 
-func (r *Repository) GetDeviceJID(orgID string) (string, error) {
-	query := `SELECT jid FROM clinic_whatsapp_devices WHERE organization_id = $1`
+func (r *Repository) GetDevices(orgID string) ([]WhatsappDevice, error) {
+	query := `SELECT id, organization_id, name, jid, created_at FROM clinic_whatsapp_devices WHERE organization_id = $1 ORDER BY created_at ASC`
+	rows, err := database.DB.Query(query, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var devices []WhatsappDevice
+	for rows.Next() {
+		var d WhatsappDevice
+		if err := rows.Scan(&d.ID, &d.OrganizationID, &d.Name, &d.JID, &d.CreatedAt); err != nil {
+			return nil, err
+		}
+		devices = append(devices, d)
+	}
+	return devices, nil
+}
+
+func (r *Repository) GetDeviceJID(orgID, deviceID string) (string, error) {
+	// If deviceID is empty, try to get the first device (for legacy fallback)
+	var query string
+	var args []interface{}
+	
+	if deviceID == "" {
+		query = `SELECT jid FROM clinic_whatsapp_devices WHERE organization_id = $1 ORDER BY created_at ASC LIMIT 1`
+		args = []interface{}{orgID}
+	} else {
+		query = `SELECT jid FROM clinic_whatsapp_devices WHERE organization_id = $1 AND id = $2`
+		args = []interface{}{orgID, deviceID}
+	}
+	
 	var jid string
-	err := database.DB.QueryRow(query, orgID).Scan(&jid)
+	err := database.DB.QueryRow(query, args...).Scan(&jid)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return "", nil
@@ -82,18 +112,18 @@ func (r *Repository) GetDeviceJID(orgID string) (string, error) {
 	return jid, nil
 }
 
-func (r *Repository) SaveDeviceJID(orgID, jid string) error {
+func (r *Repository) SaveDevice(d *WhatsappDevice) error {
 	query := `
-		INSERT INTO clinic_whatsapp_devices (organization_id, jid) 
-		VALUES ($1, $2)
-		ON CONFLICT (organization_id) DO UPDATE SET jid = EXCLUDED.jid, created_at = CURRENT_TIMESTAMP
+		INSERT INTO clinic_whatsapp_devices (id, organization_id, name, jid) 
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (organization_id, jid) DO UPDATE SET name = EXCLUDED.name
 	`
-	_, err := database.DB.Exec(query, orgID, jid)
+	_, err := database.DB.Exec(query, d.ID, d.OrganizationID, d.Name, d.JID)
 	return err
 }
 
-func (r *Repository) DeleteDeviceJID(orgID string) error {
-	query := `DELETE FROM clinic_whatsapp_devices WHERE organization_id = $1`
-	_, err := database.DB.Exec(query, orgID)
+func (r *Repository) DeleteDevice(orgID, deviceID string) error {
+	query := `DELETE FROM clinic_whatsapp_devices WHERE organization_id = $1 AND id = $2`
+	_, err := database.DB.Exec(query, orgID, deviceID)
 	return err
 }

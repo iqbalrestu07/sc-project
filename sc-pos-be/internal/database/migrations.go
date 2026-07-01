@@ -22,6 +22,7 @@ func RunMigrations() error {
 		addConsumableUsageLogs,
 		addConsumablePermissions,
 		addWhatsappTables,
+		addOmnichannelTables,
 	}
 
 	for i, migration := range migrations {
@@ -611,9 +612,12 @@ ON CONFLICT (role, permission_id) DO NOTHING;
 
 const addWhatsappTables = `
 CREATE TABLE IF NOT EXISTS clinic_whatsapp_devices (
-    organization_id VARCHAR(36) PRIMARY KEY REFERENCES organizations(id),
+    id VARCHAR(36) PRIMARY KEY,
+    organization_id VARCHAR(36) REFERENCES organizations(id),
+    name VARCHAR(100) NOT NULL,
     jid VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(organization_id, jid)
 );
 
 CREATE TABLE IF NOT EXISTS whatsapp_templates (
@@ -625,4 +629,36 @@ CREATE TABLE IF NOT EXISTS whatsapp_templates (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_whatsapp_templates_org ON whatsapp_templates(organization_id);
+`
+
+const addOmnichannelTables = `
+CREATE TABLE IF NOT EXISTS omni_conversations (
+    id VARCHAR(36) PRIMARY KEY,
+    organization_id VARCHAR(36) NOT NULL REFERENCES organizations(id),
+    platform VARCHAR(50) NOT NULL,
+    device_id VARCHAR(100),
+    customer_identifier VARCHAR(255) NOT NULL,
+    customer_name VARCHAR(255) DEFAULT '',
+    last_message_content TEXT,
+    last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    unread_count INT DEFAULT 0,
+    status VARCHAR(50) DEFAULT 'open',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(organization_id, platform, customer_identifier)
+);
+CREATE INDEX IF NOT EXISTS idx_omni_conversations_org ON omni_conversations(organization_id);
+
+CREATE TABLE IF NOT EXISTS omni_messages (
+    id VARCHAR(36) PRIMARY KEY,
+    conversation_id VARCHAR(36) NOT NULL REFERENCES omni_conversations(id) ON DELETE CASCADE,
+    direction VARCHAR(20) NOT NULL,
+    status VARCHAR(50) DEFAULT 'sent',
+    content_type VARCHAR(50) DEFAULT 'text',
+    content TEXT,
+    media_url TEXT,
+    sender_user_id VARCHAR(36) REFERENCES users(id),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_omni_messages_conv ON omni_messages(conversation_id);
 `

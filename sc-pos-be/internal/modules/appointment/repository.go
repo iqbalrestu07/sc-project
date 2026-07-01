@@ -7,6 +7,7 @@ import (
 
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Repository struct {
@@ -240,6 +241,11 @@ func scanAppointmentWithRelations(scanner appointmentScanner) (AppointmentWithRe
 	if therapistID.Valid {
 		result.Therapist = &StaffSummary{ID: therapistID.String, FullName: therapistName.String}
 	}
+
+	// The DB column is TIMESTAMP (without time zone). The driver returns the
+	// stored wall-clock value in UTC, so we must reinterpret those digits as
+	// Asia/Jakarta (WIB) before returning them to the frontend.
+	result.ScheduledAt = utils.JakartaWallClock(result.ScheduledAt)
 
 	return result, nil
 }

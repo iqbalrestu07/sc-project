@@ -8,9 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Building2, 
-  Percent, 
+import {
+  Building2,
+  Percent,
   Bell,
   MessageSquare,
   Mail,
@@ -94,8 +94,8 @@ export default function SettingsPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 pt-16 lg:pt-8 animate-fade-in">
-      <PageHeader 
-        title="Settings" 
+      <PageHeader
+        title="Settings"
         description="Configure your clinic system"
       />
 
@@ -112,9 +112,9 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="clinicName">Clinic Name <span className="text-destructive">*</span></Label>
-              <Input 
-                id="clinicName" 
-                placeholder="Your Aesthetic Clinic" 
+              <Input
+                id="clinicName"
+                placeholder="Your Aesthetic Clinic"
                 value={formData.clinic_name || ""}
                 onChange={(e) => handleChange("clinic_name", e.target.value)}
                 className={clinicNameError ? "border-destructive focus-visible:ring-destructive" : ""}
@@ -126,9 +126,9 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="address">Address</Label>
-              <Input 
-                id="address" 
-                placeholder="Clinic address" 
+              <Input
+                id="address"
+                placeholder="Clinic address"
                 value={formData.address || ""}
                 onChange={(e) => handleChange("address", e.target.value)}
               />
@@ -136,19 +136,19 @@ export default function SettingsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
-                <Input 
-                  id="phone" 
-                  placeholder="+62 xxx xxx xxxx" 
+                <Input
+                  id="phone"
+                  placeholder="+62 xxx xxx xxxx"
                   value={formData.phone || ""}
                   onChange={(e) => handleChange("phone", e.target.value)}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input 
-                  id="email" 
-                  type="email" 
-                  placeholder="clinic@email.com" 
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="clinic@email.com"
                   value={formData.email || ""}
                   onChange={(e) => handleChange("email", e.target.value)}
                 />
@@ -169,10 +169,10 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="taxRate">Default Tax Rate (%)</Label>
-              <Input 
-                id="taxRate" 
-                type="number" 
-                placeholder="11" 
+              <Input
+                id="taxRate"
+                type="number"
+                placeholder="11"
                 value={formData.tax_rate || ""}
                 onChange={(e) => handleChange("tax_rate", parseFloat(e.target.value) || 0)}
               />
@@ -184,7 +184,7 @@ export default function SettingsPage() {
                   Prices shown already include tax
                 </p>
               </div>
-              <Switch 
+              <Switch
                 checked={formData.tax_inclusive || false}
                 onCheckedChange={(checked) => handleChange("tax_inclusive", checked)}
               />
@@ -204,7 +204,7 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Reminder Timing</Label>
-              <Select 
+              <Select
                 value={String(formData.reminder_hours_before || 24)}
                 onValueChange={(value) => handleChange("reminder_hours_before", parseInt(value))}
               >
@@ -221,7 +221,7 @@ export default function SettingsPage() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label className="flex items-center gap-2">
@@ -232,7 +232,7 @@ export default function SettingsPage() {
                   Send reminders via WhatsApp
                 </p>
               </div>
-              <Switch 
+              <Switch
                 checked={formData.whatsapp_reminder_enabled || false}
                 onCheckedChange={(checked) => handleChange("whatsapp_reminder_enabled", checked)}
               />
@@ -248,7 +248,7 @@ export default function SettingsPage() {
                   Send reminders via email
                 </p>
               </div>
-              <Switch 
+              <Switch
                 checked={formData.email_reminder_enabled || false}
                 onCheckedChange={(checked) => handleChange("email_reminder_enabled", checked)}
               />
@@ -257,9 +257,9 @@ export default function SettingsPage() {
             {formData.whatsapp_reminder_enabled && (
               <div className="space-y-2 p-4 bg-muted/50 rounded-lg">
                 <Label htmlFor="whatsappPhoneId">WhatsApp Business Phone ID</Label>
-                <Input 
-                  id="whatsappPhoneId" 
-                  placeholder="Enter your Meta WhatsApp Business Phone ID" 
+                <Input
+                  id="whatsappPhoneId"
+                  placeholder="Enter your Meta WhatsApp Business Phone ID"
                   value={formData.whatsapp_business_phone_id || ""}
                   onChange={(e) => handleChange("whatsapp_business_phone_id", e.target.value)}
                 />
@@ -271,56 +271,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* WhatsApp Settings */}
-        <Card className="shadow-clinic">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-success" />
-              WhatsApp Configuration
-            </CardTitle>
-            <CardDescription>Configure WhatsApp Business API settings</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="whatsappPhoneIdMain">WhatsApp Business Phone ID</Label>
-              <Input 
-                id="whatsappPhoneIdMain" 
-                placeholder="Enter your Meta WhatsApp Business Phone ID" 
-                value={formData.whatsapp_business_phone_id || ""}
-                onChange={(e) => handleChange("whatsapp_business_phone_id", e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Get this from Meta Business Suite → WhatsApp → Phone Numbers
-              </p>
-            </div>
 
-            <div className="p-4 bg-muted/50 rounded-lg space-y-3">
-              <div className="flex items-center gap-2">
-                <Bell className="h-4 w-4 text-primary" />
-                <Label className="font-medium">Setup Instructions</Label>
-              </div>
-              <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
-                <li>Go to <a href="https://business.facebook.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">Meta Business Suite</a></li>
-                <li>Navigate to WhatsApp → Getting Started</li>
-                <li>Copy your Phone Number ID and paste it above</li>
-                <li>Contact your administrator to configure the Access Token securely</li>
-              </ol>
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              <div className="space-y-0.5">
-                <Label>Enable WhatsApp Messaging</Label>
-                <p className="text-sm text-muted-foreground">
-                  Allow sending messages via WhatsApp
-                </p>
-              </div>
-              <Switch 
-                checked={formData.whatsapp_reminder_enabled || false}
-                onCheckedChange={(checked) => handleChange("whatsapp_reminder_enabled", checked)}
-              />
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Notifications */}
         <Card className="shadow-clinic">
@@ -339,7 +290,7 @@ export default function SettingsPage() {
                   Get notified when products run low
                 </p>
               </div>
-              <Switch 
+              <Switch
                 checked={formData.low_stock_alerts || false}
                 onCheckedChange={(checked) => handleChange("low_stock_alerts", checked)}
               />
@@ -351,7 +302,7 @@ export default function SettingsPage() {
                   Show reminder notifications in dashboard
                 </p>
               </div>
-              <Switch 
+              <Switch
                 checked={formData.appointment_reminders || false}
                 onCheckedChange={(checked) => handleChange("appointment_reminders", checked)}
               />
@@ -363,7 +314,7 @@ export default function SettingsPage() {
                   Alert when products near expiry
                 </p>
               </div>
-              <Switch 
+              <Switch
                 checked={formData.expiry_warnings || false}
                 onCheckedChange={(checked) => handleChange("expiry_warnings", checked)}
               />
@@ -385,9 +336,9 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="invoiceHeaderTitle">Judul Header Invoice</Label>
-              <Input 
-                id="invoiceHeaderTitle" 
-                placeholder="Contoh: Shasi Beauty Care" 
+              <Input
+                id="invoiceHeaderTitle"
+                placeholder="Contoh: Shasi Beauty Care"
                 value={formData.invoice_header_title || ""}
                 onChange={(e) => handleChange("invoice_header_title", e.target.value)}
               />
@@ -397,9 +348,9 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="invoiceHeaderDesc">Deskripsi Header</Label>
-              <Textarea 
-                id="invoiceHeaderDesc" 
-                placeholder="Contoh: Jl. Raya Utama No. 123, Kota ABC&#10;Telp: 021-12345678" 
+              <Textarea
+                id="invoiceHeaderDesc"
+                placeholder="Contoh: Jl. Raya Utama No. 123, Kota ABC&#10;Telp: 021-12345678"
                 value={formData.invoice_header_description || ""}
                 onChange={(e) => handleChange("invoice_header_description", e.target.value)}
                 rows={3}
@@ -410,9 +361,9 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="invoiceFooter">Footer Invoice</Label>
-              <Textarea 
-                id="invoiceFooter" 
-                placeholder="Contoh: Terima kasih atas kunjungan Anda!&#10;Follow IG: @shasibeautycare" 
+              <Textarea
+                id="invoiceFooter"
+                placeholder="Contoh: Terima kasih atas kunjungan Anda!&#10;Follow IG: @shasibeautycare"
                 value={formData.invoice_footer_text || ""}
                 onChange={(e) => handleChange("invoice_footer_text", e.target.value)}
                 rows={3}
@@ -486,8 +437,8 @@ export default function SettingsPage() {
         </Card>
 
         {/* Save Button */}
-        <Button 
-          className="gap-2" 
+        <Button
+          className="gap-2"
           onClick={handleSave}
           disabled={!hasChanges || updateSettings.isPending}
         >

@@ -76,12 +76,14 @@ export function useTransactions() {
       id,
       payment_status,
       payment_method,
-      paid_at
+      paid_at,
+      send_whatsapp
     }: {
       id: string;
       payment_status: string;
       payment_method?: string;
       paid_at?: string;
+      send_whatsapp?: boolean;
     }) => {
       try {
         const data = await apiClient.put<{ data: TransactionWithRelations }>(
@@ -90,6 +92,7 @@ export function useTransactions() {
             payment_status,
             payment_method,
             paid_at: paid_at || (payment_status === "paid" ? new Date().toISOString() : null),
+            send_whatsapp,
           }
         );
         return data.data;

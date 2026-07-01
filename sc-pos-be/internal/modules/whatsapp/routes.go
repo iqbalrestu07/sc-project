@@ -9,7 +9,7 @@ func RegisterRoutes(r *gin.RouterGroup, middlewares ...gin.HandlerFunc) {
 	wa := r.Group("/whatsapp")
 	wa.Use(middlewares...)
 
-	wa.GET("/status", handler.Status)
+	wa.GET("/devices", handler.Devices)
 	wa.GET("/login", handler.LoginQR)
 	wa.POST("/logout", handler.Logout)
 

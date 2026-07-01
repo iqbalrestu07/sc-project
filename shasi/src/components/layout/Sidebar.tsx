@@ -27,7 +27,7 @@ interface NavGroup {
 }
 
 type NavEntry =
-  | { kind: "item";  item: NavItem }
+  | { kind: "item"; item: NavItem }
   | { kind: "group"; group: NavGroup };
 
 // ─── Navigation definition ────────────────────────────────────────────────────
@@ -35,23 +35,23 @@ type NavEntry =
 const NAV_STRUCTURE: NavEntry[] = [
   {
     kind: "item",
-    item: { to: "/dashboard",    icon: LayoutDashboard, label: "Dashboard",    permission: "reports:read" },
+    item: { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", permission: "reports:read" },
   },
   {
     kind: "item",
-    item: { to: "/patients",     icon: Users,           label: "Patients",     permission: "patients:read" },
+    item: { to: "/patients", icon: Users, label: "Patients", permission: "patients:read" },
   },
   {
     kind: "item",
-    item: { to: "/appointments", icon: Calendar,        label: "Appointments", permission: "appointments:read" },
+    item: { to: "/appointments", icon: Calendar, label: "Appointments", permission: "appointments:read" },
   },
   {
     kind: "item",
-    item: { to: "/pos",          icon: ShoppingCart,    label: "Transactions", permission: "transactions:read" },
+    item: { to: "/pos", icon: ShoppingCart, label: "Transactions", permission: "transactions:read" },
   },
   {
     kind: "item",
-    item: { to: "/messaging",    icon: MessageCircle,   label: "Messaging" }, // Available for all valid roles
+    item: { to: "/messaging", icon: MessageCircle, label: "Messaging" }, // Available for all valid roles
   },
 
   // ── Group 1: Katalog ──────────────────────────────────────────────────────
@@ -61,11 +61,11 @@ const NAV_STRUCTURE: NavEntry[] = [
       label: "Inventory Management",
       icon: FolderOpen,
       items: [
-        { to: "/services",          icon: Sparkles,      label: "Services",            permission: "services:read" },
-        { to: "/products",          icon: Package,       label: "Products",            permission: "products:read" },
-        { to: "/categories",        icon: Tag,           label: "Categories",          permission: "categories:read" },
-        { to: "/stock-opname",      icon: ClipboardList, label: "Stock Opname",        permission: "products:write" },
-        { to: "/consumable-items",  icon: FlaskConical,  label: "Produk Habis Pakai", permission: "consumables:read" },
+        { to: "/services", icon: Sparkles, label: "Services", permission: "services:read" },
+        { to: "/products", icon: Package, label: "Products", permission: "products:read" },
+        { to: "/categories", icon: Tag, label: "Categories", permission: "categories:read" },
+        { to: "/stock-opname", icon: ClipboardList, label: "Stock Opname", permission: "products:write" },
+        { to: "/consumable-items", icon: FlaskConical, label: "Produk Habis Pakai", permission: "consumables:read" },
       ],
     },
   },
@@ -77,9 +77,9 @@ const NAV_STRUCTURE: NavEntry[] = [
       label: "Management User",
       icon: UserCog,
       items: [
-        { to: "/staff",       icon: UserCog,    label: "Staff",       permission: "staff:read" },
+        { to: "/staff", icon: UserCog, label: "Staff", permission: "staff:read" },
         { to: "/commissions", icon: DollarSign, label: "Commissions", permission: "commissions:read" },
-        { to: "/members",     icon: Building2,  label: "Members",     permission: "organization:write" },
+        { to: "/members", icon: Building2, label: "Members", permission: "organization:write" },
       ],
     },
   },
@@ -91,9 +91,8 @@ const NAV_STRUCTURE: NavEntry[] = [
       label: "Konten & Akses",
       icon: Globe,
       items: [
-        { to: "/cms",      icon: Globe,          label: "Website CMS",       permission: "cms:read" },
-        { to: "/rbac",     icon: Shield,         label: "Roles & Permissions", permission: "rbac:read" },
-        { to: "/whatsapp", icon: MessageCircle,  label: "WhatsApp" },
+        { to: "/cms", icon: Globe, label: "Website CMS", permission: "cms:read" },
+        { to: "/rbac", icon: Shield, label: "Roles & Permissions", permission: "rbac:read" },
       ],
     },
   },

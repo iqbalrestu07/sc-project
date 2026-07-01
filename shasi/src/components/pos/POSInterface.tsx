@@ -36,7 +36,10 @@ import {
   ChevronsUpDown,
   Check,
   Printer,
+  MessageCircle,
 } from "lucide-react";
+import { format } from "date-fns";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { usePatients } from "@/hooks/usePatients";
 import { useServices } from "@/hooks/useServices";
@@ -70,6 +73,7 @@ export function POSInterface() {
   const [discountType, setDiscountType] = useState<"fixed" | "percentage">("fixed");
   const [showPrintPrompt, setShowPrintPrompt] = useState(false);
   const [completedTransaction, setCompletedTransaction] = useState<TransactionWithRelations | null>(null);
+  const [sendWhatsApp, setSendWhatsApp] = useState(true);
 
   const patientsQuery = usePatients();
   const servicesQuery = useServices();
@@ -86,7 +90,7 @@ export function POSInterface() {
   );
 
   const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
+    !p.is_consumable && p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const addToCart = (
@@ -203,11 +207,16 @@ export function POSInterface() {
       const transaction = await createTransaction.mutateAsync({
         transaction: {
           patient_id: selectedPatientId,
+          appointment_id: null,
           subtotal,
           discount_amount: discount > 0 ? discount : null,
           discount_type: discount > 0 ? discountType : null,
           total_amount: total,
+          tax_amount: 0,
+          payment_method: null,
           payment_status: "pending",
+          notes: null,
+          created_by: null,
         },
         items: cart.map((item) => ({
           item_type: item.type,
@@ -228,6 +237,7 @@ export function POSInterface() {
         id: transaction.id,
         payment_status: "paid",
         payment_method: paymentMethod,
+        send_whatsapp: sendWhatsApp,
       });
 
       // Clear cart
@@ -646,6 +656,22 @@ export function POSInterface() {
                 </Button>
               ))}
             </div>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between rounded-lg border p-3 shadow-sm">
+            <div className="space-y-0.5">
+              <label htmlFor="send-wa" className="text-sm font-medium">
+                Kirim via WhatsApp
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Kirim struk digital ke pasien
+              </p>
+            </div>
+            <Switch
+              id="send-wa"
+              checked={sendWhatsApp}
+              onCheckedChange={setSendWhatsApp}
+            />
           </div>
 
           {/* Checkout Button */}

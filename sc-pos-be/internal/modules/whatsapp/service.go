@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"google.golang.org/protobuf/proto"
 	"go.mau.fi/whatsmeow/types"
@@ -15,15 +16,15 @@ import (
 
 // Service is the public interface for the whatsapp module business logic.
 type Service interface {
-	Send(orgID, to, message string) (*SendResult, error)
-	SendBulk(orgID string, recipients []Recipient, templateID, customMessage string) BulkSendResult
+	Send(orgID, deviceID, to, message string) (*SendResult, error)
+	SendBulk(orgID, deviceID string, recipients []Recipient, templateID, customMessage string) BulkSendResult
 	SendBlast(orgID string, req BlastRequest) BlastResult
 	Templates(orgID string) ([]Template, error)
 	CreateTemplate(orgID, name, content string) (*Template, error)
-	Status(orgID string) (bool, error)
-	GetLoginQR(ctx context.Context, orgID string) (<-chan string, error)
-	Logout(orgID string) error
-	SendInvoice(orgID string, data InvoiceData) error
+	GetDevices(orgID string) ([]WhatsappDevice, error)
+	GetLoginQR(ctx context.Context, orgID, deviceName string) (<-chan string, error)
+	Logout(orgID, deviceID string) error
+	SendInvoice(orgID, deviceID string, data InvoiceData) error
 }
 
 type InvoiceData struct {
@@ -76,6 +77,7 @@ type BlastResult struct {
 
 type BlastRequest struct {
 	TemplateID string      `json:"template_id"`
+	DeviceIDs  []string    `json:"device_ids"`
 	Recipients []Recipient `json:"recipients"` // Optional predefined recipients
 	MaxBlast   int         `json:"max_blast"`  // Max random successful messages
 	RegionCode string      `json:"region_code"` // e.g. "+628"
@@ -83,12 +85,12 @@ type BlastRequest struct {
 
 // ── Sending Messages ────────────────────────────────────────────────────────
 
-func (s *service) Send(orgID, to, message string) (*SendResult, error) {
+func (s *service) Send(orgID, deviceID, to, message string) (*SendResult, error) {
 	if s.clientManager == nil {
 		return nil, errors.New("whatsapp client manager not initialized")
 	}
 
-	jidStr, err := s.repo.GetDeviceJID(orgID)
+	jidStr, err := s.repo.GetDeviceJID(orgID, deviceID)
 	if err != nil {
 		return nil, err
 	}
@@ -132,10 +134,16 @@ func (s *service) Send(orgID, to, message string) (*SendResult, error) {
 	}, nil
 }
 
-func (s *service) SendBulk(orgID string, recipients []Recipient, templateID, customMessage string) BulkSendResult {
+func (s *service) SendBulk(orgID, deviceID string, recipients []Recipient, templateID, customMessage string) BulkSendResult {
 	result := BulkSendResult{
 		Total:   len(recipients),
 		Results: make([]SendResult, 0, len(recipients)),
+	}
+
+	_, err := s.repo.GetDeviceJID(orgID, deviceID)
+	if err != nil {
+		result.Failed = len(recipients)
+		return result
 	}
 
 	var baseContent string
@@ -158,7 +166,7 @@ func (s *service) SendBulk(orgID string, recipients []Recipient, templateID, cus
 		if r.PatientName != "" {
 			content = strings.ReplaceAll(content, "{{name}}", r.PatientName)
 		}
-		res, err := s.Send(orgID, r.To, content)
+		res, err := s.Send(orgID, deviceID, r.To, content)
 		if err != nil || res == nil || !res.Success {
 			result.Failed++
 			errMsg := "Failed"
@@ -185,10 +193,32 @@ func (s *service) SendBlast(orgID string, req BlastRequest) BlastResult {
 		return result // Template not found
 	}
 
-	jidStr, _ := s.repo.GetDeviceJID(orgID)
-	client, _ := s.clientManager.GetClient(jidStr)
-	if client == nil {
+	if len(req.DeviceIDs) == 0 {
 		return result
+	}
+
+	var validDeviceIDs []string
+	for _, id := range req.DeviceIDs {
+		jidStr, _ := s.repo.GetDeviceJID(orgID, id)
+		if jidStr != "" {
+			c, _ := s.clientManager.GetClient(jidStr)
+			if c != nil {
+				validDeviceIDs = append(validDeviceIDs, id)
+			}
+		}
+	}
+
+	if len(validDeviceIDs) == 0 {
+		return result
+	}
+
+	deviceCount := len(validDeviceIDs)
+	currentDeviceIdx := 0
+
+	getNextDeviceID := func() string {
+		id := validDeviceIDs[currentDeviceIdx]
+		currentDeviceIdx = (currentDeviceIdx + 1) % deviceCount
+		return id
 	}
 
 	// 1. Send to predefined recipients if any
@@ -201,7 +231,8 @@ func (s *service) SendBlast(orgID string, req BlastRequest) BlastResult {
 		if r.PatientName != "" {
 			content = strings.ReplaceAll(content, "{{name}}", r.PatientName)
 		}
-		res, _ := s.Send(orgID, r.To, content)
+		senderDeviceID := getNextDeviceID()
+		res, _ := s.Send(orgID, senderDeviceID, r.To, content)
 		if res != nil && res.Success {
 			result.Success++
 		}
@@ -234,6 +265,14 @@ func (s *service) SendBlast(orgID string, req BlastRequest) BlastResult {
 		result.TotalAttempted++
 		
 		// Validate using IsOnWhatsApp
+		// Need a client for IsOnWhatsApp check. We can just use the first valid one
+		// Wait, if we use the first valid one, it should work for the IsOnWhatsApp check.
+		jidStr, _ := s.repo.GetDeviceJID(orgID, validDeviceIDs[0])
+		client, _ := s.clientManager.GetClient(jidStr)
+		if client == nil {
+			continue
+		}
+		
 		checkRes, err := client.IsOnWhatsApp(ctx, []string{phone})
 		if err != nil || len(checkRes) == 0 {
 			continue
@@ -241,7 +280,8 @@ func (s *service) SendBlast(orgID string, req BlastRequest) BlastResult {
 		
 		if checkRes[0].IsIn {
 			// Found valid number, send
-			res, _ := s.Send(orgID, phone, template.Content)
+			senderDeviceID := getNextDeviceID()
+			res, _ := s.Send(orgID, senderDeviceID, phone, template.Content)
 			if res != nil && res.Success {
 				result.Success++
 			}
@@ -253,43 +293,43 @@ func (s *service) SendBlast(orgID string, req BlastRequest) BlastResult {
 
 // ── Device / Session Management ─────────────────────────────────────────────
 
-func (s *service) Status(orgID string) (bool, error) {
-	jidStr, err := s.repo.GetDeviceJID(orgID)
+func (s *service) GetDevices(orgID string) ([]WhatsappDevice, error) {
+	devices, err := s.repo.GetDevices(orgID)
 	if err != nil {
-		return false, err
-	}
-	if jidStr == "" {
-		return false, nil
+		return nil, err
 	}
 	
-	client, err := s.clientManager.GetClient(jidStr)
-	if err != nil {
-		return false, nil // Device exists but client can't connect, treat as offline
+	for i := range devices {
+		devices[i].Status = "disconnected"
+		client, err := s.clientManager.GetClient(devices[i].JID)
+		if err == nil && client.IsLoggedIn() {
+			devices[i].Status = "connected"
+		}
 	}
-	return client.IsConnected(), nil
+	
+	return devices, nil
 }
 
-func (s *service) GetLoginQR(ctx context.Context, orgID string) (<-chan string, error) {
-	// If already have JID, disconnect first? Or just allow new pairing.
-	jidStr, _ := s.repo.GetDeviceJID(orgID)
-	if jidStr != "" {
-		s.clientManager.DeleteSession(jidStr)
-		s.repo.DeleteDeviceJID(orgID)
-	}
-
+func (s *service) GetLoginQR(ctx context.Context, orgID, deviceName string) (<-chan string, error) {
 	return s.clientManager.StartNewSession(ctx, func(newJid string) {
-		s.repo.SaveDeviceJID(orgID, newJid)
+		d := &WhatsappDevice{
+			ID:             uuid.New().String(),
+			OrganizationID: orgID,
+			Name:           deviceName,
+			JID:            newJid,
+		}
+		s.repo.SaveDevice(d)
 	})
 }
 
-func (s *service) Logout(orgID string) error {
-	jidStr, err := s.repo.GetDeviceJID(orgID)
+func (s *service) Logout(orgID, deviceID string) error {
+	jidStr, err := s.repo.GetDeviceJID(orgID, deviceID)
 	if err != nil {
 		return err
 	}
 	if jidStr != "" {
 		s.clientManager.DeleteSession(jidStr)
-		return s.repo.DeleteDeviceJID(orgID)
+		return s.repo.DeleteDevice(orgID, deviceID)
 	}
 	return nil
 }
@@ -314,7 +354,7 @@ func (s *service) CreateTemplate(orgID, name, content string) (*Template, error)
 
 // ── Integrations ────────────────────────────────────────────────────────────
 
-func (s *service) SendInvoice(orgID string, data InvoiceData) error {
+func (s *service) SendInvoice(orgID, deviceID string, data InvoiceData) error {
 	if data.PatientWhatsApp == "" {
 		return nil // Cannot send if no WhatsApp number
 	}
@@ -325,6 +365,6 @@ func (s *service) SendInvoice(orgID string, data InvoiceData) error {
 	}
 	msg += fmt.Sprintf("\nTotal: Rp %.2f\n\nTerima kasih!", data.TotalAmount)
 	
-	_, err := s.Send(orgID, data.PatientWhatsApp, msg)
+	_, err := s.Send(orgID, deviceID, data.PatientWhatsApp, msg)
 	return err
 }

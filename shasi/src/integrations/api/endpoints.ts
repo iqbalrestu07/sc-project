@@ -139,7 +139,7 @@ export const API_ENDPOINTS = {
 
     // WhatsApp
     WHATSAPP: {
-        STATUS: "/whatsapp/status",
+        DEVICES: "/whatsapp/devices",
         LOGOUT: "/whatsapp/logout",
         SEND_MESSAGE: "/whatsapp/send",
         SEND_BULK: "/whatsapp/send-bulk",

@@ -1,0 +1,169 @@
+--- internal/modules/whatsapp/service.go
++++ internal/modules/whatsapp/service.go
+@@ -15,15 +15,15 @@
+ 
+ // Service is the public interface for the whatsapp module business logic.
+ type Service interface {
+-	Send(orgID, to, message string) (*SendResult, error)
+-	SendBulk(orgID string, recipients []Recipient, templateID, customMessage string) BulkSendResult
+-	SendBlast(orgID string, req BlastRequest) BlastResult
++	Send(orgID, deviceID, to, message string) (*SendResult, error)
++	SendBulk(orgID, deviceID string, recipients []Recipient, templateID, customMessage string) BulkSendResult
++	SendBlast(orgID, deviceID string, req BlastRequest) BlastResult
+ 	Templates(orgID string) ([]Template, error)
+ 	CreateTemplate(orgID, name, content string) (*Template, error)
+-	Status(orgID string) (bool, error)
+-	GetLoginQR(ctx context.Context, orgID string) (<-chan string, error)
+-	Logout(orgID string) error
+-	SendInvoice(orgID string, data InvoiceData) error
++	GetDevices(orgID string) ([]WhatsappDevice, error)
++	GetLoginQR(ctx context.Context, orgID, deviceName string) (<-chan string, error)
++	Logout(orgID, deviceID string) error
++	SendInvoice(orgID, deviceID string, data InvoiceData) error
+ }
+ 
+ type InvoiceData struct {
+@@ -83,12 +83,12 @@
+ 
+ // ── Sending Messages ────────────────────────────────────────────────────────
+ 
+-func (s *service) Send(orgID, to, message string) (*SendResult, error) {
++func (s *service) Send(orgID, deviceID, to, message string) (*SendResult, error) {
+ 	if s.clientManager == nil {
+ 		return nil, errors.New("whatsapp client manager not initialized")
+ 	}
+ 
+-	jidStr, err := s.repo.GetDeviceJID(orgID)
++	jidStr, err := s.repo.GetDeviceJID(orgID, deviceID)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+@@ -118,12 +118,12 @@
+ 	return &SendResult{Success: true, MessageID: resp.ID}, nil
+ }
+ 
+-func (s *service) SendBulk(orgID string, recipients []Recipient, templateID, customMessage string) BulkSendResult {
++func (s *service) SendBulk(orgID, deviceID string, recipients []Recipient, templateID, customMessage string) BulkSendResult {
+ 	result := BulkSendResult{
+ 		Total: len(recipients),
+ 	}
+ 
+-	jidStr, err := s.repo.GetDeviceJID(orgID)
++	jidStr, err := s.repo.GetDeviceJID(orgID, deviceID)
+ 	if err != nil || jidStr == "" {
+ 		result.Failed = len(recipients)
+ 		return result
+@@ -165,7 +165,7 @@
+ 	return result
+ }
+ 
+-func (s *service) SendBlast(orgID string, req BlastRequest) BlastResult {
++func (s *service) SendBlast(orgID, deviceID string, req BlastRequest) BlastResult {
+ 	result := BlastResult{}
+ 	
+ 	// 1. Get templates
+@@ -185,7 +185,7 @@
+ 	}
+ 
+ 	// 2. Validate WhatsApp connection
+-	jidStr, _ := s.repo.GetDeviceJID(orgID)
++	jidStr, _ := s.repo.GetDeviceJID(orgID, deviceID)
+ 	if jidStr == "" {
+ 		return result
+ 	}
+@@ -242,7 +242,7 @@
+ 		
+ 		if checkRes[0].IsIn {
+ 			// Found valid number, send
+-			res, _ := s.Send(orgID, phone, template.Content)
++			res, _ := s.Send(orgID, deviceID, phone, template.Content)
+ 			if res != nil && res.Success {
+ 				result.Success++
+ 			}
+@@ -254,43 +254,44 @@
+ 
+ // ── Device / Session Management ─────────────────────────────────────────────
+ 
+-func (s *service) Status(orgID string) (bool, error) {
+-	jidStr, err := s.repo.GetDeviceJID(orgID)
++func (s *service) GetDevices(orgID string) ([]WhatsappDevice, error) {
++	devices, err := s.repo.GetDevices(orgID)
+ 	if err != nil {
+-		return false, err
++		return nil, err
+ 	}
+-	if jidStr == "" {
+-		return false, nil
+-	}
+ 	
+-	client, err := s.clientManager.GetClient(jidStr)
+-	if err != nil {
+-		return false, nil // Device exists but client can't connect, treat as offline
++	for i := range devices {
++		devices[i].Status = "disconnected"
++		client, err := s.clientManager.GetClient(devices[i].JID)
++		if err == nil && client.IsLoggedIn() {
++			devices[i].Status = "connected"
++		}
+ 	}
+-	// client.IsConnected() might return false if the websocket is temporarily reconnecting.
+-	// client.IsLoggedIn() is more accurate because it checks if the device session is still valid.
+-	return client.IsLoggedIn(), nil
++	
++	return devices, nil
+ }
+ 
+-func (s *service) GetLoginQR(ctx context.Context, orgID string) (<-chan string, error) {
+-	// If already have JID, disconnect first? Or just allow new pairing.
+-	jidStr, _ := s.repo.GetDeviceJID(orgID)
+-	if jidStr != "" {
+-		s.clientManager.DeleteSession(jidStr)
+-		s.repo.DeleteDeviceJID(orgID)
+-	}
++import "github.com/google/uuid"
+ 
+-	return s.clientManager.StartNewSession(ctx, func(newJid string) {
+-		s.repo.SaveDeviceJID(orgID, newJid)
++func (s *service) GetLoginQR(ctx context.Context, orgID, deviceName string) (<-chan string, error) {
++	return s.clientManager.StartNewSession(ctx, func(newJid string) {
++		d := &WhatsappDevice{
++			ID: uuid.New().String(),
++			OrganizationID: orgID,
++			Name: deviceName,
++			JID: newJid,
++		}
++		s.repo.SaveDevice(d)
+ 	})
+ }
+ 
+-func (s *service) Logout(orgID string) error {
+-	jidStr, err := s.repo.GetDeviceJID(orgID)
++func (s *service) Logout(orgID, deviceID string) error {
++	jidStr, err := s.repo.GetDeviceJID(orgID, deviceID)
+ 	if err != nil {
+ 		return err
+ 	}
+ 	if jidStr != "" {
+ 		s.clientManager.DeleteSession(jidStr)
+-		return s.repo.DeleteDeviceJID(orgID)
++		return s.repo.DeleteDevice(orgID, deviceID)
+ 	}
+ 	return nil
+ }
+@@ -317,7 +318,7 @@
+ 
+ // ── Integrations ────────────────────────────────────────────────────────────
+ 
+-func (s *service) SendInvoice(orgID string, data InvoiceData) error {
++func (s *service) SendInvoice(orgID, deviceID string, data InvoiceData) error {
+ 	if data.PatientWhatsApp == "" {
+ 		return errors.New("no whatsapp number provided")
+ 	}
+@@ -330,5 +331,5 @@
+ 		itemsStr += fmt.Sprintf("- %dx %s = Rp %.0f\n", item.Quantity, item.Name, item.TotalPrice)
+ 	}
+ 	msg := fmt.Sprintf(template, data.PatientName, data.TransactionCode, itemsStr, data.TotalAmount)
+-	_, err := s.Send(orgID, data.PatientWhatsApp, msg)
++	_, err := s.Send(orgID, deviceID, data.PatientWhatsApp, msg)
+ 	return err
+ }

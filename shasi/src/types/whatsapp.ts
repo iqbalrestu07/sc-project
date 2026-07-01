@@ -7,8 +7,13 @@ export interface WhatsappTemplate {
     updated_at?: string;
 }
 
-export interface WhatsappStatusResponse {
-    connected: boolean;
+export interface WhatsappDevice {
+    id: string;
+    organization_id: string;
+    name: string;
+    jid: string;
+    status: "connected" | "disconnected";
+    created_at: string;
 }
 
 export interface Recipient {
@@ -18,9 +23,12 @@ export interface Recipient {
 
 export interface BlastRequest {
     template_id: string;
-    recipients: Recipient[];
-    max_blast: number;
-    region_code: string;
+    device_ids: string[];
+    audience?: string;
+    include_ids?: string[];
+    recipients?: Recipient[];
+    max_blast?: number;
+    region_code?: string;
 }
 
 export interface BlastResult {
@@ -29,6 +37,14 @@ export interface BlastResult {
 }
 
 export interface SendBulkRequest {
+    device_id: string;
     recipients: Recipient[];
+    template_id?: string;
+    message?: string;
+}
+
+export interface SendRequest {
+    device_id: string;
+    to: string;
     message: string;
 }

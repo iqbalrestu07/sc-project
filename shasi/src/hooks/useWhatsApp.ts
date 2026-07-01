@@ -3,7 +3,7 @@ import { apiClient } from "@/integrations/api/client";
 import { API_ENDPOINTS } from "@/integrations/api/endpoints";
 import type { ApiResponse } from "@/integrations/api/types";
 import type { 
-    WhatsappStatusResponse, 
+    WhatsappDevice, 
     WhatsappTemplate, 
     BlastRequest, 
     BlastResult,
@@ -13,18 +13,18 @@ import type {
 // Keys for caching
 export const WA_KEYS = {
     all: ['whatsapp'] as const,
-    status: () => [...WA_KEYS.all, 'status'] as const,
+    devices: () => [...WA_KEYS.all, 'devices'] as const,
     templates: () => [...WA_KEYS.all, 'templates'] as const,
 };
 
-export function useWhatsAppStatus() {
+export function useWhatsAppDevices() {
     return useQuery({
-        queryKey: WA_KEYS.status(),
+        queryKey: WA_KEYS.devices(),
         queryFn: async () => {
-            const response = await apiClient.get<ApiResponse<WhatsappStatusResponse>>(
-                API_ENDPOINTS.WHATSAPP.STATUS
+            const response = await apiClient.get<ApiResponse<WhatsappDevice[]>>(
+                API_ENDPOINTS.WHATSAPP.DEVICES
             );
-            return response.data;
+            return response.data || [];
         },
     });
 }
@@ -32,14 +32,15 @@ export function useWhatsAppStatus() {
 export function useWhatsAppLogout() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async () => {
+        mutationFn: async (deviceId: string) => {
             const response = await apiClient.post<ApiResponse>(
-                API_ENDPOINTS.WHATSAPP.LOGOUT
+                API_ENDPOINTS.WHATSAPP.LOGOUT,
+                { device_id: deviceId }
             );
             return response;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: WA_KEYS.status() });
+            queryClient.invalidateQueries({ queryKey: WA_KEYS.devices() });
         },
     });
 }

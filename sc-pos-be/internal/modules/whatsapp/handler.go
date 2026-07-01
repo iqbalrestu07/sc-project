@@ -22,11 +22,13 @@ func NewModule() *Handler {
 }
 
 type SendRequest struct {
-	To      string `json:"to" binding:"required"`
-	Message string `json:"message" binding:"required"`
+	DeviceID string `json:"device_id"`
+	To       string `json:"to" binding:"required"`
+	Message  string `json:"message" binding:"required"`
 }
 
 type SendBulkRequest struct {
+	DeviceID   string      `json:"device_id"`
 	Recipients []Recipient `json:"recipients" binding:"required"`
 	TemplateID string      `json:"template_id"`
 	Message    string      `json:"message"`
@@ -47,7 +49,7 @@ func (h *Handler) Send(c *gin.Context) {
 	}
 
 	orgID := c.GetString("org_id")
-	result, err := h.service.Send(orgID, req.To, req.Message)
+	result, err := h.service.Send(orgID, req.DeviceID, req.To, req.Message)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -68,7 +70,7 @@ func (h *Handler) SendBulk(c *gin.Context) {
 	}
 
 	orgID := c.GetString("org_id")
-	results := h.service.SendBulk(orgID, req.Recipients, req.TemplateID, req.Message)
+	results := h.service.SendBulk(orgID, req.DeviceID, req.Recipients, req.TemplateID, req.Message)
 	utils.SuccessResponse(c, http.StatusOK, results)
 }
 
@@ -86,24 +88,28 @@ func (h *Handler) SendBlast(c *gin.Context) {
 
 // ── Session endpoints ───────────────────────────────────────────────────────
 
-func (h *Handler) Status(c *gin.Context) {
+func (h *Handler) Devices(c *gin.Context) {
 	orgID := c.GetString("org_id")
-	isConnected, err := h.service.Status(orgID)
+	devices, err := h.service.GetDevices(orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	utils.SuccessResponse(c, http.StatusOK, gin.H{"connected": isConnected})
+	utils.SuccessResponse(c, http.StatusOK, devices)
 }
 
 func (h *Handler) LoginQR(c *gin.Context) {
 	orgID := c.GetString("org_id")
+	deviceName := c.Query("name")
+	if deviceName == "" {
+		deviceName = "Device 1"
+	}
 	
 	// Create context with timeout for QR generation
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	qrChan, err := h.service.GetLoginQR(ctx, orgID)
+	qrChan, err := h.service.GetLoginQR(ctx, orgID, deviceName)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -139,7 +145,16 @@ func (h *Handler) LoginQR(c *gin.Context) {
 
 func (h *Handler) Logout(c *gin.Context) {
 	orgID := c.GetString("org_id")
-	err := h.service.Logout(orgID)
+	
+	var req struct {
+		DeviceID string `json:"device_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	err := h.service.Logout(orgID, req.DeviceID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return

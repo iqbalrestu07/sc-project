@@ -120,9 +120,10 @@ export function AppointmentFormDialog({
 
   const onSubmit = async (values: FormValues) => {
     try {
-      // Store the time as UTC - the hour entered should be the UTC hour displayed on calendar
-      const scheduled_at = `${values.scheduled_date}T${values.scheduled_time}:00.000Z`;
-      
+      // Treat the date/time selected by the user as Asia/Jakarta (WIB) so the
+      // backend stores and returns the appointment in the clinic's local time.
+      const scheduled_at = `${values.scheduled_date}T${values.scheduled_time}:00+07:00`;
+
       const payload = {
         patient_id: values.patient_id,
         service_id: values.service_id,

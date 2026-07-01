@@ -56,15 +56,20 @@ func (h *Handler) Create(c *gin.Context) {
 	utils.SuccessResponseWithMessage(c, http.StatusCreated, "Transaction created successfully", transaction)
 }
 
+type UpdateTransactionRequest struct {
+	models.Transaction
+	SendWhatsApp *bool `json:"send_whatsapp"`
+}
+
 func (h *Handler) Update(c *gin.Context) {
 	orgID := c.GetString("org_id")
 	userID := c.GetString("user_id")
-	var req models.Transaction
+	var req UpdateTransactionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	transaction, err := h.service.Update(c.Param("id"), orgID, userID, req)
+	transaction, err := h.service.Update(c.Param("id"), orgID, userID, req.Transaction, req.SendWhatsApp)
 	if err != nil {
 		h.handleError(c, err)
 		return

@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 var ErrNotFound = errors.New("appointment not found")
@@ -55,6 +56,8 @@ func (s *service) Create(req models.Appointment, userID *string, orgID string) (
 	if req.Status == "" {
 		req.Status = "scheduled"
 	}
+	// Treat all appointment times as Asia/Jakarta wall-clock before storing.
+	req.ScheduledAt = utils.ToJakarta(req.ScheduledAt)
 	if err := s.repo.Create(&req, orgID); err != nil {
 		return nil, err
 	}
@@ -74,6 +77,8 @@ func (s *service) Update(id, orgID, userID string, req models.Appointment) (*App
 	}
 	if req.ScheduledAt.IsZero() {
 		req.ScheduledAt = current.ScheduledAt
+	} else {
+		req.ScheduledAt = utils.ToJakarta(req.ScheduledAt)
 	}
 	if req.Status == "" {
 		req.Status = current.Status

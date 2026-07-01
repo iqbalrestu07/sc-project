@@ -17,7 +17,7 @@ type Service interface {
 	List(orgID string) ([]TransactionWithRelations, error)
 	Get(id, orgID string) (*TransactionWithRelations, error)
 	Create(req CreateRequest, userID *string, orgID string) (*TransactionWithRelations, error)
-	Update(id, orgID, userID string, req models.Transaction) (*TransactionWithRelations, error)
+	Update(id, orgID, userID string, req models.Transaction, sendWhatsApp *bool) (*TransactionWithRelations, error)
 	Delete(id, orgID, userID string) error
 	Items(id string) ([]TransactionItemWithRelations, error)
 }
@@ -158,7 +158,7 @@ func (s *service) Create(req CreateRequest, userID *string, orgID string) (*Tran
 	return result, nil
 }
 
-func (s *service) Update(id, orgID, userID string, req models.Transaction) (*TransactionWithRelations, error) {
+func (s *service) Update(id, orgID, userID string, req models.Transaction, sendWhatsApp *bool) (*TransactionWithRelations, error) {
 	current, err := s.Get(id, orgID)
 	if err != nil {
 		return nil, err
@@ -179,10 +179,12 @@ func (s *service) Update(id, orgID, userID string, req models.Transaction) (*Tra
 		}
 		
 		updatedTx, _ := s.Get(id, orgID)
-		if updatedTx != nil {
+		if updatedTx != nil && (sendWhatsApp == nil || *sendWhatsApp) {
 			go s.sendWhatsappInvoice(updatedTx, orgID)
 		}
+		return updatedTx, nil
 	}
+
 	return s.Get(id, orgID)
 }
 
@@ -227,5 +229,6 @@ func (s *service) sendWhatsappInvoice(tx *TransactionWithRelations, orgID string
 	}
 
 	waService := whatsapp.NewService()
-	_ = waService.SendInvoice(orgID, invoice)
+	// Fire and forget whatsapp invoice, passing empty deviceID to use the first connected device
+	_ = waService.SendInvoice(orgID, "", invoice)
 }

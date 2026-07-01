@@ -124,7 +124,10 @@ func parseOptionalTime(value string) (*time.Time, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &parsed, nil
+	// Convert the absolute instant to Asia/Jakarta wall-clock so the query
+	// boundaries match the TIMESTAMP (without time zone) values stored in the DB.
+	jakarta := utils.ToJakarta(parsed)
+	return &jakarta, nil
 }
 
 func getUserID(c *gin.Context) *string {

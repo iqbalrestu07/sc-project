@@ -32,7 +32,7 @@ func StopReminderJob() {
 
 func processReminders() {
 	waService := whatsapp.NewService()
-	
+
 	now := time.Now()
 	// Target appointments scheduled for tomorrow
 	startOfTomorrow := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
@@ -76,11 +76,18 @@ func processReminders() {
 		// A full implementation would let users configure the template in clinic_settings.
 		timeStr := scheduledAt.Format("15:04")
 		dateStr := scheduledAt.Format("02 Jan 2006")
-		
-		msg := fmt.Sprintf("Halo %s,\n\nIni adalah pengingat otomatis untuk jadwal appointment Anda pada:\nTanggal: %s\nJam: %s\n\nMohon hadir tepat waktu. Terima kasih!", 
+
+		msg := fmt.Sprintf("Halo %s,\n\nIni adalah pengingat otomatis untuk jadwal appointment Anda pada:\nTanggal: %s\nJam: %s\n\nMohon hadir tepat waktu. Terima kasih!",
 			patientName, dateStr, timeStr)
 
-		_, err = waService.Send(orgID, patientWhatsApp, msg)
+		devices, err := waService.GetDevices(orgID)
+		if err != nil || len(devices) == 0 {
+			log.Printf("No WhatsApp device for org %s, skipping reminder to %s\n", orgID, patientWhatsApp)
+			continue
+		}
+		deviceID := devices[0].ID
+
+		_, err = waService.Send(orgID, deviceID, patientWhatsApp, msg)
 		if err != nil {
 			log.Printf("Failed to send reminder to %s: %v\n", patientWhatsApp, err)
 		} else {

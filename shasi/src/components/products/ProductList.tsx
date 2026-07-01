@@ -11,6 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -27,7 +34,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, MoreHorizontal, Edit, Trash2, AlertTriangle, Package } from "lucide-react";
+import { Search, MoreHorizontal, Edit, Trash2, AlertTriangle, Package, Filter, ArrowUpDown } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
 import type { Product } from "@/types/product";
 import { PRODUCT_CATEGORIES } from "@/types/product";
@@ -42,13 +49,37 @@ export function ProductList({ onEdit }: ProductListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  const [productType, setProductType] = useState<string>("all");
+  const [stockStatus, setStockStatus] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("name_asc");
+
   const filteredProducts = products.filter((product) => {
     const search = searchQuery.toLowerCase();
-    return (
-      product.name.toLowerCase().includes(search) ||
+    const catStr = typeof product.category === 'object' ? product.category?.name : product.category;
+    
+    const matchesSearch = product.name.toLowerCase().includes(search) ||
       (product.sku?.toLowerCase().includes(search) ?? false) ||
-      (product.category?.toLowerCase().includes(search) ?? false)
-    );
+      (catStr?.toLowerCase().includes(search) ?? false);
+
+    const matchesType = 
+      productType === "all" ? true :
+      productType === "consumable" ? product.is_consumable :
+      productType === "normal" ? !product.is_consumable : true;
+
+    const stock = product.current_stock ?? 0;
+    const minStock = product.minimum_stock ?? 5;
+    const matchesStock =
+      stockStatus === "all" ? true :
+      stockStatus === "low_stock" ? (stock > 0 && stock <= minStock) :
+      stockStatus === "out_of_stock" ? stock <= 0 : true;
+
+    return matchesSearch && matchesType && matchesStock;
+  }).sort((a, b) => {
+    if (sortBy === "name_asc") return a.name.localeCompare(b.name);
+    if (sortBy === "name_desc") return b.name.localeCompare(a.name);
+    if (sortBy === "stock_asc") return (a.current_stock ?? 0) - (b.current_stock ?? 0);
+    if (sortBy === "stock_desc") return (b.current_stock ?? 0) - (a.current_stock ?? 0);
+    return 0;
   });
 
   const handleDelete = async () => {
@@ -67,8 +98,9 @@ export function ProductList({ onEdit }: ProductListProps) {
     }).format(price);
   };
 
-  const getCategoryLabel = (value: string | null) => {
+  const getCategoryLabel = (value: any) => {
     if (!value) return "-";
+    if (typeof value === "object" && value.name) return value.name;
     return PRODUCT_CATEGORIES.find((c) => c.value === value)?.label || value;
   };
 
@@ -117,15 +149,62 @@ export function ProductList({ onEdit }: ProductListProps) {
   return (
     <>
       <Card className="shadow-clinic">
-        <CardContent className="p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, SKU, or category..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+        <CardContent className="p-4 space-y-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, SKU, or category..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            
+            <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+              <Select value={productType} onValueChange={setProductType}>
+                <SelectTrigger className="w-[140px]">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4" />
+                    <span>Type</span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="normal">Retail / Normal</SelectItem>
+                  <SelectItem value="consumable">Consumable</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={stockStatus} onValueChange={setStockStatus}>
+                <SelectTrigger className="w-[140px]">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    <span>Stock</span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="low_stock">Low Stock</SelectItem>
+                  <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-[160px]">
+                  <div className="flex items-center gap-2">
+                    <ArrowUpDown className="h-4 w-4" />
+                    <span>Sort</span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name_asc">Name (A-Z)</SelectItem>
+                  <SelectItem value="name_desc">Name (Z-A)</SelectItem>
+                  <SelectItem value="stock_desc">Stock (High-Low)</SelectItem>
+                  <SelectItem value="stock_asc">Stock (Low-High)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -42,7 +42,7 @@ export function AppointmentCalendar({
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
-  const timeSlots = Array.from({ length: 12 }, (_, i) => i + 8); // 8 AM to 7 PM
+  const timeSlots = Array.from({ length: 24 }, (_, i) => i); // 00:00 to 23:00
 
   const getStatusBadge = (status: string) => {
     const statusConfig = APPOINTMENT_STATUSES.find((s) => s.value === status);
@@ -52,8 +52,9 @@ export function AppointmentCalendar({
   const getAppointmentsForSlot = (date: Date, hour: number) => {
     return appointments.filter((apt) => {
       const aptDate = new Date(apt.scheduled_at);
-      // Use UTC hours to match the stored UTC time
-      return isSameDay(aptDate, date) && aptDate.getUTCHours() === hour;
+      // The backend now returns the appointment time in Asia/Jakarta (WIB).
+      // Match the local hour so the calendar displays the exact clinic time.
+      return isSameDay(aptDate, date) && aptDate.getHours() === hour;
     });
   };
 
@@ -159,7 +160,7 @@ export function AppointmentCalendar({
                         <div
                           key={`${day.toISOString()}-${hour}`}
                           className={cn(
-                            "p-1 border-r last:border-r-0 min-h-[60px]",
+                            "p-1 border-r last:border-r-0 min-h-[40px]",
                             isSameDay(day, new Date()) && "bg-primary/5"
                           )}
                         >
