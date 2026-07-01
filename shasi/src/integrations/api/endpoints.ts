@@ -170,4 +170,13 @@ export const API_ENDPOINTS = {
         GRANT_PERMISSION:     (userId: string) => `/rbac/user-permissions/${userId}`,
         REVOKE_PERMISSION:    (userId: string, permId: string) => `/rbac/user-permissions/${userId}/${permId}`,
     },
+
+    // Omnichannel
+    OMNI: {
+        CONVERSATIONS: "/omni/conversations",
+        MESSAGES: (id: string) => `/omni/conversations/${id}/messages`,
+        SEND_MESSAGE: (id: string) => `/omni/conversations/${id}/messages`,
+        MARK_AS_READ: (id: string) => `/omni/conversations/${id}/read`,
+        WS: (orgId: string) => `/omni/ws?org_id=${orgId}`,
+    },
 };

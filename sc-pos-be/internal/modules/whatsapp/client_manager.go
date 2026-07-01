@@ -11,7 +11,9 @@ import (
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
+	"time"
 )
 
 func init() {
@@ -25,6 +27,8 @@ type ClientManager struct {
 	clients   map[string]*whatsmeow.Client // map JID string to Client
 	mu        sync.RWMutex
 	log       waLog.Logger
+	OnMessage func(receiverJID, senderJID, customerName, contentType, content, mediaURL string, timestamp time.Time)
+	OnHistorySync func(receiverJID string, evt *events.HistorySync)
 }
 
 var managerInstance *ClientManager
@@ -81,14 +85,78 @@ func (cm *ClientManager) GetClient(jidStr string) (*whatsmeow.Client, error) {
 	}
 
 	device, err := cm.container.GetDevice(context.Background(), jid)
-	if err != nil {
-		return nil, fmt.Errorf("device not found in store: %v", err)
+	if err != nil || device == nil {
+		// Device not found directly, maybe it has AD device specifier (e.g., :47).
+		// Let's get all devices and find the one that matches ToNonAD().
+		devices, getErr := cm.container.GetAllDevices(context.Background())
+		if getErr == nil {
+			for _, d := range devices {
+				if d.ID.ToNonAD().String() == jid.ToNonAD().String() {
+					device = d
+					break
+				}
+			}
+		}
 	}
+	
 	if device == nil {
 		return nil, fmt.Errorf("no device for JID %s", jidStr)
 	}
 
 	newClient := whatsmeow.NewClient(device, cm.log)
+	
+	newClient.AddEventHandler(func(evt interface{}) {
+		switch v := evt.(type) {
+		case *events.Message:
+			if cm.OnMessage != nil {
+				// We need to look up orgID and deviceID for this jid
+				jidStr := newClient.Store.ID.ToNonAD().String()
+				
+				// Wait, doing this lookup asynchronously or passing it directly?
+				// Since we are in the handler, let's just pass the jidStr
+				// and let OnMessage handle it, OR we look it up here.
+				
+				content := ""
+				contentType := "text"
+				mediaURL := "" // WhatsApp doesn't provide mediaURL directly, usually you download it.
+				
+				msg := v.Message
+				if msg.GetConversation() != "" {
+					content = msg.GetConversation()
+				} else if msg.GetExtendedTextMessage() != nil {
+					content = msg.GetExtendedTextMessage().GetText()
+				} else if msg.GetImageMessage() != nil {
+					contentType = "image"
+					content = msg.GetImageMessage().GetCaption()
+				} else if msg.GetDocumentMessage() != nil {
+					contentType = "document"
+					content = msg.GetDocumentMessage().GetTitle()
+				} else if msg.GetVideoMessage() != nil {
+					contentType = "video"
+					content = msg.GetVideoMessage().GetCaption()
+				} else if msg.GetAudioMessage() != nil {
+					contentType = "audio"
+				}
+
+				if content == "" && contentType == "text" {
+					return // Ignore unsupported or empty messages
+				}
+
+				sender := v.Info.Sender.ToNonAD().String()
+				pushName := v.Info.PushName
+				
+				// Call OnMessage with the device's JID (receiver) and sender info
+				cm.OnMessage(jidStr, sender, pushName, contentType, content, mediaURL, v.Info.Timestamp)
+			}
+			
+		case *events.HistorySync:
+			if cm.OnHistorySync != nil {
+				jidStr := newClient.Store.ID.ToNonAD().String()
+				cm.OnHistorySync(jidStr, v)
+			}
+		}
+	})
+
 	err = newClient.Connect()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect client: %w", err)
@@ -176,9 +244,31 @@ func (cm *ClientManager) DeleteSession(jidStr string) error {
 		// Attempt to load and logout
 		jid, err := types.ParseJID(jidStr)
 		if err == nil {
-			dev, err := cm.container.GetDevice(ctx, jid)
-			if err == nil && dev != nil {
-				client := whatsmeow.NewClient(dev, cm.log)
+			device, err := cm.container.GetDevice(ctx, jid)
+			if err != nil || device == nil {
+				devices, getErr := cm.container.GetAllDevices(ctx)
+				if getErr == nil {
+					for _, d := range devices {
+						if d.ID.ToNonAD().String() == jid.ToNonAD().String() {
+							device = d
+							break
+						}
+					}
+				}
+			}
+			
+			if device != nil {
+				client := whatsmeow.NewClient(device, cm.log)
+				
+				// CRITICAL: We must be connected to send the logout stanza to WhatsApp servers
+				if !client.IsConnected() {
+					err = client.Connect()
+					if err == nil {
+						// Small wait to ensure connection is ready before sending logout stanza
+						time.Sleep(1 * time.Second)
+					}
+				}
+				
 				client.Logout(ctx)
 			}
 		}

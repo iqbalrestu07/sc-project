@@ -302,7 +302,7 @@ func (s *service) GetDevices(orgID string) ([]WhatsappDevice, error) {
 	for i := range devices {
 		devices[i].Status = "disconnected"
 		client, err := s.clientManager.GetClient(devices[i].JID)
-		if err == nil && client.IsLoggedIn() {
+		if err == nil && client != nil && client.Store != nil && client.Store.ID != nil {
 			devices[i].Status = "connected"
 		}
 	}

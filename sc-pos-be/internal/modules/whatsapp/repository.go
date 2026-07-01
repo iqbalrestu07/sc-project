@@ -112,6 +112,19 @@ func (r *Repository) GetDeviceJID(orgID, deviceID string) (string, error) {
 	return jid, nil
 }
 
+func (r *Repository) GetDeviceByJID(jid string) (*WhatsappDevice, error) {
+	query := `SELECT id, organization_id, name, jid, created_at FROM clinic_whatsapp_devices WHERE jid = $1 LIMIT 1`
+	var d WhatsappDevice
+	err := database.DB.QueryRow(query, jid).Scan(&d.ID, &d.OrganizationID, &d.Name, &d.JID, &d.CreatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &d, nil
+}
+
 func (r *Repository) SaveDevice(d *WhatsappDevice) error {
 	query := `
 		INSERT INTO clinic_whatsapp_devices (id, organization_id, name, jid) 

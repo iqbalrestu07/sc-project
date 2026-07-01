@@ -21,6 +21,7 @@ import (
 	"github.com/sc-pos/backend/internal/modules/stock"
 	"github.com/sc-pos/backend/internal/modules/transaction"
 	"github.com/sc-pos/backend/internal/modules/whatsapp"
+	"github.com/sc-pos/backend/internal/modules/omnichannel"
 )
 
 func SetupRoutes(router *gin.Engine) {
@@ -141,6 +142,9 @@ func SetupRoutes(router *gin.Engine) {
 
 		// ── WhatsApp ──────────────────────────────────────────────────────
 		whatsapp.RegisterRoutes(protectedAPI, cashierAndAdmin)
+
+		// ── Omnichannel Chat ──────────────────────────────────────────────
+		omnichannel.RegisterRoutes(protectedAPI, cashierAndAdmin)
 
 		// ── Migration / Import Excel ──────────────────────────────────────
 		migration.RegisterRoutes(protectedAPI, adminOnly)

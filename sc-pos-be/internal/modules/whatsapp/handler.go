@@ -90,6 +90,7 @@ func (h *Handler) SendBlast(c *gin.Context) {
 
 func (h *Handler) Devices(c *gin.Context) {
 	orgID := c.GetString("org_id")
+	
 	devices, err := h.service.GetDevices(orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())

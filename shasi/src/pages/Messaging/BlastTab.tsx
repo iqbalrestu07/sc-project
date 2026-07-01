@@ -6,17 +6,21 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Send, Rocket } from "lucide-react";
-import { useWhatsAppTemplates, useSendWhatsAppBlast } from "@/hooks/useWhatsApp";
+import { useWhatsAppTemplates, useSendWhatsAppBlast, useWhatsAppDevices } from "@/hooks/useWhatsApp";
 import { usePatients } from "@/hooks/usePatients";
 import { toast } from "sonner";
 import type { Recipient } from "@/types/whatsapp";
 
 export function BlastTab() {
   const { data: templates = [], isLoading: templatesLoading } = useWhatsAppTemplates();
+  const { data: devices = [], isLoading: devicesLoading } = useWhatsAppDevices();
   const { data: patients = [] } = usePatients();
   const blastMutation = useSendWhatsAppBlast();
 
+  const connectedDevices = devices.filter(d => d.status === "connected");
+
   const [templateId, setTemplateId] = useState<string>("");
+  const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
   const [regionCode, setRegionCode] = useState<string>("+628");
   const [maxBlast, setMaxBlast] = useState<string>("100");
   const [includeExisting, setIncludeExisting] = useState<boolean>(true);
@@ -26,6 +30,11 @@ export function BlastTab() {
   const handleBlast = () => {
     if (!templateId) {
       toast.error("Please select a template first.");
+      return;
+    }
+
+    if (selectedDevices.length === 0) {
+      toast.error("Please select at least one sender device.");
       return;
     }
 
@@ -50,6 +59,7 @@ export function BlastTab() {
     blastMutation.mutate(
       {
         template_id: templateId,
+        device_ids: selectedDevices,
         region_code: regionCode,
         max_blast: max,
         recipients
@@ -96,18 +106,50 @@ export function BlastTab() {
         )}
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="template">Select Template</Label>
-            <Select value={templateId} onValueChange={setTemplateId} disabled={templatesLoading}>
-              <SelectTrigger>
-                <SelectValue placeholder="-- Choose a template --" />
-              </SelectTrigger>
-              <SelectContent>
-                {templates.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="template">Select Template</Label>
+              <Select value={templateId} onValueChange={setTemplateId} disabled={templatesLoading}>
+                <SelectTrigger>
+                  <SelectValue placeholder="-- Choose a template --" />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-3">
+              <Label>Sender Devices (Select Multiple)</Label>
+              <div className="border rounded-md p-3 space-y-2 max-h-[120px] overflow-y-auto">
+                {devicesLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading devices...</p>
+                ) : connectedDevices.length === 0 ? (
+                  <p className="text-sm text-destructive">No connected devices found</p>
+                ) : (
+                  connectedDevices.map(d => (
+                    <div key={d.id} className="flex items-center space-x-2">
+                      <Checkbox 
+                        id={`device-${d.id}`}
+                        checked={selectedDevices.includes(d.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedDevices(prev => [...prev, d.id]);
+                          } else {
+                            setSelectedDevices(prev => prev.filter(id => id !== d.id));
+                          }
+                        }}
+                      />
+                      <Label htmlFor={`device-${d.id}`} className="font-normal cursor-pointer">
+                        {d.name} <span className="text-muted-foreground text-xs">({d.jid.split('@')[0]})</span>
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
