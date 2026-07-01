@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/modules/whatsapp"
 )
 
 type Repository struct {
@@ -98,15 +99,25 @@ func (r *Repository) CreateUsageLog(log *models.ConsumableUsageLog, orgID string
 	}
 
 	// Deduct stock — floor at 0
-	if _, err := tx.Exec(`
+	var currStock, minStock int
+	var prodName string
+	if err := tx.QueryRow(`
 		UPDATE products
 		SET current_stock = GREATEST(0, COALESCE(current_stock, 0) - $1),
 		    updated_at = CURRENT_TIMESTAMP
 		WHERE id = $2
 		  AND (organization_id = $3 OR ($3::text = '' AND organization_id IS NULL))
 		  AND deleted_at IS NULL
-	`, log.Quantity, log.ProductID, orgVal); err != nil {
+		RETURNING current_stock, minimum_stock, name
+	`, log.Quantity, log.ProductID, orgVal).Scan(&currStock, &minStock, &prodName); err != nil {
 		return fmt.Errorf("failed to deduct product stock: %w", err)
+	}
+
+	if currStock <= minStock {
+		go func(org, pName string, cur, min int) {
+			waService := whatsapp.NewService()
+			waService.SendLowStockAlert(org, pName, cur, min)
+		}(orgID, prodName, currStock, minStock)
 	}
 
 	// Mirror the usage as a stock_movements record (type: out) for unified audit trail

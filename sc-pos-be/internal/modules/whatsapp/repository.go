@@ -67,6 +67,18 @@ func (r *Repository) CreateTemplate(t *Template) error {
 	return err
 }
 
+func (r *Repository) UpdateTemplate(id, orgID, name, content string) error {
+	query := `UPDATE whatsapp_templates SET name = $1, content = $2, updated_at = NOW() WHERE id = $3 AND organization_id = $4`
+	_, err := database.DB.Exec(query, name, content, id, orgID)
+	return err
+}
+
+func (r *Repository) DeleteTemplate(id, orgID string) error {
+	query := `DELETE FROM whatsapp_templates WHERE id = $1 AND organization_id = $2`
+	_, err := database.DB.Exec(query, id, orgID)
+	return err
+}
+
 // ── Devices ─────────────────────────────────────────────────────────────────
 
 func (r *Repository) GetDevices(orgID string) ([]WhatsappDevice, error) {

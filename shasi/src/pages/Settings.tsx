@@ -47,6 +47,9 @@ export default function SettingsPage() {
         invoice_header_title: settings.invoice_header_title || "",
         invoice_header_description: settings.invoice_header_description || "",
         invoice_footer_text: settings.invoice_footer_text || "",
+        wa_invoice_header_title: settings.wa_invoice_header_title || "",
+        wa_invoice_header_description: settings.wa_invoice_header_description || "",
+        wa_invoice_footer_text: settings.wa_invoice_footer_text || "",
         maps_embed_url: settings.maps_embed_url || "",
       });
     }
@@ -253,21 +256,6 @@ export default function SettingsPage() {
                 onCheckedChange={(checked) => handleChange("email_reminder_enabled", checked)}
               />
             </div>
-
-            {formData.whatsapp_reminder_enabled && (
-              <div className="space-y-2 p-4 bg-muted/50 rounded-lg">
-                <Label htmlFor="whatsappPhoneId">WhatsApp Business Phone ID</Label>
-                <Input
-                  id="whatsappPhoneId"
-                  placeholder="Enter your Meta WhatsApp Business Phone ID"
-                  value={formData.whatsapp_business_phone_id || ""}
-                  onChange={(e) => handleChange("whatsapp_business_phone_id", e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Get this from Meta Business Suite → WhatsApp → Phone Numbers
-                </p>
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -294,6 +282,19 @@ export default function SettingsPage() {
                 checked={formData.low_stock_alerts || false}
                 onCheckedChange={(checked) => handleChange("low_stock_alerts", checked)}
               />
+            </div>
+
+            <div className="space-y-2 p-4 bg-muted/50 rounded-lg">
+              <Label htmlFor="adminWhatsappNumber">Admin WhatsApp Number (For Alerts)</Label>
+              <Input
+                id="adminWhatsappNumber"
+                placeholder="e.g. 6281234567890"
+                value={formData.whatsapp_business_phone_id || ""}
+                onChange={(e) => handleChange("whatsapp_business_phone_id", e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                System alerts (like low stock) will be sent to this WhatsApp number. Use country code without + (e.g., 62 for Indonesia).
+              </p>
             </div>
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
@@ -375,6 +376,57 @@ export default function SettingsPage() {
             <div className="p-3 bg-muted/50 rounded-lg">
               <p className="text-xs text-muted-foreground">
                 💡 Invoice dioptimalkan untuk printer thermal 58mm. Lebar kertas ±48mm area cetak.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* WhatsApp Invoice Settings Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              WhatsApp Invoice Settings
+            </CardTitle>
+            <CardDescription>Sesuaikan tampilan invoice yang dikirim via WhatsApp</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="waInvoiceHeaderTitle">WhatsApp Header Title</Label>
+              <Input
+                id="waInvoiceHeaderTitle"
+                placeholder="Contoh: INVOICE TRANSAKSI"
+                value={formData.wa_invoice_header_title || ""}
+                onChange={(e) => handleChange("wa_invoice_header_title", e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Judul utama pesan invoice di WhatsApp (akan dicetak tebal / bold)
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="waInvoiceHeaderDesc">WhatsApp Header Description</Label>
+              <Textarea
+                id="waInvoiceHeaderDesc"
+                placeholder="Contoh: Halo {{name}},&#10;Terima kasih atas kunjungan Anda."
+                value={formData.wa_invoice_header_description || ""}
+                onChange={(e) => handleChange("wa_invoice_header_description", e.target.value)}
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                Pesan pembuka. Gunakan <code>{`{{name}}`}</code> untuk menyapa nama pasien.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="waInvoiceFooter">WhatsApp Footer Text</Label>
+              <Textarea
+                id="waInvoiceFooter"
+                placeholder="Contoh: Terima kasih!"
+                value={formData.wa_invoice_footer_text || ""}
+                onChange={(e) => handleChange("wa_invoice_footer_text", e.target.value)}
+                rows={2}
+              />
+              <p className="text-xs text-muted-foreground">
+                Pesan penutup di akhir pesan WhatsApp.
               </p>
             </div>
           </CardContent>

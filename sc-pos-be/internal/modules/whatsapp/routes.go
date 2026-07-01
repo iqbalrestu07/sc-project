@@ -19,4 +19,6 @@ func RegisterRoutes(r *gin.RouterGroup, middlewares ...gin.HandlerFunc) {
 
 	wa.GET("/templates", handler.Templates)
 	wa.POST("/templates", handler.CreateTemplate)
+	wa.PUT("/templates/:id", handler.UpdateTemplate)
+	wa.DELETE("/templates/:id", handler.DeleteTemplate)
 }

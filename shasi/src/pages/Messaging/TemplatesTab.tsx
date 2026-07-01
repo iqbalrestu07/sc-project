@@ -7,38 +7,93 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, Plus, MessageSquare } from "lucide-react";
-import { useWhatsAppTemplates, useCreateWhatsAppTemplate } from "@/hooks/useWhatsApp";
+import { 
+  useWhatsAppTemplates, 
+  useCreateWhatsAppTemplate, 
+  useUpdateWhatsAppTemplate, 
+  useDeleteWhatsAppTemplate 
+} from "@/hooks/useWhatsApp";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { Pencil, Trash2 } from "lucide-react";
 
 export function TemplatesTab() {
   const { data: templates = [], isLoading } = useWhatsAppTemplates();
   const createMutation = useCreateWhatsAppTemplate();
+  const updateMutation = useUpdateWhatsAppTemplate();
+  const deleteMutation = useDeleteWhatsAppTemplate();
   
   const [isOpen, setIsOpen] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [content, setContent] = useState("");
 
-  const handleCreate = () => {
+  const handleOpenCreate = () => {
+    setIsEdit(false);
+    setEditId(null);
+    setName("");
+    setContent("");
+    setIsOpen(true);
+  };
+
+  const handleOpenEdit = (t: any) => {
+    setIsEdit(true);
+    setEditId(t.id);
+    setName(t.name);
+    setContent(t.content);
+    setIsOpen(true);
+  };
+
+  const handleDelete = (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this template?")) return;
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        toast.success("Template deleted successfully");
+      },
+      onError: (err: any) => {
+        toast.error(err.message || "Failed to delete template");
+      }
+    });
+  };
+
+  const handleSave = () => {
     if (!name || !content) {
       toast.error("Please fill in both name and content.");
       return;
     }
 
-    createMutation.mutate(
-      { name, content },
-      {
-        onSuccess: () => {
-          toast.success("Template created successfully");
-          setIsOpen(false);
-          setName("");
-          setContent("");
-        },
-        onError: (err: any) => {
-          toast.error(err.message || "Failed to create template");
+    if (isEdit && editId) {
+      updateMutation.mutate(
+        { id: editId, data: { name, content } },
+        {
+          onSuccess: () => {
+            toast.success("Template updated successfully");
+            setIsOpen(false);
+            setName("");
+            setContent("");
+          },
+          onError: (err: any) => {
+            toast.error(err.message || "Failed to update template");
+          }
         }
-      }
-    );
+      );
+    } else {
+      createMutation.mutate(
+        { name, content },
+        {
+          onSuccess: () => {
+            toast.success("Template created successfully");
+            setIsOpen(false);
+            setName("");
+            setContent("");
+          },
+          onError: (err: any) => {
+            toast.error(err.message || "Failed to create template");
+          }
+        }
+      );
+    }
   };
 
   return (
@@ -49,15 +104,13 @@ export function TemplatesTab() {
           <p className="text-sm text-muted-foreground">Manage your predefined WhatsApp messages.</p>
         </div>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              New Template
-            </Button>
-          </DialogTrigger>
+          <Button className="gap-2" onClick={handleOpenCreate}>
+            <Plus className="h-4 w-4" />
+            New Template
+          </Button>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>Create New Template</DialogTitle>
+              <DialogTitle>{isEdit ? "Edit Template" : "Create New Template"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
@@ -85,9 +138,9 @@ export function TemplatesTab() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreate} disabled={createMutation.isPending}>
-                {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Template
+              <Button onClick={handleSave} disabled={createMutation.isPending || updateMutation.isPending}>
+                {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEdit ? "Save Changes" : "Create Template"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -112,17 +165,40 @@ export function TemplatesTab() {
                   <TableHead>Name</TableHead>
                   <TableHead>Content Snippet</TableHead>
                   <TableHead className="w-[150px]">Created</TableHead>
+                  <TableHead className="w-[100px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {templates.map((t) => (
                   <TableRow key={t.id}>
                     <TableCell className="font-medium">{t.name}</TableCell>
-                    <TableCell className="max-w-[400px] truncate" title={t.content}>
+                    <TableCell className="max-w-[300px] truncate" title={t.content}>
                       {t.content}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {t.created_at ? format(new Date(t.created_at), "dd MMM yyyy") : "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleOpenEdit(t)}
+                          title="Edit"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => handleDelete(t.id)}
+                          title="Delete"
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

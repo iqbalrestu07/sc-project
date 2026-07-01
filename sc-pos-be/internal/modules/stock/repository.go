@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/modules/whatsapp"
 )
 
 type Repository struct {
@@ -161,13 +162,23 @@ func (r *Repository) Create(m *models.StockMovement, orgID string) error {
 		delta = m.Quantity
 	}
 
-	if _, err := tx.Exec(`
+	var currStock, minStock int
+	var prodName string
+	if err := tx.QueryRow(`
 		UPDATE products
 		SET current_stock = GREATEST(0, COALESCE(current_stock, 0) + $1),
 		    updated_at = CURRENT_TIMESTAMP
 		WHERE id = $2
-	`, delta, m.ProductID); err != nil {
+		RETURNING current_stock, minimum_stock, name
+	`, delta, m.ProductID).Scan(&currStock, &minStock, &prodName); err != nil {
 		return fmt.Errorf("failed to update product stock: %w", err)
+	}
+
+	if currStock <= minStock {
+		go func(org, pName string, cur, min int) {
+			waService := whatsapp.NewService()
+			waService.SendLowStockAlert(org, pName, cur, min)
+		}(orgID, prodName, currStock, minStock)
 	}
 
 	return tx.Commit()

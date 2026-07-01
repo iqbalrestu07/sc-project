@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/modules/whatsapp"
 )
 
 type Repository struct {
@@ -293,8 +294,19 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) erro
 	// Step 2: apply side-effects now that the cursor is closed
 	for _, row := range items {
 		if row.itemType == "product" && row.productID.Valid {
-			if _, err := tx.Exec(`UPDATE products SET current_stock = GREATEST(COALESCE(current_stock, 0) - $1, 0), updated_at = CURRENT_TIMESTAMP WHERE id = $2`, row.quantity, row.productID.String); err != nil {
+			var currStock, minStock int
+			var prodName string
+			err = tx.QueryRow(`UPDATE products SET current_stock = GREATEST(COALESCE(current_stock, 0) - $1, 0), updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING current_stock, minimum_stock, name`, row.quantity, row.productID.String).Scan(&currStock, &minStock, &prodName)
+			if err != nil {
 				return fmt.Errorf("failed to decrease stock: %w", err)
+			}
+			
+			if currStock <= minStock {
+				// Fire low stock alert
+				go func(org, pName string, cur, min int) {
+					waService := whatsapp.NewService()
+					waService.SendLowStockAlert(org, pName, cur, min)
+				}(orgID, prodName, currStock, minStock)
 			}
 			// Record stock movement for audit trail
 			refType := "transaction"

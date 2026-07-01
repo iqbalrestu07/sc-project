@@ -73,6 +73,37 @@ export function useCreateWhatsAppTemplate() {
     });
 }
 
+export function useUpdateWhatsAppTemplate() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ id, data }: { id: string; data: { name: string; content: string } }) => {
+            const response = await apiClient.put<ApiResponse>(
+                `${API_ENDPOINTS.WHATSAPP.TEMPLATES}/${id}`,
+                data
+            );
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: WA_KEYS.templates() });
+        },
+    });
+}
+
+export function useDeleteWhatsAppTemplate() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (id: string) => {
+            const response = await apiClient.delete<ApiResponse>(
+                `${API_ENDPOINTS.WHATSAPP.TEMPLATES}/${id}`
+            );
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: WA_KEYS.templates() });
+        },
+    });
+}
+
 export function useSendWhatsAppBlast() {
     return useMutation({
         mutationFn: async (data: BlastRequest) => {

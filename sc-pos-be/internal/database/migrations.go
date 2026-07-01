@@ -31,6 +31,23 @@ func RunMigrations() error {
 			return fmt.Errorf("migration %d failed: %w", i+1, err)
 		}
 	}
+	// ---------------------------------------------------------------------------
+	// 5) NEW ALTER TABLES FOR APPOINTMENT REMINDERS
+	// ---------------------------------------------------------------------------
+	if _, err := DB.Exec(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP;`); err != nil {
+		return fmt.Errorf("failed to add reminder_sent_at to appointments: %w", err)
+	}
+
+	// ---------------------------------------------------------------------------
+	// 6) NEW ALTER TABLES FOR WA INVOICE SETTINGS
+	// ---------------------------------------------------------------------------
+	if _, err := DB.Exec(`
+		ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS wa_invoice_header_title VARCHAR(255);
+		ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS wa_invoice_header_description TEXT;
+		ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS wa_invoice_footer_text TEXT;
+	`); err != nil {
+		return fmt.Errorf("failed to add wa invoice settings: %w", err)
+	}
 
 	return nil
 }

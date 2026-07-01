@@ -21,6 +21,9 @@ type ClinicSettings struct {
 	InvoiceHeaderTitle       *string    `json:"invoice_header_title" db:"invoice_header_title"`
 	InvoiceHeaderDescription *string    `json:"invoice_header_description" db:"invoice_header_description"`
 	InvoiceFooterText        *string    `json:"invoice_footer_text" db:"invoice_footer_text"`
+	WaInvoiceHeaderTitle       *string    `json:"wa_invoice_header_title" db:"wa_invoice_header_title"`
+	WaInvoiceHeaderDescription *string    `json:"wa_invoice_header_description" db:"wa_invoice_header_description"`
+	WaInvoiceFooterText        *string    `json:"wa_invoice_footer_text" db:"wa_invoice_footer_text"`
 	MapsEmbedUrl             *string    `json:"maps_embed_url" db:"maps_embed_url"`
 	CreatedBy                *string    `json:"created_by,omitempty" db:"created_by"`
 	UpdatedBy                *string    `json:"updated_by,omitempty" db:"updated_by"`

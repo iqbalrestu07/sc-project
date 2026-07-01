@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/modules/settings"
 	"go.mau.fi/whatsmeow/proto/waE2E"
-	"google.golang.org/protobuf/proto"
 	"go.mau.fi/whatsmeow/types"
+	"google.golang.org/protobuf/proto"
 )
 
 // Service is the public interface for the whatsapp module business logic.
@@ -21,10 +23,13 @@ type Service interface {
 	SendBlast(orgID string, req BlastRequest) BlastResult
 	Templates(orgID string) ([]Template, error)
 	CreateTemplate(orgID, name, content string) (*Template, error)
+	UpdateTemplate(id, orgID, name, content string) error
+	DeleteTemplate(id, orgID string) error
 	GetDevices(orgID string) ([]WhatsappDevice, error)
 	GetLoginQR(ctx context.Context, orgID, deviceName string) (<-chan string, error)
 	Logout(orgID, deviceID string) error
 	SendInvoice(orgID, deviceID string, data InvoiceData) error
+	SendLowStockAlert(orgID, itemName string, currentStock, minStock int) error
 }
 
 type InvoiceData struct {
@@ -78,8 +83,8 @@ type BlastResult struct {
 type BlastRequest struct {
 	TemplateID string      `json:"template_id"`
 	DeviceIDs  []string    `json:"device_ids"`
-	Recipients []Recipient `json:"recipients"` // Optional predefined recipients
-	MaxBlast   int         `json:"max_blast"`  // Max random successful messages
+	Recipients []Recipient `json:"recipients"`  // Optional predefined recipients
+	MaxBlast   int         `json:"max_blast"`   // Max random successful messages
 	RegionCode string      `json:"region_code"` // e.g. "+628"
 }
 
@@ -187,7 +192,7 @@ func (s *service) SendBulk(orgID, deviceID string, recipients []Recipient, templ
 
 func (s *service) SendBlast(orgID string, req BlastRequest) BlastResult {
 	result := BlastResult{}
-	
+
 	template, err := s.repo.GetTemplateByID(req.TemplateID, orgID)
 	if err != nil || template == nil {
 		return result // Template not found
@@ -241,7 +246,7 @@ func (s *service) SendBlast(orgID string, req BlastRequest) BlastResult {
 	// 2. Generate random numbers until max_blast is reached
 	rand.Seed(time.Now().UnixNano())
 	ctx := context.Background()
-	
+
 	// E.g. "+62812", "+628" etc. We strip the plus for IsOnWhatsApp
 	basePrefix := strings.TrimPrefix(req.RegionCode, "+")
 	if basePrefix == "" {
@@ -260,10 +265,10 @@ func (s *service) SendBlast(orgID string, req BlastRequest) BlastResult {
 		for j := 0; j < length; j++ {
 			suffix += fmt.Sprintf("%d", rand.Intn(10))
 		}
-		
+
 		phone := "+" + basePrefix + suffix
 		result.TotalAttempted++
-		
+
 		// Validate using IsOnWhatsApp
 		// Need a client for IsOnWhatsApp check. We can just use the first valid one
 		// Wait, if we use the first valid one, it should work for the IsOnWhatsApp check.
@@ -272,12 +277,12 @@ func (s *service) SendBlast(orgID string, req BlastRequest) BlastResult {
 		if client == nil {
 			continue
 		}
-		
+
 		checkRes, err := client.IsOnWhatsApp(ctx, []string{phone})
 		if err != nil || len(checkRes) == 0 {
 			continue
 		}
-		
+
 		if checkRes[0].IsIn {
 			// Found valid number, send
 			senderDeviceID := getNextDeviceID()
@@ -298,7 +303,7 @@ func (s *service) GetDevices(orgID string) ([]WhatsappDevice, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for i := range devices {
 		devices[i].Status = "disconnected"
 		client, err := s.clientManager.GetClient(devices[i].JID)
@@ -306,7 +311,7 @@ func (s *service) GetDevices(orgID string) ([]WhatsappDevice, error) {
 			devices[i].Status = "connected"
 		}
 	}
-	
+
 	return devices, nil
 }
 
@@ -352,19 +357,82 @@ func (s *service) CreateTemplate(orgID, name, content string) (*Template, error)
 	return t, nil
 }
 
+func (s *service) UpdateTemplate(id, orgID, name, content string) error {
+	return s.repo.UpdateTemplate(id, orgID, name, content)
+}
+
+func (s *service) DeleteTemplate(id, orgID string) error {
+	return s.repo.DeleteTemplate(id, orgID)
+}
+
 // ── Integrations ────────────────────────────────────────────────────────────
+
+func (s *service) SendLowStockAlert(orgID, itemName string, currentStock, minStock int) error {
+	settingsRepo := settings.NewRepository()
+	var clinic *models.ClinicSettings
+	if orgID != "" {
+		clinic, _ = settingsRepo.GetClinic(orgID)
+	} else {
+		clinic, _ = settingsRepo.GetFirstClinic()
+	}
+
+	if clinic == nil || clinic.LowStockAlerts == nil || !*clinic.LowStockAlerts {
+		return nil // Alert not enabled
+	}
+
+	if clinic.WhatsAppBusinessPhoneID == nil || *clinic.WhatsAppBusinessPhoneID == "" {
+		return nil // No admin number specified
+	}
+
+	msg := fmt.Sprintf("⚠️ *SYSTEM ALERT - LOW STOCK* ⚠️\n\nStok untuk item *%s* saat ini telah mencapai batas minimum.\n\nSisa Stok: %d\nBatas Minimum: %d\n\nMohon segera lakukan restock untuk menghindari kehabisan stok.", itemName, currentStock, minStock)
+
+	devices, err := s.GetDevices(orgID)
+	if err != nil || len(devices) == 0 {
+		return fmt.Errorf("no active whatsapp device to send alert")
+	}
+
+	_, err = s.Send(orgID, devices[0].ID, *clinic.WhatsAppBusinessPhoneID, msg)
+	return err
+}
 
 func (s *service) SendInvoice(orgID, deviceID string, data InvoiceData) error {
 	if data.PatientWhatsApp == "" {
 		return nil // Cannot send if no WhatsApp number
 	}
-	
-	msg := fmt.Sprintf("Halo %s,\n\nTerima kasih atas kunjungan Anda. Berikut adalah detail transaksi Anda:\nKode: %s\n\n", data.PatientName, data.TransactionCode)
+
+	settingsRepo := settings.NewRepository()
+	var clinic *models.ClinicSettings
+	if orgID != "" {
+		clinic, _ = settingsRepo.GetClinic(orgID)
+	} else {
+		clinic, _ = settingsRepo.GetFirstClinic()
+	}
+
+	headerTitle := "INVOICE TRANSAKSI"
+	headerDesc := fmt.Sprintf("Halo %s,\nTerima kasih atas kunjungan Anda.", data.PatientName)
+	patientGreeting := fmt.Sprintf("Halo %s,\nTerima kasih atas kunjungan Anda.", data.PatientName)
+	footerText := "Terima kasih!"
+
+	if clinic != nil {
+		if clinic.WaInvoiceHeaderTitle != nil && *clinic.WaInvoiceHeaderTitle != "" {
+			headerTitle = *clinic.WaInvoiceHeaderTitle
+		}
+		if clinic.WaInvoiceHeaderDescription != nil && *clinic.WaInvoiceHeaderDescription != "" {
+			headerDesc = strings.ReplaceAll(*clinic.WaInvoiceHeaderDescription, "{{name}}", data.PatientName)
+		}
+		if clinic.WaInvoiceFooterText != nil && *clinic.WaInvoiceFooterText != "" {
+			footerText = *clinic.WaInvoiceFooterText
+		}
+	}
+
+	msg := fmt.Sprintf("%s\n\n*%s*\n\n%s\n\n*Kode Transaksi:* %s\n\n*Detail Transaksi:*\n", patientGreeting, headerTitle, headerDesc, data.TransactionCode)
+
 	for _, item := range data.Items {
 		msg += fmt.Sprintf("- %s (x%d): Rp %.2f\n", item.Name, item.Quantity, item.TotalPrice)
 	}
-	msg += fmt.Sprintf("\nTotal: Rp %.2f\n\nTerima kasih!", data.TotalAmount)
-	
+
+	msg += fmt.Sprintf("\n*Total: Rp %.2f*\n\n%s", data.TotalAmount, footerText)
+
 	_, err := s.Send(orgID, deviceID, data.PatientWhatsApp, msg)
 	return err
 }

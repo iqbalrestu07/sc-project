@@ -195,3 +195,31 @@ func (h *Handler) CreateTemplate(c *gin.Context) {
 	}
 	utils.SuccessResponse(c, http.StatusCreated, t)
 }
+
+func (h *Handler) UpdateTemplate(c *gin.Context) {
+	orgID := c.GetString("org_id")
+	id := c.Param("id")
+
+	var req CreateTemplateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := h.service.UpdateTemplate(id, orgID, req.Name, req.Content); err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, "Template updated")
+}
+
+func (h *Handler) DeleteTemplate(c *gin.Context) {
+	orgID := c.GetString("org_id")
+	id := c.Param("id")
+
+	if err := h.service.DeleteTemplate(id, orgID); err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, "Template deleted")
+}
