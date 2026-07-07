@@ -15,7 +15,7 @@ import (
 
 var (
 	ErrEmptyFile      = errors.New("file is empty")
-	ErrInvalidHeader  = errors.New("excel header must contain: nama, jenis, harga, komisi")
+	ErrInvalidHeader  = errors.New("excel header must contain: nama, jenis, harga")
 	ErrInvalidRowType = errors.New("jenis must be one of: product, tindakan, barang habis pakai")
 	ErrMissingName    = errors.New("nama is required")
 	ErrInvalidPrice   = errors.New("harga must be a valid number")
@@ -115,16 +115,17 @@ func (s *service) ImportExcel(file io.Reader, orgID, userID string) (*ImportResu
 		}
 
 		commission, _ := parsePrice(getCell(row, idx.komisi))
+		modal, _ := parsePrice(getCell(row, idx.modal))
 
 		var created bool
 		var upsertErr error
 		switch jenis {
 		case "product":
-			created, upsertErr = s.upsertProduct(name, price, false, orgID, userID)
+			created, upsertErr = s.upsertProduct(name, price, modal, false, orgID, userID)
 		case "tindakan":
 			created, upsertErr = s.upsertService(name, price, commission, orgID, userID)
 		case "barang habis pakai":
-			created, upsertErr = s.upsertProduct(name, price, true, orgID, userID)
+			created, upsertErr = s.upsertProduct(name, price, modal, true, orgID, userID)
 		default:
 			upsertErr = ErrInvalidRowType
 		}
@@ -135,12 +136,15 @@ func (s *service) ImportExcel(file io.Reader, orgID, userID string) (*ImportResu
 	return result, nil
 }
 
-func (s *service) upsertProduct(name string, price float64, isConsumable bool, orgID, userID string) (bool, error) {
+func (s *service) upsertProduct(name string, price, purchasePrice float64, isConsumable bool, orgID, userID string) (bool, error) {
 	req := models.Product{
 		Name:         name,
 		SellingPrice: &price,
 		IsConsumable: isConsumable,
 		IsActive:     true,
+	}
+	if purchasePrice > 0 {
+		req.PurchasePrice = &purchasePrice
 	}
 	existing, err := s.productSvc.GetByName(name, orgID)
 	if err != nil {
@@ -186,11 +190,11 @@ func (s *service) upsertService(name string, price, commission float64, orgID, u
 }
 
 type headerIndex struct {
-	name, jenis, harga, komisi int
+	name, jenis, harga, komisi, modal int
 }
 
 func mapHeader(header []string) (headerIndex, error) {
-	idx := headerIndex{name: -1, jenis: -1, harga: -1, komisi: -1}
+	idx := headerIndex{name: -1, jenis: -1, harga: -1, komisi: -1, modal: -1}
 	for i, h := range header {
 		col := strings.TrimSpace(strings.ToLower(h))
 		switch col {
@@ -202,9 +206,12 @@ func mapHeader(header []string) (headerIndex, error) {
 			idx.harga = i
 		case "komisi":
 			idx.komisi = i
+		case "modal":
+			idx.modal = i
 		}
 	}
-	if idx.name < 0 || idx.jenis < 0 || idx.harga < 0 || idx.komisi < 0 {
+	// nama, jenis, harga are required; komisi and modal are optional
+	if idx.name < 0 || idx.jenis < 0 || idx.harga < 0 {
 		return idx, ErrInvalidHeader
 	}
 	return idx, nil

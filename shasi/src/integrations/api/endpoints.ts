@@ -171,6 +171,11 @@ export const API_ENDPOINTS = {
         REVOKE_PERMISSION:    (userId: string, permId: string) => `/rbac/user-permissions/${userId}/${permId}`,
     },
 
+    // Data Import / Migration
+    MIGRATION: {
+        IMPORT_EXCEL: "/migration/import",
+    },
+
     // Omnichannel
     OMNI: {
         CONVERSATIONS: "/omni/conversations",

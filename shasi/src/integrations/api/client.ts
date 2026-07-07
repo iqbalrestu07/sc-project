@@ -229,6 +229,13 @@ class ApiClient {
         const response = await this.client.delete<T>(url);
         return response.data;
     }
+
+    public async postForm<T = unknown>(url: string, formData: FormData) {
+        const response = await this.client.post<T>(url, formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
+        return response.data;
+    }
 }
 
 // Singleton instance

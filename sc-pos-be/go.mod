@@ -3,6 +3,7 @@ module github.com/sc-pos/backend
 go 1.26
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/gin-gonic/gin v1.9.1
 	github.com/golang-jwt/jwt/v5 v5.0.0
 	github.com/google/uuid v1.6.0
@@ -13,6 +14,7 @@ require (
 	github.com/xuri/excelize/v2 v2.8.1
 	go.mau.fi/whatsmeow v0.0.0-20260622185415-5f04eac6dbbb
 	golang.org/x/crypto v0.53.0
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
@@ -20,7 +22,6 @@ require (
 	github.com/beeper/argo-go v1.1.2 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
-	github.com/coder/websocket v1.8.15 // indirect
 	github.com/elliotchance/orderedmap/v3 v3.1.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
@@ -55,7 +56,6 @@ require (
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
