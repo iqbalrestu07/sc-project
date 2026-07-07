@@ -3,6 +3,7 @@ package product
 import (
 	"database/sql"
 	"errors"
+	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -175,5 +176,10 @@ func applyProductDefaults(product *models.Product) {
 }
 
 func genSkuCode() string {
-	return "SKU-" + time.Now().Format("20060102150405")
+	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	suffix := make([]byte, 4)
+	for i := range suffix {
+		suffix[i] = chars[rand.Intn(len(chars))]
+	}
+	return "SKU-" + time.Now().Format("20060102150405") + "-" + string(suffix)
 }
