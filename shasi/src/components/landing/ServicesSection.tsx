@@ -1,110 +1,174 @@
 import { useCmsServicesOverview } from "@/hooks/useCmsData";
-import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
+
+const MAROON = "#6B0F1A";
+const MAROON_LIGHT = "#8B1A2A";
+const GOLD = "#C9A84C";
+const GOLD_LIGHT = "#E8C870";
+const GOLD_PALE = "#F5E6B5";
 
 export function ServicesSection() {
   const { data: services } = useCmsServicesOverview();
 
-  // Default services if none in CMS
   const defaultServices = [
     {
       id: "1",
       name: "Perawatan Wajah",
       short_description: "Peremajaan kulit dengan perawatan wajah canggih yang disesuaikan dengan jenis kulit Anda.",
-      image_url: null
+      image_url: null,
+      icon: "💆",
     },
     {
-      id: "2", 
+      id: "2",
       name: "Perawatan Laser",
       short_description: "Teknologi laser terkini untuk hair removal, peremajaan kulit, dan lainnya.",
-      image_url: null
+      image_url: null,
+      icon: "✨",
     },
     {
       id: "3",
       name: "Pembentukan Tubuh",
       short_description: "Dapatkan bentuk tubuh ideal dengan perawatan body contouring non-invasif.",
-      image_url: null
+      image_url: null,
+      icon: "💫",
     },
     {
       id: "4",
       name: "Solusi Anti-Penuaan",
       short_description: "Kembalikan masa muda dengan perawatan anti-aging komprehensif dan suntikan.",
-      image_url: null
+      image_url: null,
+      icon: "🌟",
     },
     {
       id: "5",
       name: "Perawatan Kulit",
       short_description: "Produk skincare medical-grade dan perawatan untuk hasil yang tahan lama.",
-      image_url: null
+      image_url: null,
+      icon: "💎",
     },
     {
       id: "6",
       name: "Peningkatan Kecantikan",
       short_description: "Peningkatan halus yang menonjolkan kecantikan alami dan kepercayaan diri Anda.",
-      image_url: null
-    }
+      image_url: null,
+      icon: "🌸",
+    },
   ];
 
+  const serviceIcons = ["💆", "✨", "💫", "🌟", "💎", "🌸"];
   const displayServices = services && services.length > 0 ? services : defaultServices;
 
-  const serviceIcons = ["💆", "✨", "💫", "🌟", "💎", "🌸"];
-
   return (
-    <section id="services" className="py-20 bg-gradient-to-b from-background to-clinic-rose-light/30">
+    <section
+      id="services"
+      className="py-20 relative overflow-hidden"
+      style={{
+        background: `linear-gradient(180deg, #FDF8F0 0%, #F9F0E4 50%, #FDF8F0 100%)`,
+      }}
+    >
       <div className="container mx-auto px-4">
         {/* Section header */}
         <div className="text-center mb-16">
-          <span className="text-primary text-sm font-medium uppercase tracking-wider">
-            Layanan Kami
+          <span
+            className="text-sm font-semibold uppercase tracking-[0.2em]"
+            style={{ color: GOLD }}
+          >
+            ✦ Layanan Kami ✦
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold text-foreground mt-2 mb-4">
+          <h2
+            className="text-3xl md:text-4xl font-bold mt-3 mb-4"
+            style={{ color: MAROON }}
+          >
             Perawatan Estetika Premium
           </h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            Temukan berbagai perawatan profesional yang dirancang untuk meningkatkan kecantikan alami dan kepercayaan diri Anda.
+          <div className="flex items-center justify-center mb-4">
+            <div className="h-0.5 w-20" style={{ background: `linear-gradient(to right, transparent, ${GOLD}, transparent)` }} />
+          </div>
+          <p className="max-w-2xl mx-auto" style={{ color: "#6b4c40" }}>
+            Temukan berbagai perawatan profesional yang dirancang untuk meningkatkan
+            kecantikan alami dan kepercayaan diri Anda.
           </p>
         </div>
 
         {/* Services grid */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {displayServices.map((service, index) => (
-            <Card 
-              key={service.id} 
-              className="group overflow-hidden border-0 shadow-clinic hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+            <div
+              key={service.id}
+              className="group overflow-hidden rounded-2xl transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl"
+              style={{
+                background: "#fff",
+                border: `1px solid rgba(201, 168, 76, 0.2)`,
+                boxShadow: `0 4px 20px rgba(107,15,26,0.08)`,
+              }}
             >
-              <CardContent className="p-0">
-                {/* Image or placeholder */}
-                <div className="h-48 bg-gradient-to-br from-clinic-rose-light to-clinic-beige flex items-center justify-center">
-                  {service.image_url ? (
-                    <img 
-                      src={service.image_url} 
-                      alt={service.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              {/* Image / placeholder */}
+              <div
+                className="h-48 flex items-center justify-center relative overflow-hidden"
+                style={{
+                  background: `linear-gradient(135deg, ${MAROON} 0%, ${MAROON_LIGHT} 60%, #5a0f1a 100%)`,
+                }}
+              >
+                {/* Gold shimmer overlay on hover */}
+                <div
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                  style={{
+                    background: `linear-gradient(135deg, rgba(201,168,76,0.2) 0%, transparent 60%)`,
+                  }}
+                />
+                {service.image_url ? (
+                  <img
+                    src={service.image_url}
+                    alt={service.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                ) : (
+                  <div className="text-center">
+                    <span className="text-5xl block mb-2">
+                      {(service as any).icon || serviceIcons[index % serviceIcons.length]}
+                    </span>
+                    {/* Gold frame decoration */}
+                    <div
+                      className="w-12 h-0.5 mx-auto"
+                      style={{ background: `linear-gradient(to right, transparent, ${GOLD}, transparent)` }}
                     />
-                  ) : (
-                    <span className="text-5xl">{serviceIcons[index % serviceIcons.length]}</span>
-                  )}
-                </div>
-                {/* Content */}
-                <div className="p-6">
-                  <h3 className="text-xl font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
-                    {service.name}
-                  </h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    {service.short_description}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+                  </div>
+                )}
+              </div>
+
+              {/* Content */}
+              <div className="p-6">
+                <h3
+                  className="text-xl font-semibold mb-2 transition-colors duration-200"
+                  style={{ color: MAROON }}
+                >
+                  {service.name}
+                </h3>
+                <div
+                  className="w-8 h-0.5 mb-3 transition-all duration-300 group-hover:w-16"
+                  style={{ background: GOLD }}
+                />
+                <p className="text-sm leading-relaxed" style={{ color: "#6b4c40" }}>
+                  {service.short_description}
+                </p>
+              </div>
+            </div>
           ))}
         </div>
 
         {/* Bottom note */}
         <div className="text-center mt-12">
-          <p className="text-muted-foreground flex items-center justify-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
+          <div
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-sm"
+            style={{
+              background: `linear-gradient(135deg, rgba(107,15,26,0.07) 0%, rgba(201,168,76,0.1) 100%)`,
+              border: `1px solid rgba(201, 168, 76, 0.25)`,
+              color: MAROON,
+            }}
+          >
+            <Sparkles className="w-4 h-4" style={{ color: GOLD }} />
             Hubungi kami via WhatsApp untuk info lebih lanjut tentang layanan kami
-          </p>
+          </div>
         </div>
       </div>
     </section>
