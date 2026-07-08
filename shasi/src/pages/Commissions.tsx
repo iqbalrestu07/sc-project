@@ -41,6 +41,9 @@ import { useStaff } from "@/hooks/useStaff";
 import { DateRangeFilter, type PeriodPreset } from "@/components/filters";
 import { format, isWithinInterval } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
+import { TransactionDetailDialog } from "@/components/transactions/TransactionDetailDialog";
+import { ServiceDetailDialog } from "@/components/services/ServiceDetailDialog";
+import { ProductDetailDialog } from "@/components/products/ProductDetailDialog";
 
 export default function Commissions() {
   const { commissions, isLoading, updateStatus, isUpdating } = useCommissions();
@@ -55,6 +58,13 @@ export default function Commissions() {
   const [staffFilter, setStaffFilter] = useState<string>("all");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
+  const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [reasonFilter, setReasonFilter] = useState<string>("all");
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("id-ID", {
@@ -82,10 +92,17 @@ export default function Commissions() {
       
       // Status filter
       const matchesStatus = statusFilter === "all" || c.status === statusFilter;
+
+      // Reason filter
+      const matchesReason =
+        reasonFilter === "all" ||
+        (reasonFilter === "handling" && c.commission_reason === "handling") ||
+        (reasonFilter === "offering" && c.commission_reason === "offering") ||
+        (reasonFilter === "legacy" && !c.commission_reason);
       
-      return matchesDate && matchesStaff && matchesRole && matchesStatus;
+      return matchesDate && matchesStaff && matchesRole && matchesStatus && matchesReason;
     });
-  }, [commissions, dateFilter, staffFilter, roleFilter, statusFilter]);
+  }, [commissions, dateFilter, staffFilter, roleFilter, statusFilter, reasonFilter]);
 
   // Calculate stats from filtered data
   const pendingCommissions = filteredCommissions.filter((c) => c.status === "pending");
@@ -137,11 +154,12 @@ export default function Commissions() {
   const clearFilters = () => {
     setDateFilter({ from: undefined, to: undefined, preset: "all" });
     setStaffFilter("all");
+    setReasonFilter("all");
     setRoleFilter("all");
     setStatusFilter("all");
   };
 
-  const hasActiveFilters = dateFilter.preset !== "all" || staffFilter !== "all" || roleFilter !== "all" || statusFilter !== "all";
+  const hasActiveFilters = dateFilter.preset !== "all" || staffFilter !== "all" || roleFilter !== "all" || statusFilter !== "all" || reasonFilter !== "all";
 
   // Selection handlers
   const toggleSelectAll = () => {
@@ -235,6 +253,17 @@ export default function Commissions() {
                   <SelectItem value="all">Semua Status</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="paid">Paid</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={reasonFilter} onValueChange={setReasonFilter}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Jenis Komisi" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Jenis</SelectItem>
+                  <SelectItem value="handling">Handling (PIC)</SelectItem>
+                  <SelectItem value="offering">Offering (Tawarkan)</SelectItem>
+                  <SelectItem value="legacy">Data Lama</SelectItem>
                 </SelectContent>
               </Select>
               {hasActiveFilters && (
@@ -388,7 +417,9 @@ export default function Commissions() {
                   <TableHead>Staff</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Transaksi</TableHead>
-                  <TableHead>Tipe</TableHead>
+                  <TableHead>Item</TableHead>
+                  <TableHead>Jenis</TableHead>
+                  <TableHead>Rate</TableHead>
                   <TableHead className="text-right">Base Amount</TableHead>
                   <TableHead className="text-right">Komisi</TableHead>
                   <TableHead>Status</TableHead>
@@ -422,8 +453,62 @@ export default function Commissions() {
                         {commission.staff_role === "doctor" ? "Dokter" : "Terapis"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {commission.transaction?.transaction_code || "-"}
+                    <TableCell>
+                      {commission.transaction_id ? (
+                        <button
+                          className="text-primary underline-offset-4 hover:underline font-mono text-xs font-medium transition-colors cursor-pointer"
+                          onClick={() => {
+                            setSelectedTransactionId(commission.transaction_id);
+                            setTransactionDialogOpen(true);
+                          }}
+                        >
+                          {commission.transaction?.transaction_code || commission.transaction_id.slice(0, 8) + "…"}
+                        </button>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    {/* Item (service / product) */}
+                    <TableCell>
+                      {commission.item ? (
+                        <button
+                          className="text-left hover:underline underline-offset-4 transition-colors max-w-[160px] truncate block text-xs font-medium"
+                          style={{
+                            color: commission.item.item_type === "service"
+                              ? "hsl(var(--primary))"
+                              : "hsl(160 60% 40%)",
+                          }}
+                          title={commission.item.name}
+                          onClick={() => {
+                            if (commission.item!.item_type === "service") {
+                              setSelectedServiceId(commission.item!.id);
+                              setServiceDialogOpen(true);
+                            } else {
+                              setSelectedProductId(commission.item!.id);
+                              setProductDialogOpen(true);
+                            }
+                          }}
+                        >
+                          {commission.item.name}
+                        </button>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {commission.commission_reason === "handling" ? (
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
+                          Handling
+                        </Badge>
+                      ) : commission.commission_reason === "offering" ? (
+                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">
+                          Offering
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs text-muted-foreground">
+                          -
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       {commission.commission_type === "percentage"
@@ -472,6 +557,33 @@ export default function Commissions() {
           )}
         </CardContent>
       </Card>
+
+      <TransactionDetailDialog
+        transactionId={selectedTransactionId}
+        open={transactionDialogOpen}
+        onOpenChange={(open) => {
+          setTransactionDialogOpen(open);
+          if (!open) setSelectedTransactionId(null);
+        }}
+      />
+
+      <ServiceDetailDialog
+        serviceId={selectedServiceId}
+        open={serviceDialogOpen}
+        onOpenChange={(open) => {
+          setServiceDialogOpen(open);
+          if (!open) setSelectedServiceId(null);
+        }}
+      />
+
+      <ProductDetailDialog
+        productId={selectedProductId}
+        open={productDialogOpen}
+        onOpenChange={(open) => {
+          setProductDialogOpen(open);
+          if (!open) setSelectedProductId(null);
+        }}
+      />
     </div>
   );
 }

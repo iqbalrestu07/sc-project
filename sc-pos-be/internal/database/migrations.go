@@ -39,6 +39,18 @@ func RunMigrations() error {
 	}
 
 	// ---------------------------------------------------------------------------
+	// 7) commission_eligible & commission_notes on transaction_items
+	// Tracks whether a service item earns an OFFERING commission for the staff.
+	// Default TRUE preserves backward compatibility for existing rows.
+	// ---------------------------------------------------------------------------
+	if _, err := DB.Exec(`
+		ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS commission_eligible BOOLEAN NOT NULL DEFAULT TRUE;
+		ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS commission_notes TEXT;
+	`); err != nil {
+		return fmt.Errorf("failed to add commission_eligible to transaction_items: %w", err)
+	}
+
+	// ---------------------------------------------------------------------------
 	// 6) NEW ALTER TABLES FOR WA INVOICE SETTINGS
 	// ---------------------------------------------------------------------------
 	if _, err := DB.Exec(`
@@ -47,6 +59,53 @@ func RunMigrations() error {
 		ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS wa_invoice_footer_text TEXT;
 	`); err != nil {
 		return fmt.Errorf("failed to add wa invoice settings: %w", err)
+	}
+
+	// ---------------------------------------------------------------------------
+	// 8) Offering commission rate columns on services table.
+	//    Separates "handling" (doing the work) from "offering" (upselling).
+	//    doctor_commission_type/value and therapist_commission_type/value already
+	//    exist and will be repurposed as the HANDLING rate.
+	// ---------------------------------------------------------------------------
+	if _, err := DB.Exec(`
+		ALTER TABLE services ADD COLUMN IF NOT EXISTS doctor_offering_commission_type   VARCHAR(20);
+		ALTER TABLE services ADD COLUMN IF NOT EXISTS doctor_offering_commission_value  DECIMAL(10, 2);
+		ALTER TABLE services ADD COLUMN IF NOT EXISTS therapist_offering_commission_type  VARCHAR(20);
+		ALTER TABLE services ADD COLUMN IF NOT EXISTS therapist_offering_commission_value DECIMAL(10, 2);
+	`); err != nil {
+		return fmt.Errorf("failed to add offering commission columns to services: %w", err)
+	}
+
+	// ---------------------------------------------------------------------------
+	// 9) commission_reason on commissions table.
+	//    'handling' = PIC / mengerjakan tindakan (always generated when staff assigned).
+	//    'offering' = terapis menawarkan dan pasien setuju (generated only when eligible).
+	//    Data lama tidak perlu dimigrasikan — reason dibiarkan NULL.
+	// ---------------------------------------------------------------------------
+	if _, err := DB.Exec(`
+		ALTER TABLE commissions ADD COLUMN IF NOT EXISTS commission_reason VARCHAR(20);
+	`); err != nil {
+		return fmt.Errorf("failed to add commission_reason to commissions: %w", err)
+	}
+
+	// ---------------------------------------------------------------------------
+	// 10) Commission rate columns on products table.
+	//     Same structure as services: handling (existing PIC) + offering (upsell).
+	//     doctor_commission_type/value   = handling rate for doctor
+	//     therapist_commission_type/value = handling rate for therapist
+	//     *_offering_*                   = offering rate (nullable = no offering commission)
+	// ---------------------------------------------------------------------------
+	if _, err := DB.Exec(`
+		ALTER TABLE products ADD COLUMN IF NOT EXISTS doctor_commission_type    VARCHAR(20);
+		ALTER TABLE products ADD COLUMN IF NOT EXISTS doctor_commission_value   DECIMAL(10, 2);
+		ALTER TABLE products ADD COLUMN IF NOT EXISTS therapist_commission_type   VARCHAR(20);
+		ALTER TABLE products ADD COLUMN IF NOT EXISTS therapist_commission_value  DECIMAL(10, 2);
+		ALTER TABLE products ADD COLUMN IF NOT EXISTS doctor_offering_commission_type    VARCHAR(20);
+		ALTER TABLE products ADD COLUMN IF NOT EXISTS doctor_offering_commission_value   DECIMAL(10, 2);
+		ALTER TABLE products ADD COLUMN IF NOT EXISTS therapist_offering_commission_type   VARCHAR(20);
+		ALTER TABLE products ADD COLUMN IF NOT EXISTS therapist_offering_commission_value  DECIMAL(10, 2);
+	`); err != nil {
+		return fmt.Errorf("failed to add commission columns to products: %w", err)
 	}
 
 	return nil

@@ -34,11 +34,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, MoreHorizontal, Edit, Trash2, AlertTriangle, Package, Filter, ArrowUpDown } from "lucide-react";
+import { Search, MoreHorizontal, Edit, Trash2, AlertTriangle, Package, Filter, ArrowUpDown, Eye } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
 import type { Product } from "@/types/product";
 import { PRODUCT_CATEGORIES } from "@/types/product";
 import { format } from "date-fns";
+import { ProductDetailDialog } from "@/components/products/ProductDetailDialog";
 
 interface ProductListProps {
   onEdit: (product: Product) => void;
@@ -48,6 +49,7 @@ export function ProductList({ onEdit }: ProductListProps) {
   const { products, isLoading, deleteProduct } = useProducts();
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [viewProduct, setViewProduct] = useState<Product | null>(null);
 
   const [productType, setProductType] = useState<string>("all");
   const [stockStatus, setStockStatus] = useState<string>("all");
@@ -228,7 +230,14 @@ export function ProductList({ onEdit }: ProductListProps) {
               <TableBody>
                 {filteredProducts.map((product) => (
                   <TableRow key={product.id}>
-                    <TableCell className="font-medium">{product.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <button
+                        className="text-left hover:underline underline-offset-4 transition-colors text-foreground hover:text-primary"
+                        onClick={() => setViewProduct(product)}
+                      >
+                        {product.name}
+                      </button>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {product.sku || "-"}
                     </TableCell>
@@ -286,6 +295,10 @@ export function ProductList({ onEdit }: ProductListProps) {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setViewProduct(product)}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            Lihat Detail
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => onEdit(product)}>
                             <Edit className="h-4 w-4 mr-2" />
                             Edit
@@ -328,6 +341,12 @@ export function ProductList({ onEdit }: ProductListProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ProductDetailDialog
+        product={viewProduct}
+        open={!!viewProduct}
+        onOpenChange={(open) => { if (!open) setViewProduct(null); }}
+      />
     </>
   );
 }

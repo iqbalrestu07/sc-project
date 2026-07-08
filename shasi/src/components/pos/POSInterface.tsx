@@ -117,6 +117,8 @@ export function POSInterface() {
           name,
           unitPrice,
           quantity: 1,
+          // Service items default to commission-eligible; product items never earn commission.
+          commissionEligible: type === "service" ? true : undefined,
         },
       ]);
     }
@@ -165,6 +167,20 @@ export function POSInterface() {
       prev.map((item) =>
         item.id === id
           ? { ...item, discountAmount: amount, discountType: type }
+          : item
+      )
+    );
+  };
+
+  const updateCartItemCommission = (
+    id: string,
+    eligible: boolean,
+    notes?: string
+  ) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, commissionEligible: eligible, commissionNotes: notes ?? item.commissionNotes }
           : item
       )
     );
@@ -229,6 +245,9 @@ export function POSInterface() {
           discount_amount: item.discountAmount && item.discountAmount > 0 ? item.discountAmount : null,
           discount_type: item.discountAmount && item.discountAmount > 0 ? (item.discountType ?? "fixed") : null,
           total_price: itemTotal(item),
+          // Only pass for service items; product items never earn commission.
+          commission_eligible: item.type === "service" ? (item.commissionEligible ?? true) : undefined,
+          commission_notes: item.commissionNotes || null,
         })),
       });
 
@@ -526,61 +545,71 @@ export function POSInterface() {
                     />
                   </div>
 
-                  {/* Staff Assignment for Services */}
-                  {item.type === "service" && (
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <Select
-                        value={item.doctorId || "none"}
-                        onValueChange={(value) => {
-                          const actualValue = value === "none" ? "" : value;
-                          const doctor = doctors.find((d) => d.id === actualValue);
-                          updateCartItemStaff(
-                            item.id,
-                            "doctorId",
-                            actualValue,
-                            doctor?.full_name
-                          );
-                        }}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="Doctor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          {doctors.map((d) => (
-                            <SelectItem key={d.id} value={d.id}>
-                              {d.full_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                  {/* Staff Assignment + Offering toggle — for both services and products */}
+                  <div className="space-y-1 pt-1">
+                    <div className="grid grid-cols-2 gap-2">
+                      {item.type === "service" && (
+                        <Select
+                          value={item.doctorId || "none"}
+                          onValueChange={(value) => {
+                            const actualValue = value === "none" ? "" : value;
+                            const doctor = doctors.find((d) => d.id === actualValue);
+                            updateCartItemStaff(item.id, "doctorId", actualValue, doctor?.full_name);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Doctor" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {doctors.map((d) => (
+                              <SelectItem key={d.id} value={d.id}>{d.full_name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                       <Select
                         value={item.therapistId || "none"}
                         onValueChange={(value) => {
                           const actualValue = value === "none" ? "" : value;
                           const therapist = therapists.find((t) => t.id === actualValue);
-                          updateCartItemStaff(
-                            item.id,
-                            "therapistId",
-                            actualValue,
-                            therapist?.full_name
-                          );
+                          updateCartItemStaff(item.id, "therapistId", actualValue, therapist?.full_name);
                         }}
                       >
-                        <SelectTrigger className="h-8 text-xs">
+                        <SelectTrigger className={`h-8 text-xs ${item.type === "product" ? "col-span-2" : ""}`}>
                           <SelectValue placeholder="Therapist" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">None</SelectItem>
                           {therapists.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.full_name}
-                            </SelectItem>
+                            <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                  )}
+
+                    {/* Offering commission toggle — shown when any staff is assigned */}
+                    {(item.therapistId || item.doctorId) && (
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <Switch
+                          id={`comm-${item.id}`}
+                          checked={item.commissionEligible ?? true}
+                          onCheckedChange={(checked) =>
+                            updateCartItemCommission(item.id, checked)
+                          }
+                          className="scale-75"
+                        />
+                        <label
+                          htmlFor={`comm-${item.id}`}
+                          className="text-xs text-muted-foreground cursor-pointer select-none"
+                        >
+                          {item.commissionEligible ?? true
+                            ? "Komisi offering: staff tawarkan & pasien setuju ✓"
+                            : "Tidak ada komisi offering (pasien minta sendiri)"}
+                        </label>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))
             )}

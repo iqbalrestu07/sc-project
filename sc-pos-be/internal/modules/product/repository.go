@@ -22,6 +22,10 @@ func (r *Repository) List(orgID string) ([]models.Product, error) {
 		       COALESCE(current_stock, 0), COALESCE(minimum_stock, 5), unit,
 		       expiry_date, COALESCE(is_active, true),
 		       COALESCE(is_consumable, false), consumable_category,
+		       doctor_commission_type, doctor_commission_value,
+		       therapist_commission_type, therapist_commission_value,
+		       doctor_offering_commission_type, doctor_offering_commission_value,
+		       therapist_offering_commission_type, therapist_offering_commission_value,
 		       created_at, updated_at
 		FROM products
 		WHERE COALESCE(is_active, true) = true
@@ -57,6 +61,10 @@ func (r *Repository) Get(id, orgID string) (*models.Product, error) {
 		       COALESCE(current_stock, 0), COALESCE(minimum_stock, 5), unit,
 		       expiry_date, COALESCE(is_active, true),
 		       COALESCE(is_consumable, false), consumable_category,
+		       doctor_commission_type, doctor_commission_value,
+		       therapist_commission_type, therapist_commission_value,
+		       doctor_offering_commission_type, doctor_offering_commission_value,
+		       therapist_offering_commission_type, therapist_offering_commission_value,
 		       created_at, updated_at
 		FROM products
 		WHERE id = $1 AND COALESCE(is_active, true) = true
@@ -79,6 +87,10 @@ func (r *Repository) GetByName(name, orgID string) (*models.Product, error) {
 		       COALESCE(current_stock, 0), COALESCE(minimum_stock, 5), unit,
 		       expiry_date, COALESCE(is_active, true),
 		       COALESCE(is_consumable, false), consumable_category,
+		       doctor_commission_type, doctor_commission_value,
+		       therapist_commission_type, therapist_commission_value,
+		       doctor_offering_commission_type, doctor_offering_commission_value,
+		       therapist_offering_commission_type, therapist_offering_commission_value,
 		       created_at, updated_at
 		FROM products
 		WHERE LOWER(name) = LOWER($1) AND COALESCE(is_active, true) = true
@@ -106,13 +118,21 @@ func (r *Repository) Create(product *models.Product, orgID string) error {
 			id, name, category, sku, supplier, purchase_price, selling_price,
 			current_stock, minimum_stock, unit, expiry_date, is_active,
 			is_consumable, consumable_category,
+			doctor_commission_type, doctor_commission_value,
+			therapist_commission_type, therapist_commission_value,
+			doctor_offering_commission_type, doctor_offering_commission_value,
+			therapist_offering_commission_type, therapist_offering_commission_value,
 			created_at, updated_at, organization_id, created_by
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
 	`, product.ID, product.Name, product.Category, product.Sku, product.Supplier,
 		product.PurchasePrice, product.SellingPrice, product.CurrentStock,
 		product.MinimumStock, product.Unit, product.ExpiryDate, product.IsActive,
 		product.IsConsumable, product.ConsumableCategory,
+		product.DoctorCommissionType, product.DoctorCommissionValue,
+		product.TherapistCommissionType, product.TherapistCommissionValue,
+		product.DoctorOfferingCommissionType, product.DoctorOfferingCommissionValue,
+		product.TherapistOfferingCommissionType, product.TherapistOfferingCommissionValue,
 		product.CreatedAt, product.UpdatedAt, nullableString(orgID), createdByVal)
 	if err != nil {
 		return fmt.Errorf("failed to create product: %w", err)
@@ -131,14 +151,22 @@ func (r *Repository) Update(id string, product *models.Product, orgID string) er
 		    purchase_price = $5, selling_price = $6, current_stock = $7,
 		    minimum_stock = $8, unit = $9, expiry_date = $10,
 		    is_consumable = $11, consumable_category = $12,
-		    updated_by = $13, updated_at = NOW()
-		WHERE id = $14 AND COALESCE(is_active, true) = true
-		  AND (organization_id = $15 OR ($15::text = '' AND organization_id IS NULL))
+		    doctor_commission_type = $13, doctor_commission_value = $14,
+		    therapist_commission_type = $15, therapist_commission_value = $16,
+		    doctor_offering_commission_type = $17, doctor_offering_commission_value = $18,
+		    therapist_offering_commission_type = $19, therapist_offering_commission_value = $20,
+		    updated_by = $21, updated_at = NOW()
+		WHERE id = $22 AND COALESCE(is_active, true) = true
+		  AND (organization_id = $23 OR ($23::text = '' AND organization_id IS NULL))
 		  AND deleted_at IS NULL`,
 		product.Name, product.Category, product.Sku, product.Supplier,
 		product.PurchasePrice, product.SellingPrice, product.CurrentStock,
 		product.MinimumStock, product.Unit, product.ExpiryDate,
 		product.IsConsumable, product.ConsumableCategory,
+		product.DoctorCommissionType, product.DoctorCommissionValue,
+		product.TherapistCommissionType, product.TherapistCommissionValue,
+		product.DoctorOfferingCommissionType, product.DoctorOfferingCommissionValue,
+		product.TherapistOfferingCommissionType, product.TherapistOfferingCommissionValue,
 		updatedByVal, id, orgID)
 	if err != nil {
 		return fmt.Errorf("failed to update product: %w", err)
@@ -273,6 +301,10 @@ func scanProduct(scanner productScanner) (models.Product, error) {
 		&product.CurrentStock, &product.MinimumStock, &product.Unit,
 		&product.ExpiryDate, &product.IsActive,
 		&product.IsConsumable, &product.ConsumableCategory,
+		&product.DoctorCommissionType, &product.DoctorCommissionValue,
+		&product.TherapistCommissionType, &product.TherapistCommissionValue,
+		&product.DoctorOfferingCommissionType, &product.DoctorOfferingCommissionValue,
+		&product.TherapistOfferingCommissionType, &product.TherapistOfferingCommissionValue,
 		&product.CreatedAt, &product.UpdatedAt,
 	)
 	if err != nil {

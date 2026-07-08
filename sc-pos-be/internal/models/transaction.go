@@ -26,20 +26,26 @@ type Transaction struct {
 
 // TransactionItem represents items in a transaction
 type TransactionItem struct {
-	ID             string     `json:"id" db:"id"`
-	TransactionID  string     `json:"transaction_id" db:"transaction_id"`
-	ItemType       string     `json:"item_type" db:"item_type"`
-	ServiceID      *string    `json:"service_id" db:"service_id"`
-	ProductID      *string    `json:"product_id" db:"product_id"`
-	Quantity       int        `json:"quantity" db:"quantity"`
-	UnitPrice      float64    `json:"unit_price" db:"unit_price"`
-	DiscountAmount *float64   `json:"discount_amount" db:"discount_amount"`
-	DiscountType   *string    `json:"discount_type" db:"discount_type"` // "fixed" | "percentage"
-	TotalPrice     float64    `json:"total_price" db:"total_price"`
-	DoctorID       *string    `json:"doctor_id" db:"doctor_id"`
-	TherapistID    *string    `json:"therapist_id" db:"therapist_id"`
-	CreatedBy      *string    `json:"created_by,omitempty" db:"created_by"`
-	UpdatedBy      *string    `json:"updated_by,omitempty" db:"updated_by"`
-	DeletedAt      *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
-	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
+	ID             string   `json:"id" db:"id"`
+	TransactionID  string   `json:"transaction_id" db:"transaction_id"`
+	ItemType       string   `json:"item_type" db:"item_type"`
+	ServiceID      *string  `json:"service_id" db:"service_id"`
+	ProductID      *string  `json:"product_id" db:"product_id"`
+	Quantity       int      `json:"quantity" db:"quantity"`
+	UnitPrice      float64  `json:"unit_price" db:"unit_price"`
+	DiscountAmount *float64 `json:"discount_amount" db:"discount_amount"`
+	DiscountType   *string  `json:"discount_type" db:"discount_type"` // "fixed" | "percentage"
+	TotalPrice     float64  `json:"total_price" db:"total_price"`
+	DoctorID       *string  `json:"doctor_id" db:"doctor_id"`
+	TherapistID    *string  `json:"therapist_id" db:"therapist_id"`
+	// CommissionEligible indicates whether this item earns commission for the assigned staff.
+	// true  = therapist/doctor offered the service and patient agreed (gets commission).
+	// false = patient requested on their own (no commission generated).
+	// Nil / omitted is treated as true in the service layer (backward compatible).
+	CommissionEligible *bool      `json:"commission_eligible,omitempty" db:"commission_eligible"`
+	CommissionNotes    *string    `json:"commission_notes,omitempty" db:"commission_notes"`
+	CreatedBy          *string    `json:"created_by,omitempty" db:"created_by"`
+	UpdatedBy          *string    `json:"updated_by,omitempty" db:"updated_by"`
+	DeletedAt          *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
+	CreatedAt          time.Time  `json:"created_at" db:"created_at"`
 }

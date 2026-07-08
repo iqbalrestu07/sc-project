@@ -26,8 +26,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MoreHorizontal, Pencil, Trash2, Clock, Stethoscope } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, Clock, Stethoscope, Eye } from "lucide-react";
 import { useDeleteService } from "@/hooks/useServices";
+import { ServiceDetailDialog } from "@/components/services/ServiceDetailDialog";
 
 interface ServiceListProps {
   services: Service[];
@@ -38,6 +39,7 @@ interface ServiceListProps {
 export function ServiceList({ services, onEdit, isLoading }: ServiceListProps) {
   const deleteService = useDeleteService();
   const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
+  const [viewService, setViewService] = useState<Service | null>(null);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("id-ID", {
@@ -93,7 +95,12 @@ export function ServiceList({ services, onEdit, isLoading }: ServiceListProps) {
                   <div className="flex items-center gap-2">
                     <div>
                       <div className="font-medium flex items-center gap-2">
-                        {service.name}
+                        <button
+                          className="text-left hover:underline underline-offset-4 transition-colors hover:text-primary"
+                          onClick={() => setViewService(service)}
+                        >
+                          {service.name}
+                        </button>
                         {service.requires_doctor && (
                           <Stethoscope className="h-3.5 w-3.5 text-primary" />
                         )}
@@ -136,6 +143,10 @@ export function ServiceList({ services, onEdit, isLoading }: ServiceListProps) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setViewService(service)}>
+                        <Eye className="h-4 w-4 mr-2" />
+                        Lihat Detail
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onEdit(service)}>
                         <Pencil className="h-4 w-4 mr-2" />
                         Edit
@@ -175,6 +186,12 @@ export function ServiceList({ services, onEdit, isLoading }: ServiceListProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ServiceDetailDialog
+        service={viewService}
+        open={!!viewService}
+        onOpenChange={(open) => { if (!open) setViewService(null); }}
+      />
     </>
   );
 }

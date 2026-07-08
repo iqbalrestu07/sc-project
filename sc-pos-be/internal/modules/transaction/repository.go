@@ -149,16 +149,24 @@ func (r *Repository) Create(req CreateRequest, orgID string) (*TransactionWithRe
 	}
 
 	for _, item := range req.Items {
+		// Default commission_eligible to true for service items when not explicitly provided.
+		commEligible := item.CommissionEligible
+		if item.ItemType == "service" && commEligible == nil {
+			t := true
+			commEligible = &t
+		}
 		if _, err := tx.Exec(`
 			INSERT INTO transaction_items (
 				id, transaction_id, item_type, service_id, product_id, quantity,
 				unit_price, discount_amount, discount_type, total_price,
-				doctor_id, therapist_id, created_at, created_by
+				doctor_id, therapist_id, commission_eligible, commission_notes,
+				created_at, created_by
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		`, item.ID, req.Transaction.ID, item.ItemType, item.ServiceID, item.ProductID,
 			item.Quantity, item.UnitPrice, item.DiscountAmount, item.DiscountType, item.TotalPrice,
-			item.DoctorID, item.TherapistID, item.CreatedAt, item.CreatedBy); err != nil {
+			item.DoctorID, item.TherapistID, commEligible, item.CommissionNotes,
+			item.CreatedAt, item.CreatedBy); err != nil {
 			return nil, fmt.Errorf("failed to create transaction item: %w", err)
 		}
 	}
@@ -210,6 +218,7 @@ func (r *Repository) Items(transactionID string) ([]TransactionItemWithRelations
 		SELECT ti.id, ti.transaction_id, ti.item_type, ti.service_id, ti.product_id,
 		       ti.quantity, ti.unit_price, ti.discount_amount, ti.discount_type, ti.total_price,
 		       ti.doctor_id, ti.therapist_id, ti.created_at,
+		       COALESCE(ti.commission_eligible, TRUE), ti.commission_notes,
 		       s.id, s.name, p.id, p.name, d.id, d.full_name, th.id, th.full_name
 		FROM transaction_items ti
 		LEFT JOIN services s ON s.id = ti.service_id
@@ -242,13 +251,19 @@ func (r *Repository) Items(transactionID string) ([]TransactionItemWithRelations
 }
 
 type paidItemRow struct {
-	itemID, itemType            string
-	productID, serviceID        sql.NullString
-	doctorID, therapistID       sql.NullString
-	quantity                    int
-	totalPrice                  float64
-	doctorType, therapistType   string
-	doctorValue, therapistValue float64
+	itemID, itemType      string
+	productID, serviceID  sql.NullString
+	doctorID, therapistID sql.NullString
+	quantity              int
+	totalPrice            float64
+	// Handling commission (PIC / mengerjakan tindakan — selalu diberikan jika staff assigned)
+	doctorHandlingType, therapistHandlingType   string
+	doctorHandlingValue, therapistHandlingValue float64
+	// Offering commission (terapis menawarkan dan pasien setuju — diberikan hanya jika eligible)
+	doctorOfferingType, therapistOfferingType   sql.NullString
+	doctorOfferingValue, therapistOfferingValue sql.NullFloat64
+	// Whether offering commission is eligible for this item
+	commissionEligible sql.NullBool
 }
 
 func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) error {
@@ -264,10 +279,18 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) erro
 	rows, err := tx.Query(`
 		SELECT ti.id, ti.item_type, ti.product_id, ti.service_id, ti.quantity, ti.total_price,
 		       ti.doctor_id, ti.therapist_id,
-		       COALESCE(s.doctor_commission_type, 'fixed'), COALESCE(s.doctor_commission_value, 0),
-		       COALESCE(s.therapist_commission_type, 'fixed'), COALESCE(s.therapist_commission_value, 0)
+		       COALESCE(s.doctor_commission_type,   p.doctor_commission_type,   'fixed'),
+		       COALESCE(s.doctor_commission_value,  p.doctor_commission_value,  0),
+		       COALESCE(s.therapist_commission_type,  p.therapist_commission_type,  'fixed'),
+		       COALESCE(s.therapist_commission_value, p.therapist_commission_value, 0),
+		       COALESCE(s.doctor_offering_commission_type,    p.doctor_offering_commission_type),
+		       COALESCE(s.doctor_offering_commission_value,   p.doctor_offering_commission_value),
+		       COALESCE(s.therapist_offering_commission_type,  p.therapist_offering_commission_type),
+		       COALESCE(s.therapist_offering_commission_value, p.therapist_offering_commission_value),
+		       COALESCE(ti.commission_eligible, TRUE)
 		FROM transaction_items ti
-		LEFT JOIN services s ON s.id = ti.service_id
+		LEFT JOIN services  s ON s.id = ti.service_id
+		LEFT JOIN products  p ON p.id = ti.product_id
 		WHERE ti.transaction_id = $1
 	`, transactionID)
 	if err != nil {
@@ -277,9 +300,14 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) erro
 	var items []paidItemRow
 	for rows.Next() {
 		var row paidItemRow
-		if err := rows.Scan(&row.itemID, &row.itemType, &row.productID, &row.serviceID,
+		if err := rows.Scan(
+			&row.itemID, &row.itemType, &row.productID, &row.serviceID,
 			&row.quantity, &row.totalPrice, &row.doctorID, &row.therapistID,
-			&row.doctorType, &row.doctorValue, &row.therapistType, &row.therapistValue); err != nil {
+			&row.doctorHandlingType, &row.doctorHandlingValue,
+			&row.therapistHandlingType, &row.therapistHandlingValue,
+			&row.doctorOfferingType, &row.doctorOfferingValue,
+			&row.therapistOfferingType, &row.therapistOfferingValue,
+			&row.commissionEligible); err != nil {
 			rows.Close()
 			return fmt.Errorf("failed to scan payment item: %w", err)
 		}
@@ -300,7 +328,7 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) erro
 			if err != nil {
 				return fmt.Errorf("failed to decrease stock: %w", err)
 			}
-			
+
 			if currStock <= minStock {
 				// Fire low stock alert
 				go func(org, pName string, cur, min int) {
@@ -323,26 +351,85 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) erro
 				return fmt.Errorf("failed to record stock movement: %w", err)
 			}
 		}
-		if row.serviceID.Valid && row.doctorID.Valid {
-			if err := r.insertCommission(tx, row.doctorID.String, "doctor", transactionID, row.itemID, userByID, orgID, row.totalPrice, row.doctorType, row.doctorValue); err != nil {
-				return err
+		// Commission rules apply to both service items and product items.
+		// Logic: jika staff menawarkan (offering eligible), maka HANYA offering yang diberikan
+		//        karena yang menawarkan sudah pasti yang mengerjakan — tidak perlu double komisi.
+		//        Jika tidak eligible offering, maka berikan handling.
+		isEligible := !row.commissionEligible.Valid || row.commissionEligible.Bool
+
+		if row.serviceID.Valid {
+			// Doctor commission
+			if row.doctorID.Valid {
+				if isEligible && row.doctorOfferingType.Valid && row.doctorOfferingValue.Valid && row.doctorOfferingValue.Float64 > 0 {
+					// Offering supersedes handling
+					if err := r.insertCommission(tx, row.doctorID.String, "doctor", "offering", transactionID, row.itemID, userByID, orgID, row.totalPrice, row.doctorOfferingType.String, row.doctorOfferingValue.Float64); err != nil {
+						return err
+					}
+				} else {
+					// Fallback to handling
+					if err := r.insertCommission(tx, row.doctorID.String, "doctor", "handling", transactionID, row.itemID, userByID, orgID, row.totalPrice, row.doctorHandlingType, row.doctorHandlingValue); err != nil {
+						return err
+					}
+				}
+			}
+			// Therapist commission
+			if row.therapistID.Valid {
+				if isEligible && row.therapistOfferingType.Valid && row.therapistOfferingValue.Valid && row.therapistOfferingValue.Float64 > 0 {
+					// Offering supersedes handling
+					if err := r.insertCommission(tx, row.therapistID.String, "therapist", "offering", transactionID, row.itemID, userByID, orgID, row.totalPrice, row.therapistOfferingType.String, row.therapistOfferingValue.Float64); err != nil {
+						return err
+					}
+				} else {
+					// Fallback to handling
+					if err := r.insertCommission(tx, row.therapistID.String, "therapist", "handling", transactionID, row.itemID, userByID, orgID, row.totalPrice, row.therapistHandlingType, row.therapistHandlingValue); err != nil {
+						return err
+					}
+				}
 			}
 		}
-		if row.serviceID.Valid && row.therapistID.Valid {
-			if err := r.insertCommission(tx, row.therapistID.String, "therapist", transactionID, row.itemID, userByID, orgID, row.totalPrice, row.therapistType, row.therapistValue); err != nil {
-				return err
+		if row.itemType == "product" && row.productID.Valid {
+			// Doctor commission for product
+			if row.doctorID.Valid {
+				if isEligible && row.doctorOfferingType.Valid && row.doctorOfferingValue.Valid && row.doctorOfferingValue.Float64 > 0 {
+					if err := r.insertCommission(tx, row.doctorID.String, "doctor", "offering", transactionID, row.itemID, userByID, orgID, row.totalPrice, row.doctorOfferingType.String, row.doctorOfferingValue.Float64); err != nil {
+						return err
+					}
+				} else {
+					if err := r.insertCommission(tx, row.doctorID.String, "doctor", "handling", transactionID, row.itemID, userByID, orgID, row.totalPrice, row.doctorHandlingType, row.doctorHandlingValue); err != nil {
+						return err
+					}
+				}
+			}
+			// Therapist commission for product
+			if row.therapistID.Valid {
+				if isEligible && row.therapistOfferingType.Valid && row.therapistOfferingValue.Valid && row.therapistOfferingValue.Float64 > 0 {
+					if err := r.insertCommission(tx, row.therapistID.String, "therapist", "offering", transactionID, row.itemID, userByID, orgID, row.totalPrice, row.therapistOfferingType.String, row.therapistOfferingValue.Float64); err != nil {
+						return err
+					}
+				} else {
+					if err := r.insertCommission(tx, row.therapistID.String, "therapist", "handling", transactionID, row.itemID, userByID, orgID, row.totalPrice, row.therapistHandlingType, row.therapistHandlingValue); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
 	return tx.Commit()
 }
 
-func (r *Repository) insertCommission(tx *sql.Tx, staffID, staffRole, transactionID, itemID, createdBy, orgID string, baseAmount float64, commissionType string, commissionValue float64) error {
+func (r *Repository) insertCommission(tx *sql.Tx, staffID, staffRole, reason, transactionID, itemID, createdBy, orgID string, baseAmount float64, commissionType string, commissionValue float64) error {
+	if commissionValue <= 0 {
+		return nil
+	}
+	// Deduplicate per staff + item + reason so re-running is idempotent.
 	var exists bool
-	if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM commissions WHERE staff_id = $1 AND transaction_item_id = $2)`, staffID, itemID).Scan(&exists); err != nil {
+	if err := tx.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM commissions WHERE staff_id = $1 AND transaction_item_id = $2 AND COALESCE(commission_reason, '') = $3)`,
+		staffID, itemID, reason,
+	).Scan(&exists); err != nil {
 		return fmt.Errorf("failed to check commission: %w", err)
 	}
-	if exists || commissionValue <= 0 {
+	if exists {
 		return nil
 	}
 	amount := commissionValue
@@ -352,10 +439,13 @@ func (r *Repository) insertCommission(tx *sql.Tx, staffID, staffRole, transactio
 	_, err := tx.Exec(`
 		INSERT INTO commissions (
 			id, staff_id, staff_role, transaction_id, transaction_item_id, base_amount,
-			commission_type, commission_value, commission_amount, status, organization_id, created_by, created_at, updated_at
+			commission_type, commission_value, commission_amount, commission_reason,
+			status, organization_id, created_by, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, uuid.New().String(), staffID, staffRole, transactionID, itemID, baseAmount, commissionType, commissionValue, amount, nullableString(orgID), nullableString(createdBy))
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, uuid.New().String(), staffID, staffRole, transactionID, itemID, baseAmount,
+		commissionType, commissionValue, amount, reason,
+		nullableString(orgID), nullableString(createdBy))
 	if err != nil {
 		return fmt.Errorf("failed to insert commission: %w", err)
 	}
@@ -395,10 +485,13 @@ func scanTransactionItem(scanner txScanner) (TransactionItemWithRelations, error
 	var result TransactionItemWithRelations
 	var serviceID, serviceName, productID, productName sql.NullString
 	var doctorID, doctorName, therapistID, therapistName sql.NullString
+	var commissionEligible sql.NullBool
+	var commissionNotes sql.NullString
 	err := scanner.Scan(
 		&result.ID, &result.TransactionID, &result.ItemType, &result.ServiceID,
 		&result.ProductID, &result.Quantity, &result.UnitPrice, &result.DiscountAmount,
 		&result.DiscountType, &result.TotalPrice, &result.DoctorID, &result.TherapistID, &result.CreatedAt,
+		&commissionEligible, &commissionNotes,
 		&serviceID, &serviceName, &productID, &productName, &doctorID, &doctorName,
 		&therapistID, &therapistName,
 	)
@@ -416,6 +509,15 @@ func scanTransactionItem(scanner txScanner) (TransactionItemWithRelations, error
 	}
 	if therapistID.Valid {
 		result.Therapist = &NamedSummary{ID: therapistID.String, FullName: therapistName.String}
+	}
+	if commissionEligible.Valid {
+		result.CommissionEligible = &commissionEligible.Bool
+	} else {
+		t := true
+		result.CommissionEligible = &t // default true for backward compat
+	}
+	if commissionNotes.Valid {
+		result.CommissionNotes = &commissionNotes.String
 	}
 	return result, nil
 }

@@ -32,6 +32,9 @@ export interface TransactionItem {
   total_price: number;
   doctor_id: string | null;
   therapist_id: string | null;
+  /** Whether this item is eligible for commission. Undefined/null treated as true (backward compat). */
+  commission_eligible?: boolean | null;
+  commission_notes?: string | null;
   created_at: string;
 }
 
@@ -46,6 +49,8 @@ export interface Commission {
   commission_value: number;
   commission_amount: number;
   status: "pending" | "paid";
+  /** 'handling' = PIC tindakan (selalu). 'offering' = terapis tawarkan & pasien setuju. null = data lama. */
+  commission_reason?: "handling" | "offering" | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -98,4 +103,10 @@ export interface CartItem {
   therapistId?: string;
   doctorName?: string;
   therapistName?: string;
+  /** Applies to both service and product items.
+   *  true  = staff offered and patient agreed → OFFERING commission given (supersedes handling).
+   *  false = patient requested themselves → HANDLING commission given (if staff assigned).
+   */
+  commissionEligible?: boolean;
+  commissionNotes?: string;
 }

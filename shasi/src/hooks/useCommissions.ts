@@ -6,6 +6,7 @@ import { toast } from "sonner";
 interface CommissionWithRelations extends Commission {
   staff?: { id: string; full_name: string; role: string } | null;
   transaction?: { id: string; transaction_code: string } | null;
+  item?: { id: string; item_type: string; name: string } | null;
 }
 
 export function useCommissions(enabled = true) {

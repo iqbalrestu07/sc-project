@@ -19,10 +19,16 @@ export interface Service {
   description: string | null;
   duration_minutes: number;
   base_price: number;
+  // Handling commission: earned when staff is PIC / mengerjakan tindakan (always)
   doctor_commission_type: CommissionType;
   doctor_commission_value: number;
   therapist_commission_type: CommissionType;
   therapist_commission_value: number;
+  // Offering commission: earned only when staff offers the service and patient agrees
+  doctor_offering_commission_type?: CommissionType | null;
+  doctor_offering_commission_value?: number | null;
+  therapist_offering_commission_type?: CommissionType | null;
+  therapist_offering_commission_value?: number | null;
   is_active: boolean;
   requires_doctor: boolean;
   created_at: string;
@@ -37,10 +43,16 @@ export interface ServiceFormData {
   description?: string;
   duration_minutes?: number;
   base_price: number;
+  // Handling commission
   doctor_commission_type?: CommissionType;
   doctor_commission_value?: number;
   therapist_commission_type?: CommissionType;
   therapist_commission_value?: number;
+  // Offering commission
+  doctor_offering_commission_type?: CommissionType | null;
+  doctor_offering_commission_value?: number | null;
+  therapist_offering_commission_type?: CommissionType | null;
+  therapist_offering_commission_value?: number | null;
   requires_doctor?: boolean;
 }
 

@@ -31,22 +31,24 @@ import { Service, ServiceFormData } from "@/types/service";
 import { useCreateService, useUpdateService, useServiceCategories } from "@/hooks/useServices";
 import { useEffect } from "react";
 
+const commissionTypeEnum = z.enum(["fixed", "percentage"]);
+
 const serviceSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name is too long"),
   category_id: z.string().optional(),
   description: z.string().max(500, "Description is too long").optional(),
   duration_minutes: z.coerce.number().min(5, "Duration must be at least 5 minutes").max(480, "Duration must be at most 480 minutes"),
   base_price: z.coerce.number().min(0.01, "Base price is required and must be greater than 0"),
-  doctor_commission_type: z.enum(["fixed", "percentage"], {
-    required_error: "Doctor commission type is required",
-    invalid_type_error: "Doctor commission type is required",
-  }),
+  // Handling commission (PIC / mengerjakan tindakan)
+  doctor_commission_type: commissionTypeEnum,
   doctor_commission_value: z.coerce.number().min(0, "Commission value cannot be negative"),
-  therapist_commission_type: z.enum(["fixed", "percentage"], {
-    required_error: "Therapist commission type is required",
-    invalid_type_error: "Therapist commission type is required",
-  }),
+  therapist_commission_type: commissionTypeEnum,
   therapist_commission_value: z.coerce.number().min(0, "Commission value cannot be negative"),
+  // Offering commission (menawarkan dan pasien setuju — opsional)
+  doctor_offering_commission_type: commissionTypeEnum.optional().nullable(),
+  doctor_offering_commission_value: z.coerce.number().min(0).optional().nullable(),
+  therapist_offering_commission_type: commissionTypeEnum.optional().nullable(),
+  therapist_offering_commission_value: z.coerce.number().min(0).optional().nullable(),
   requires_doctor: z.boolean().optional(),
 });
 
@@ -74,11 +76,19 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
       doctor_commission_value: 0,
       therapist_commission_type: "percentage",
       therapist_commission_value: 0,
+      doctor_offering_commission_type: null,
+      doctor_offering_commission_value: null,
+      therapist_offering_commission_type: null,
+      therapist_offering_commission_value: null,
       requires_doctor: false,
     },
   });
 
+  // Trigger only when the dialog opens to avoid infinite loops from
+  // form.reset() triggering re-renders that invalidate the deps.
   useEffect(() => {
+    if (!open) return;
+
     if (service) {
       form.reset({
         name: service.name,
@@ -90,6 +100,10 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
         doctor_commission_value: service.doctor_commission_value,
         therapist_commission_type: service.therapist_commission_type,
         therapist_commission_value: service.therapist_commission_value,
+        doctor_offering_commission_type: service.doctor_offering_commission_type ?? null,
+        doctor_offering_commission_value: service.doctor_offering_commission_value ?? null,
+        therapist_offering_commission_type: service.therapist_offering_commission_type ?? null,
+        therapist_offering_commission_value: service.therapist_offering_commission_value ?? null,
         requires_doctor: service.requires_doctor,
       });
     } else {
@@ -103,10 +117,14 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
         doctor_commission_value: 0,
         therapist_commission_type: "percentage",
         therapist_commission_value: 0,
+        doctor_offering_commission_type: null,
+        doctor_offering_commission_value: null,
+        therapist_offering_commission_type: null,
+        therapist_offering_commission_value: null,
         requires_doctor: false,
       });
     }
-  }, [service, form]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSubmit = async (data: ServiceFormData) => {
     try {
@@ -134,6 +152,8 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
 
   const doctorCommissionType = form.watch("doctor_commission_type");
   const therapistCommissionType = form.watch("therapist_commission_type");
+  const doctorOfferingType = form.watch("doctor_offering_commission_type");
+  const therapistOfferingType = form.watch("therapist_offering_commission_type");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -228,16 +248,19 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
               />
             </div>
 
-            {/* Doctor Commission */}
+            {/* Therapist Commission — Handling */}
             <div className="space-y-4 border-t pt-4">
-              <h3 className="text-sm font-medium text-muted-foreground">Doctor Commission</h3>
+              <div>
+                <h3 className="text-sm font-semibold">Komisi Terapis</h3>
+                <p className="text-xs text-muted-foreground">Handling: diberikan saat terapis mengerjakan tindakan (selalu)</p>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="doctor_commission_type"
+                  name="therapist_commission_type"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Commission Type</FormLabel>
+                      <FormLabel>Tipe Handling</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -245,22 +268,21 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="percentage">Percentage (%)</SelectItem>
-                          <SelectItem value="fixed">Fixed Amount (IDR)</SelectItem>
+                          <SelectItem value="percentage">Persentase (%)</SelectItem>
+                          <SelectItem value="fixed">Nominal (IDR)</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
                 <FormField
                   control={form.control}
-                  name="doctor_commission_value"
+                  name="therapist_commission_value"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>
-                        Commission Value {doctorCommissionType === "percentage" ? "(%)" : "(IDR)"}
+                        Nilai Handling {therapistCommissionType === "percentage" ? "(%)" : "(IDR)"}
                       </FormLabel>
                       <FormControl>
                         <Input type="number" min={0} placeholder="0" {...field} />
@@ -270,18 +292,72 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
                   )}
                 />
               </div>
-            </div>
-
-            {/* Therapist Commission */}
-            <div className="space-y-4 border-t pt-4">
-              <h3 className="text-sm font-medium text-muted-foreground">Therapist Commission</h3>
+              {/* Therapist Offering Commission */}
+              <p className="text-xs text-muted-foreground mt-2">Offering: diberikan saat terapis menawarkan tindakan dan pasien setuju (opsional)</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="therapist_commission_type"
+                  name="therapist_offering_commission_type"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Commission Type</FormLabel>
+                      <FormLabel>Tipe Offering</FormLabel>
+                      <Select
+                        onValueChange={(v) => field.onChange(v === "none" ? null : v)}
+                        value={field.value ?? "none"}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Tidak ada" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">Tidak ada</SelectItem>
+                          <SelectItem value="percentage">Persentase (%)</SelectItem>
+                          <SelectItem value="fixed">Nominal (IDR)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="therapist_offering_commission_value"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Nilai Offering {therapistOfferingType === "percentage" ? "(%)" : "(IDR)"}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder="0"
+                          disabled={!therapistOfferingType}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Doctor Commission — Handling */}
+            <div className="space-y-4 border-t pt-4">
+              <div>
+                <h3 className="text-sm font-semibold">Komisi Dokter</h3>
+                <p className="text-xs text-muted-foreground">Handling: diberikan saat dokter mengerjakan tindakan (selalu)</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="doctor_commission_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipe Handling</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -289,25 +365,75 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="percentage">Percentage (%)</SelectItem>
-                          <SelectItem value="fixed">Fixed Amount (IDR)</SelectItem>
+                          <SelectItem value="percentage">Persentase (%)</SelectItem>
+                          <SelectItem value="fixed">Nominal (IDR)</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
                 <FormField
                   control={form.control}
-                  name="therapist_commission_value"
+                  name="doctor_commission_value"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>
-                        Commission Value {therapistCommissionType === "percentage" ? "(%)" : "(IDR)"}
+                        Nilai Handling {doctorCommissionType === "percentage" ? "(%)" : "(IDR)"}
                       </FormLabel>
                       <FormControl>
                         <Input type="number" min={0} placeholder="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              {/* Doctor Offering Commission */}
+              <p className="text-xs text-muted-foreground mt-2">Offering: diberikan saat dokter menawarkan tindakan dan pasien setuju (opsional)</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="doctor_offering_commission_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipe Offering</FormLabel>
+                      <Select
+                        onValueChange={(v) => field.onChange(v === "none" ? null : v)}
+                        value={field.value ?? "none"}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Tidak ada" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">Tidak ada</SelectItem>
+                          <SelectItem value="percentage">Persentase (%)</SelectItem>
+                          <SelectItem value="fixed">Nominal (IDR)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="doctor_offering_commission_value"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Nilai Offering {doctorOfferingType === "percentage" ? "(%)" : "(IDR)"}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder="0"
+                          disabled={!doctorOfferingType}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

@@ -12,6 +12,8 @@ export interface ProductCategory {
 
 export type ProductCategorySlug = 'skincare' | 'consumable' | 'consumables' | 'equipment' | 'medication' | 'supplements' | 'other';
 
+import type { CommissionType } from './service';
+
 export interface Product {
   id: string;
   name: string;
@@ -28,6 +30,16 @@ export interface Product {
   is_active: boolean;
   is_consumable?: boolean;
   consumable_category?: string | null;
+  // Handling commission: diberikan saat staff assigned sebagai PIC (selalu)
+  doctor_commission_type?: CommissionType | null;
+  doctor_commission_value?: number | null;
+  therapist_commission_type?: CommissionType | null;
+  therapist_commission_value?: number | null;
+  // Offering commission: diberikan saat staff menawarkan dan pasien setuju (opsional)
+  doctor_offering_commission_type?: CommissionType | null;
+  doctor_offering_commission_value?: number | null;
+  therapist_offering_commission_type?: CommissionType | null;
+  therapist_offering_commission_value?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -47,6 +59,16 @@ export interface ProductFormData {
   minimum_stock?: number;
   unit?: string;
   expiry_date?: string;
+  // Handling commission
+  doctor_commission_type?: CommissionType | null;
+  doctor_commission_value?: number | null;
+  therapist_commission_type?: CommissionType | null;
+  therapist_commission_value?: number | null;
+  // Offering commission
+  doctor_offering_commission_type?: CommissionType | null;
+  doctor_offering_commission_value?: number | null;
+  therapist_offering_commission_type?: CommissionType | null;
+  therapist_offering_commission_value?: number | null;
 }
 
 export const PRODUCT_CATEGORIES = [

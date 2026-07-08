@@ -74,6 +74,8 @@ func (s *service) Create(req CreateRequest, userID *string, orgID string) (*Tran
 				req.Items[i].ItemType = "service"
 			}
 		}
+		// commission_eligible defaults (nil → true) are applied in the repository
+		// when inserting. Nothing to do here.
 		// Recalculate item total_price honoring item-level discount
 		lineGross := req.Items[i].UnitPrice * float64(req.Items[i].Quantity)
 		if req.Items[i].DiscountAmount != nil && *req.Items[i].DiscountAmount > 0 {
@@ -147,7 +149,7 @@ func (s *service) Create(req CreateRequest, userID *string, orgID string) (*Tran
 		if err := s.repo.MarkPaidEffects(req.Transaction.ID, createdBy, orgID); err != nil {
 			return nil, err
 		}
-		
+
 		createdTx, _ := s.Get(req.Transaction.ID, orgID)
 		if createdTx != nil {
 			go s.sendWhatsappInvoice(createdTx, orgID)
@@ -177,7 +179,7 @@ func (s *service) Update(id, orgID, userID string, req models.Transaction, sendW
 		if err := s.repo.MarkPaidEffects(id, userID, orgID); err != nil {
 			return nil, err
 		}
-		
+
 		updatedTx, _ := s.Get(id, orgID)
 		if updatedTx != nil && (sendWhatsApp == nil || *sendWhatsApp) {
 			go s.sendWhatsappInvoice(updatedTx, orgID)
