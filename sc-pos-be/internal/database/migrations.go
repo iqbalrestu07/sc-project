@@ -23,6 +23,7 @@ func RunMigrations() error {
 		addConsumablePermissions,
 		addWhatsappTables,
 		addOmnichannelTables,
+		addServiceConsumableGroups,
 	}
 
 	for i, migration := range migrations {
@@ -705,6 +706,57 @@ CREATE TABLE IF NOT EXISTS whatsapp_templates (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_whatsapp_templates_org ON whatsapp_templates(organization_id);
+`
+
+// addServiceConsumableGroups introduces the "alternative consumable" system.
+//
+// service_consumable_groups   — defines a consumable *requirement* for a service
+//
+//	(e.g. "Masker wajah, qty 1 per session")
+//
+// service_consumable_group_items — lists the alternative products that can fulfil
+//
+//	a requirement, in priority order (0 = most preferred).
+//	When the transaction is paid the cashier selects one alternative; if its stock
+//	is 0 the transaction is blocked.
+//
+// transaction_items gains selected_consumable_product_id so we know which exact
+// product was consumed for a service item.
+const addServiceConsumableGroups = `
+CREATE TABLE IF NOT EXISTS service_consumable_groups (
+    id              VARCHAR(36) PRIMARY KEY,
+    service_id      VARCHAR(36) NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+    name            VARCHAR(255) NOT NULL,
+    quantity_used   DECIMAL(10,3) NOT NULL DEFAULT 1,
+    organization_id VARCHAR(36) REFERENCES organizations(id),
+    created_by      VARCHAR(36) REFERENCES users(id),
+    updated_by      VARCHAR(36) REFERENCES users(id),
+    deleted_at      TIMESTAMP,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_scg_service    ON service_consumable_groups(service_id);
+CREATE INDEX IF NOT EXISTS idx_scg_org        ON service_consumable_groups(organization_id);
+CREATE INDEX IF NOT EXISTS idx_scg_active     ON service_consumable_groups(service_id) WHERE deleted_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS service_consumable_group_items (
+    id              VARCHAR(36) PRIMARY KEY,
+    group_id        VARCHAR(36) NOT NULL REFERENCES service_consumable_groups(id) ON DELETE CASCADE,
+    product_id      VARCHAR(36) NOT NULL REFERENCES products(id),
+    priority        INT NOT NULL DEFAULT 0,
+    organization_id VARCHAR(36) REFERENCES organizations(id),
+    created_by      VARCHAR(36) REFERENCES users(id),
+    deleted_at      TIMESTAMP,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (group_id, product_id)
+);
+CREATE INDEX IF NOT EXISTS idx_scgi_group     ON service_consumable_group_items(group_id);
+CREATE INDEX IF NOT EXISTS idx_scgi_product   ON service_consumable_group_items(product_id);
+CREATE INDEX IF NOT EXISTS idx_scgi_active    ON service_consumable_group_items(group_id) WHERE deleted_at IS NULL;
+
+-- Track which specific consumable product was used for a service item
+ALTER TABLE transaction_items
+    ADD COLUMN IF NOT EXISTS selected_consumable_product_id VARCHAR(36) REFERENCES products(id);
 `
 
 const addOmnichannelTables = `

@@ -35,6 +35,8 @@ export interface TransactionItem {
   /** Whether this item is eligible for commission. Undefined/null treated as true (backward compat). */
   commission_eligible?: boolean | null;
   commission_notes?: string | null;
+  /** Consumable product chosen by the cashier for this service item (FK → products.id). */
+  selected_consumable_product_id?: string | null;
   created_at: string;
 }
 
@@ -109,4 +111,12 @@ export interface CartItem {
    */
   commissionEligible?: boolean;
   commissionNotes?: string;
+  /**
+   * Consumable product selected by the cashier for this service item.
+   * Set when the service has consumable groups and cashier picks an alternative.
+   * Sent to backend as selected_consumable_product_id on transaction_items.
+   */
+  selectedConsumableProductId?: string;
+  /** Friendly name of the selected consumable — for display only, not sent to backend. */
+  selectedConsumableProductName?: string;
 }

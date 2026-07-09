@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +47,7 @@ import { useProducts } from "@/hooks/useProducts";
 import { useStaff } from "@/hooks/useStaff";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useClinicSettings } from "@/hooks/useClinicSettings";
+import { useConsumableGroups } from "@/hooks/useConsumableGroups";
 import type { CartItem, PaymentMethod, TransactionWithRelations } from "@/types/transaction";
 import { PAYMENT_METHODS } from "@/types/transaction";
 import { toast } from "sonner";
@@ -61,6 +62,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ConsumableSelectionDialog } from "./ConsumableSelectionDialog";
+import type { ConsumableGroup } from "@/types/consumable_group";
 
 export function POSInterface() {
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -75,12 +78,27 @@ export function POSInterface() {
   const [completedTransaction, setCompletedTransaction] = useState<TransactionWithRelations | null>(null);
   const [sendWhatsApp, setSendWhatsApp] = useState(true);
 
+  // Consumable selection dialog state.
+  // nonce changes every time a new service is added, ensuring useEffect fires even for repeated additions.
+  const [pendingService, setPendingService] = useState<{
+    itemId: string;
+    name: string;
+    unitPrice: number;
+    nonce: number;
+  } | null>(null);
+
   const patientsQuery = usePatients();
   const servicesQuery = useServices();
   const { products } = useProducts();
   const { doctors, therapists } = useStaff();
   const { createTransaction, updatePaymentStatus } = useTransactions();
   const { settings } = useClinicSettings();
+
+  // Fetch consumable groups for the pending service (only when a service is being added)
+  const {
+    data: pendingServiceGroups = [],
+    isLoading: pendingGroupsLoading,
+  } = useConsumableGroups(pendingService?.itemId ?? null);
 
   const patients = patientsQuery.data || [];
   const services = servicesQuery.data || [];
@@ -93,11 +111,14 @@ export function POSInterface() {
     !p.is_consumable && p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const addToCart = (
+  // Internal helper: actually push item into cart (called after consumable selection confirmed)
+  const pushToCart = (
     type: "service" | "product",
     itemId: string,
     name: string,
-    unitPrice: number
+    unitPrice: number,
+    selectedConsumableProductId?: string,
+    selectedConsumableProductName?: string
   ) => {
     const existingIndex = cart.findIndex(
       (item) => item.itemId === itemId && item.type === type
@@ -108,8 +129,8 @@ export function POSInterface() {
       updated[existingIndex].quantity += 1;
       setCart(updated);
     } else {
-      setCart([
-        ...cart,
+      setCart((prev) => [
+        ...prev,
         {
           id: crypto.randomUUID(),
           type,
@@ -119,10 +140,63 @@ export function POSInterface() {
           quantity: 1,
           // Service items default to commission-eligible; product items never earn commission.
           commissionEligible: type === "service" ? true : undefined,
+          selectedConsumableProductId,
+          selectedConsumableProductName,
         },
       ]);
     }
   };
+
+  const addToCart = (
+    type: "service" | "product",
+    itemId: string,
+    name: string,
+    unitPrice: number
+  ) => {
+    if (type === "service") {
+      // Store as pending; once consumable groups load, the dialog opens (or we add directly if no groups)
+      setPendingService({ itemId, name, unitPrice, nonce: Date.now() });
+      return;
+    }
+    // Products go straight to cart
+    pushToCart(type, itemId, name, unitPrice);
+  };
+
+  // Called when pendingServiceGroups loads and we need to decide what to do
+  // This is done inside the render (see ConsumableSelectionDialog usage)
+  const handleConsumableConfirm = (
+    selections: Record<string, { productId: string; productName: string }>
+  ) => {
+    if (!pendingService) return;
+    // For simplicity: use the first selection (we only support single-group selection per item currently)
+    // Backend accepts only one selected_consumable_product_id per item
+    const firstKey = Object.keys(selections)[0];
+    const sel = firstKey ? selections[firstKey] : undefined;
+    pushToCart(
+      "service",
+      pendingService.itemId,
+      pendingService.name,
+      pendingService.unitPrice,
+      sel?.productId,
+      sel?.productName
+    );
+    setPendingService(null);
+  };
+
+  const handleConsumableCancel = () => {
+    setPendingService(null);
+  };
+
+  // Auto-add service to cart when it has no consumable groups (after groups finish loading)
+  useEffect(() => {
+    if (!pendingService || pendingGroupsLoading) return;
+    const hasGroups = (pendingServiceGroups as ConsumableGroup[]).some((g) => g.items.length > 0);
+    if (!hasGroups) {
+      pushToCart("service", pendingService.itemId, pendingService.name, pendingService.unitPrice);
+      setPendingService(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingService, pendingGroupsLoading, pendingServiceGroups]);
 
   const updateQuantity = (id: string, delta: number) => {
     setCart((prev) =>
@@ -248,6 +322,8 @@ export function POSInterface() {
           // Only pass for service items; product items never earn commission.
           commission_eligible: item.type === "service" ? (item.commissionEligible ?? true) : undefined,
           commission_notes: item.commissionNotes || null,
+          // Selected consumable product (for service items with consumable groups)
+          selected_consumable_product_id: item.selectedConsumableProductId || null,
         })),
       });
 
@@ -474,6 +550,13 @@ export function POSInterface() {
                       <div className="text-xs text-muted-foreground">
                         {formatPrice(item.unitPrice)} x {item.quantity}
                       </div>
+                      {item.type === "service" && item.selectedConsumableProductName && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <Badge variant="outline" className="text-xs h-4 px-1 bg-blue-50 text-blue-700 border-blue-200">
+                            🧴 {item.selectedConsumableProductName}
+                          </Badge>
+                        </div>
+                      )}
                     </div>
                     <div className="text-right">
                       <div className="font-semibold text-sm text-primary">
@@ -743,6 +826,19 @@ export function POSInterface() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Consumable selection dialog — shown when adding a service with consumable groups.
+          The useEffect above handles the no-groups case (auto-add). */}
+      {pendingService && !pendingGroupsLoading &&
+        (pendingServiceGroups as ConsumableGroup[]).some((g) => g.items.length > 0) && (
+        <ConsumableSelectionDialog
+          open={true}
+          serviceName={pendingService.name}
+          groups={(pendingServiceGroups as ConsumableGroup[]).filter((g) => g.items.length > 0)}
+          onConfirm={handleConsumableConfirm}
+          onCancel={handleConsumableCancel}
+        />
+      )}
     </div>
   );
 }

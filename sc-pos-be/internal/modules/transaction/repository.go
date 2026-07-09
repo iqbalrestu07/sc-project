@@ -160,12 +160,14 @@ func (r *Repository) Create(req CreateRequest, orgID string) (*TransactionWithRe
 				id, transaction_id, item_type, service_id, product_id, quantity,
 				unit_price, discount_amount, discount_type, total_price,
 				doctor_id, therapist_id, commission_eligible, commission_notes,
+				selected_consumable_product_id,
 				created_at, created_by
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		`, item.ID, req.Transaction.ID, item.ItemType, item.ServiceID, item.ProductID,
 			item.Quantity, item.UnitPrice, item.DiscountAmount, item.DiscountType, item.TotalPrice,
 			item.DoctorID, item.TherapistID, commEligible, item.CommissionNotes,
+			item.SelectedConsumableProductID,
 			item.CreatedAt, item.CreatedBy); err != nil {
 			return nil, fmt.Errorf("failed to create transaction item: %w", err)
 		}
@@ -264,6 +266,8 @@ type paidItemRow struct {
 	doctorOfferingValue, therapistOfferingValue sql.NullFloat64
 	// Whether offering commission is eligible for this item
 	commissionEligible sql.NullBool
+	// Consumable product chosen by cashier for this service item
+	selectedConsumableProductID sql.NullString
 }
 
 func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) error {
@@ -287,7 +291,8 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) erro
 		       COALESCE(s.doctor_offering_commission_value,   p.doctor_offering_commission_value),
 		       COALESCE(s.therapist_offering_commission_type,  p.therapist_offering_commission_type),
 		       COALESCE(s.therapist_offering_commission_value, p.therapist_offering_commission_value),
-		       COALESCE(ti.commission_eligible, TRUE)
+		       COALESCE(ti.commission_eligible, TRUE),
+		       ti.selected_consumable_product_id
 		FROM transaction_items ti
 		LEFT JOIN services  s ON s.id = ti.service_id
 		LEFT JOIN products  p ON p.id = ti.product_id
@@ -307,7 +312,7 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) erro
 			&row.therapistHandlingType, &row.therapistHandlingValue,
 			&row.doctorOfferingType, &row.doctorOfferingValue,
 			&row.therapistOfferingType, &row.therapistOfferingValue,
-			&row.commissionEligible); err != nil {
+			&row.commissionEligible, &row.selectedConsumableProductID); err != nil {
 			rows.Close()
 			return fmt.Errorf("failed to scan payment item: %w", err)
 		}
@@ -319,8 +324,39 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) erro
 	}
 	rows.Close() // explicitly close before issuing DML inside the same tx
 
-	// Step 2: apply side-effects now that the cursor is closed
+	// Step 2a: validate consumable stock BEFORE any mutations.
+	// If any selected consumable product has insufficient stock, abort the whole transaction.
 	for _, row := range items {
+		if row.itemType == "service" && row.selectedConsumableProductID.Valid {
+			var available int
+			var productName string
+			// Determine required quantity from the group definition
+			var required float64
+			err = tx.QueryRow(`
+				SELECT COALESCE(p.current_stock, 0), p.name,
+				       COALESCE(scg.quantity_used, 1) * $2
+				FROM products p
+				LEFT JOIN service_consumable_groups scg
+					ON scg.service_id = $3 AND scg.deleted_at IS NULL
+				WHERE p.id = $1
+				LIMIT 1
+			`, row.selectedConsumableProductID.String, row.quantity, row.serviceID).
+				Scan(&available, &productName, &required)
+			if err != nil {
+				return fmt.Errorf("failed to check consumable stock for product %s: %w",
+					row.selectedConsumableProductID.String, err)
+			}
+			if float64(available) < required {
+				return fmt.Errorf(
+					"stok %s tidak cukup: dibutuhkan %.0f, tersedia %d. Transaksi dibatalkan",
+					productName, required, available)
+			}
+		}
+	}
+
+	// Step 2b: apply side-effects now that the cursor is closed
+	for _, row := range items {
+		// 2b-i: deduct stock for retail product items
 		if row.itemType == "product" && row.productID.Valid {
 			var currStock, minStock int
 			var prodName string
@@ -351,6 +387,56 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) erro
 				return fmt.Errorf("failed to record stock movement: %w", err)
 			}
 		}
+
+		// 2b-ii: deduct stock for consumable product used in a service item
+		if row.itemType == "service" && row.selectedConsumableProductID.Valid {
+			var required float64
+			err = tx.QueryRow(`
+				SELECT COALESCE(scg.quantity_used, 1) * $2
+				FROM service_consumable_groups scg
+				WHERE scg.service_id = $1 AND scg.deleted_at IS NULL
+				LIMIT 1
+			`, row.serviceID, row.quantity).Scan(&required)
+			if err != nil && err != sql.ErrNoRows {
+				return fmt.Errorf("failed to load consumable qty: %w", err)
+			}
+			if required <= 0 {
+				required = float64(row.quantity) // fallback: 1 unit per session
+			}
+
+			var currStock, minStock int
+			var prodName string
+			err = tx.QueryRow(`
+				UPDATE products
+				SET current_stock = GREATEST(COALESCE(current_stock, 0) - $1, 0),
+				    updated_at = CURRENT_TIMESTAMP
+				WHERE id = $2
+				RETURNING current_stock, minimum_stock, name
+			`, required, row.selectedConsumableProductID.String).Scan(&currStock, &minStock, &prodName)
+			if err != nil {
+				return fmt.Errorf("failed to deduct consumable stock: %w", err)
+			}
+
+			if currStock <= minStock {
+				go func(org, pName string, cur, min int) {
+					waService := whatsapp.NewService()
+					waService.SendLowStockAlert(org, pName, cur, min)
+				}(orgID, prodName, currStock, minStock)
+			}
+
+			movID := uuid.New().String()
+			negRequired := -required
+			if _, err := tx.Exec(`
+				INSERT INTO stock_movements
+					(id, product_id, movement_type, quantity, reason, reference_id, reference_type,
+					 created_by, organization_id, created_at)
+				VALUES ($1, $2, 'out', $3, 'service_consumable', $4, 'transaction', $5, $6, CURRENT_TIMESTAMP)
+			`, movID, row.selectedConsumableProductID.String, negRequired, transactionID,
+				nullableString(userByID), nullableString(orgID)); err != nil {
+				return fmt.Errorf("failed to record consumable movement: %w", err)
+			}
+		}
+
 		// Commission rules apply to both service items and product items.
 		// Logic: jika staff menawarkan (offering eligible), maka HANYA offering yang diberikan
 		//        karena yang menawarkan sudah pasti yang mengerjakan — tidak perlu double komisi.

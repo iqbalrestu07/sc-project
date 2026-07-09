@@ -130,11 +130,21 @@ export const API_ENDPOINTS = {
         MARK_CONSUMABLE: (id: string) => `/products/${id}/mark-consumable`,
     },
 
-    // Service Consumables
+    // Service Consumables (legacy)
     SERVICE_CONSUMABLES: {
         LIST: "/service-consumables",                         // ?service_id=uuid
         UPSERT: "/service-consumables",                       // body: { service_id, product_id, quantity_used }
         DELETE: (id: string) => `/service-consumables/${id}`,
+    },
+
+    // Service Consumable Groups (alternative products system)
+    CONSUMABLE_GROUPS: {
+        LIST:         (serviceId: string) => `/services/${serviceId}/consumable-groups`,
+        CREATE:       (serviceId: string) => `/services/${serviceId}/consumable-groups`,
+        UPDATE:       (groupId: string)   => `/consumable-groups/${groupId}`,
+        DELETE:       (groupId: string)   => `/consumable-groups/${groupId}`,
+        ADD_ITEM:     (groupId: string)   => `/consumable-groups/${groupId}/items`,
+        DELETE_ITEM:  (itemId: string)    => `/consumable-group-items/${itemId}`,
     },
 
     // WhatsApp

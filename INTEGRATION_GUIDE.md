@@ -22,6 +22,7 @@ bun install  # atau npm install / yarn install
 ```
 
 Dependency baru yang ditambahkan:
+
 - `axios@^1.6.5` - HTTP client library
 
 ### 2. Verify Environment Variables
@@ -112,6 +113,7 @@ make dev
 ```
 
 Jika berhasil, Anda akan melihat:
+
 ```
 Running migrations...
 Running migration 1...
@@ -192,6 +194,7 @@ curl http://localhost:8080/api/patients \
 ### Port Already in Use
 
 **Frontend (5173):**
+
 ```bash
 # Kill process
 # macOS/Linux:
@@ -203,6 +206,7 @@ taskkill /PID <PID> /F
 ```
 
 **Backend (8080):**
+
 ```bash
 # macOS/Linux:
 lsof -ti:8080 | xargs kill -9
@@ -219,6 +223,7 @@ failed to connect to database: connection refused
 ```
 
 **Solusi:**
+
 1. Pastikan PostgreSQL running: `brew services list` (macOS)
 2. Periksa credentials di `.env`
 3. Pastikan database `sc_pos` sudah dibuat
@@ -231,6 +236,7 @@ from origin 'http://localhost:5173' has been blocked by CORS policy
 ```
 
 **Solusi:** Backend sudah menghandle CORS. Jika masih error, pastikan:
+
 - Backend running di port 8080
 - Frontend mengirim request ke URL yang benar
 
@@ -241,6 +247,7 @@ Error: timeout of 30000ms exceeded
 ```
 
 Naikkan timeout di `.env`:
+
 ```env
 VITE_API_TIMEOUT=60000  # 60 detik
 ```
@@ -360,6 +367,7 @@ sc-pos-be/
 │   ├── repository/      ← Data access layer
 │   ├── routes/          ← Route definitions
 │   └── utils/           ← Utilities
+│   └── modules/         ← Business logic modules per service
 ├── main.go              ← Entry point
 ├── go.mod              ← Dependencies
 ├── .env                ← Configuration
@@ -386,11 +394,13 @@ bun run dev
 ### Making Changes
 
 **Frontend (React):**
+
 1. Edit hook di `src/hooks/`
 2. Hot reload otomatis
 3. Check Network tab untuk API calls
 
 **Backend (Go):**
+
 1. Edit handler/repository
 2. Backend auto-reload (jika pakai Air)
 3. Atau manual restart: `make dev`
@@ -456,27 +466,27 @@ make install-deps    # Install dependencies
 
 ### Frontend (.env)
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `VITE_API_BASE_URL` | Backend API URL | `http://localhost:8080/api` |
-| `VITE_API_TIMEOUT` | Request timeout (ms) | `30000` |
-| `VITE_SUPABASE_URL` | Supabase URL (legacy) | `https://...` |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase key (legacy) | `eyJ...` |
+| Variable                        | Description           | Example                     |
+| ------------------------------- | --------------------- | --------------------------- |
+| `VITE_API_BASE_URL`             | Backend API URL       | `http://localhost:8080/api` |
+| `VITE_API_TIMEOUT`              | Request timeout (ms)  | `30000`                     |
+| `VITE_SUPABASE_URL`             | Supabase URL (legacy) | `https://...`               |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase key (legacy) | `eyJ...`                    |
 
 ### Backend (.env)
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `SERVER_HOST` | Server host | `0.0.0.0` |
-| `SERVER_PORT` | Server port | `8080` |
-| `DB_HOST` | PostgreSQL host | `localhost` |
-| `DB_PORT` | PostgreSQL port | `5432` |
-| `DB_USER` | PostgreSQL user | `postgres` |
-| `DB_PASSWORD` | PostgreSQL password | `password` |
-| `DB_NAME` | Database name | `sc_pos` |
-| `DB_SSLMODE` | SSL mode | `disable` |
-| `JWT_SECRET_KEY` | JWT secret | `your-secret` |
-| `JWT_EXPIRY_HOURS` | Token expiry | `24` |
+| Variable           | Description         | Example       |
+| ------------------ | ------------------- | ------------- |
+| `SERVER_HOST`      | Server host         | `0.0.0.0`     |
+| `SERVER_PORT`      | Server port         | `8080`        |
+| `DB_HOST`          | PostgreSQL host     | `localhost`   |
+| `DB_PORT`          | PostgreSQL port     | `5432`        |
+| `DB_USER`          | PostgreSQL user     | `postgres`    |
+| `DB_PASSWORD`      | PostgreSQL password | `password`    |
+| `DB_NAME`          | Database name       | `sc_pos`      |
+| `DB_SSLMODE`       | SSL mode            | `disable`     |
+| `JWT_SECRET_KEY`   | JWT secret          | `your-secret` |
+| `JWT_EXPIRY_HOURS` | Token expiry        | `24`          |
 
 ---
 

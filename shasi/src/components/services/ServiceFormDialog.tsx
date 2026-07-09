@@ -30,6 +30,8 @@ import {
 import { Service, ServiceFormData } from "@/types/service";
 import { useCreateService, useUpdateService, useServiceCategories } from "@/hooks/useServices";
 import { useEffect } from "react";
+import { Separator } from "@/components/ui/separator";
+import { ServiceConsumableGroupsEditor } from "./ServiceConsumableGroupsEditor";
 
 const commissionTypeEnum = z.enum(["fixed", "percentage"]);
 
@@ -481,6 +483,14 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
             </div>
           </form>
         </Form>
+
+        {/* Consumable Groups Editor — only visible when editing an existing service */}
+        {isEditing && service?.id && (
+          <>
+            <Separator className="my-2" />
+            <ServiceConsumableGroupsEditor serviceId={service.id} />
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

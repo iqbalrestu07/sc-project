@@ -11,17 +11,18 @@ import (
 	consumableItem "github.com/sc-pos/backend/internal/modules/consumable_item"
 	"github.com/sc-pos/backend/internal/modules/dashboard"
 	"github.com/sc-pos/backend/internal/modules/migration"
+	"github.com/sc-pos/backend/internal/modules/omnichannel"
 	orgModule "github.com/sc-pos/backend/internal/modules/organization"
 	"github.com/sc-pos/backend/internal/modules/patient"
 	"github.com/sc-pos/backend/internal/modules/product"
 	rbacModule "github.com/sc-pos/backend/internal/modules/rbac"
 	serviceModule "github.com/sc-pos/backend/internal/modules/service"
+	servicePackage "github.com/sc-pos/backend/internal/modules/service_package"
 	"github.com/sc-pos/backend/internal/modules/settings"
 	"github.com/sc-pos/backend/internal/modules/staff"
 	"github.com/sc-pos/backend/internal/modules/stock"
 	"github.com/sc-pos/backend/internal/modules/transaction"
 	"github.com/sc-pos/backend/internal/modules/whatsapp"
-	"github.com/sc-pos/backend/internal/modules/omnichannel"
 )
 
 func SetupRoutes(router *gin.Engine) {
@@ -134,8 +135,11 @@ func SetupRoutes(router *gin.Engine) {
 		// ── Stock movements ───────────────────────────────────────────────
 		stock.RegisterRoutes(protectedAPI, adminOnly)
 
-		// ── Service consumables ───────────────────────────────────────────
+		// ── Service consumables (legacy simple list) ─────────────────────
 		consumable.RegisterRoutes(protectedAPI, adminOnly)
+
+		// ── Service consumable groups (alternative products system) ───────
+		servicePackage.RegisterRoutes(protectedAPI, canReadServices, canWriteServices)
 
 		// ── Consumable items (habis pakai) ────────────────────────────────
 		consumableItem.RegisterRoutes(protectedAPI, canReadConsumables, canWriteConsumables)

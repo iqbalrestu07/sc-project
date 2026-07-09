@@ -42,10 +42,14 @@ type TransactionItem struct {
 	// true  = therapist/doctor offered the service and patient agreed (gets commission).
 	// false = patient requested on their own (no commission generated).
 	// Nil / omitted is treated as true in the service layer (backward compatible).
-	CommissionEligible *bool      `json:"commission_eligible,omitempty" db:"commission_eligible"`
-	CommissionNotes    *string    `json:"commission_notes,omitempty" db:"commission_notes"`
-	CreatedBy          *string    `json:"created_by,omitempty" db:"created_by"`
-	UpdatedBy          *string    `json:"updated_by,omitempty" db:"updated_by"`
-	DeletedAt          *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
-	CreatedAt          time.Time  `json:"created_at" db:"created_at"`
+	CommissionEligible *bool   `json:"commission_eligible,omitempty" db:"commission_eligible"`
+	CommissionNotes    *string `json:"commission_notes,omitempty" db:"commission_notes"`
+	// SelectedConsumableProductID records which specific consumable product was chosen
+	// by the cashier for a service item (from its ServiceConsumableGroup alternatives).
+	// When set and the transaction is marked paid, this product's stock is decremented.
+	SelectedConsumableProductID *string    `json:"selected_consumable_product_id,omitempty" db:"selected_consumable_product_id"`
+	CreatedBy                   *string    `json:"created_by,omitempty" db:"created_by"`
+	UpdatedBy                   *string    `json:"updated_by,omitempty" db:"updated_by"`
+	DeletedAt                   *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
+	CreatedAt                   time.Time  `json:"created_at" db:"created_at"`
 }
