@@ -11,7 +11,7 @@ import "github.com/gin-gonic/gin"
 //	POST   /consumable-groups/:groupId/items                  — add alternative product (admin)
 //	DELETE /consumable-group-items/:itemId                    — remove alternative product (admin)
 func RegisterRoutes(router gin.IRouter, canRead, canWrite gin.HandlerFunc) {
-	h := NewHandler()
+	h := NewModule()
 
 	// Read — any authenticated staff can fetch groups (needed in POS)
 	router.GET("/services/:serviceId/consumable-groups", canRead, h.ListGroups)

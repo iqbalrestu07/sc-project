@@ -11,11 +11,16 @@ import (
 )
 
 type Handler struct {
-	repo *Repository
+	svc Service
 }
 
-func NewHandler() *Handler {
-	return &Handler{repo: NewRepository()}
+func NewHandler(svc Service) *Handler {
+	return &Handler{svc: svc}
+}
+
+// NewModule wires the full handler → service → repository stack.
+func NewModule() *Handler {
+	return NewHandler(NewService(NewRepository()))
 }
 
 // ─── Group endpoints ──────────────────────────────────────────────────────────
@@ -24,7 +29,7 @@ func NewHandler() *Handler {
 func (h *Handler) ListGroups(c *gin.Context) {
 	serviceID := c.Param("serviceId")
 	orgID := c.GetString("org_id")
-	groups, err := h.repo.ListGroups(serviceID, orgID)
+	groups, err := h.svc.ListGroups(serviceID, orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
@@ -52,7 +57,7 @@ func (h *Handler) CreateGroup(c *gin.Context) {
 		Name:         req.Name,
 		QuantityUsed: req.QuantityUsed,
 	}
-	if err := h.repo.CreateGroup(g, orgID, userID); err != nil {
+	if err := h.svc.CreateGroup(g, orgID, userID); err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -74,7 +79,7 @@ func (h *Handler) UpdateGroup(c *gin.Context) {
 		return
 	}
 
-	if err := h.repo.UpdateGroup(groupID, req.Name, req.QuantityUsed, orgID, userID); err != nil {
+	if err := h.svc.UpdateGroup(groupID, req.Name, req.QuantityUsed, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			utils.ErrorResponse(c, http.StatusNotFound, "consumable group not found")
 			return
@@ -91,7 +96,7 @@ func (h *Handler) DeleteGroup(c *gin.Context) {
 	orgID := c.GetString("org_id")
 	userID := c.GetString("user_id")
 
-	if err := h.repo.DeleteGroup(groupID, orgID, userID); err != nil {
+	if err := h.svc.DeleteGroup(groupID, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			utils.ErrorResponse(c, http.StatusNotFound, "consumable group not found")
 			return
@@ -124,7 +129,7 @@ func (h *Handler) AddGroupItem(c *gin.Context) {
 		ProductID: req.ProductID,
 		Priority:  req.Priority,
 	}
-	if err := h.repo.AddGroupItem(it, orgID, userID); err != nil {
+	if err := h.svc.AddGroupItem(it, orgID, userID); err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -137,7 +142,7 @@ func (h *Handler) DeleteGroupItem(c *gin.Context) {
 	orgID := c.GetString("org_id")
 	userID := c.GetString("user_id")
 
-	if err := h.repo.DeleteGroupItem(itemID, orgID, userID); err != nil {
+	if err := h.svc.DeleteGroupItem(itemID, orgID, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			utils.ErrorResponse(c, http.StatusNotFound, "item not found")
 			return
