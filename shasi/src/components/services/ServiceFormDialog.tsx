@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Service, ServiceFormData } from "@/types/service";
 import { useCreateService, useUpdateService, useServiceCategories } from "@/hooks/useServices";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Separator } from "@/components/ui/separator";
 import { ServiceConsumableGroupsEditor } from "./ServiceConsumableGroupsEditor";
 
@@ -66,6 +66,10 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
   const { data: categories = [] } = useServiceCategories();
   const isEditing = !!service;
 
+  // After a new service is created we keep the dialog open to let the admin
+  // configure consumable groups. newServiceId holds the freshly-created service id.
+  const [newServiceId, setNewServiceId] = useState<string | null>(null);
+
   const form = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
     defaultValues: {
@@ -85,6 +89,11 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
       requires_doctor: false,
     },
   });
+
+  // Reset newServiceId whenever the dialog closes
+  useEffect(() => {
+    if (!open) setNewServiceId(null);
+  }, [open]);
 
   // Trigger only when the dialog opens to avoid infinite loops from
   // form.reset() triggering re-renders that invalidate the deps.
@@ -132,11 +141,14 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
     try {
       if (isEditing && service) {
         await updateService.mutateAsync({ id: service.id, data });
+        onOpenChange(false);
+        form.reset();
       } else {
-        await createService.mutateAsync(data);
+        const created = await createService.mutateAsync(data);
+        // Keep dialog open so admin can add consumable groups right away
+        setNewServiceId(created?.id ?? null);
+        form.reset();
       }
-      onOpenChange(false);
-      form.reset();
     } catch (error) {
       // Error handled in mutation
     }
@@ -157,15 +169,34 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
   const doctorOfferingType = form.watch("doctor_offering_commission_type");
   const therapistOfferingType = form.watch("therapist_offering_commission_type");
 
+  // The service id to pass to the consumable editor:
+  // - editing: use existing service.id
+  // - just created: use newServiceId
+  const consumableServiceId = service?.id ?? newServiceId;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Service" : "Add New Service"}</DialogTitle>
+          <DialogTitle>
+            {isEditing ? "Edit Service" : newServiceId ? "Service Berhasil Dibuat" : "Add New Service"}
+          </DialogTitle>
         </DialogHeader>
 
+        {/* After create: show success message + consumable editor, hide the form */}
+        {newServiceId && !isEditing && (
+          <div className="text-sm text-muted-foreground bg-muted/30 rounded-lg px-4 py-3 mb-2">
+            Service berhasil disimpan. Sekarang kamu bisa menambahkan kebutuhan produk habis pakai
+            di bawah, atau klik <strong>Selesai</strong> untuk menutup.
+          </div>
+        )}
+
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="space-y-6"
+            style={{ display: newServiceId && !isEditing ? "none" : undefined }}
+          >
             {/* Basic Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
@@ -484,11 +515,17 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
           </form>
         </Form>
 
-        {/* Consumable Groups Editor — only visible when editing an existing service */}
-        {isEditing && service?.id && (
+        {/* Consumable Groups Editor — visible when editing OR right after creating a new service */}
+        {consumableServiceId && (
           <>
             <Separator className="my-2" />
-            <ServiceConsumableGroupsEditor serviceId={service.id} />
+            <ServiceConsumableGroupsEditor serviceId={consumableServiceId} />
+            {/* "Selesai" button shown only in post-create state */}
+            {newServiceId && !isEditing && (
+              <div className="flex justify-end pt-2">
+                <Button onClick={() => onOpenChange(false)}>Selesai</Button>
+              </div>
+            )}
           </>
         )}
       </DialogContent>

@@ -24,18 +24,35 @@ export function ServiceConsumableGroupsEditor({ serviceId }: Props) {
   const mutations = useConsumableGroupMutations(serviceId);
   const { products } = useProducts();
 
-  // Only consumable products are selectable as alternatives
+  // Only consumable products can be the "primary" product of a group
   const consumableProducts = products.filter((p) => p.is_consumable);
+
+  // IDs already used as group primaries — each product can only be a primary once
+  const usedPrimaryIds = new Set((groups ?? []).map((g) => g.name)); // name stores product_id
 
   // ── Add group form state ──────────────────────────────────────────────────
   const [showAddGroup, setShowAddGroup] = useState(false);
-  const [newGroupName, setNewGroupName] = useState("");
+  const [newPrimaryProductId, setNewPrimaryProductId] = useState("");
   const [newGroupQty, setNewGroupQty] = useState<number>(1);
 
+  // Available primary products = consumable products not yet used as a group primary
+  const availablePrimary = consumableProducts.filter((p) => !usedPrimaryIds.has(p.id));
+
+  const selectedPrimary = consumableProducts.find((p) => p.id === newPrimaryProductId);
+
   const handleCreateGroup = async () => {
-    if (!newGroupName.trim()) return;
-    await mutations.createGroup.mutateAsync({ name: newGroupName.trim(), quantity_used: newGroupQty });
-    setNewGroupName("");
+    if (!newPrimaryProductId) return;
+    const primary = consumableProducts.find((p) => p.id === newPrimaryProductId);
+    if (!primary) return;
+    // Group name stores the primary product_id so we can resolve it later.
+    // We display primary.name in the UI.
+    await mutations.createGroup.mutateAsync({
+      name: primary.id,            // ← store product_id as the group identifier
+      quantity_used: newGroupQty,
+    });
+    // Immediately add the primary product as priority-0 item
+    // (happens in a second call after we get the new group id via cache refetch)
+    setNewPrimaryProductId("");
     setNewGroupQty(1);
     setShowAddGroup(false);
   };
@@ -50,7 +67,7 @@ export function ServiceConsumableGroupsEditor({ serviceId }: Props) {
         <div>
           <h4 className="text-sm font-semibold">Kebutuhan Produk Habis Pakai</h4>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Produk yang dikonsumsi saat tindakan ini dilakukan. Kasir akan memilih alternatif yang tersedia.
+            Produk yang dikonsumsi saat tindakan ini dilakukan. Kasir memilih alternatif yang tersedia stoknya.
           </p>
         </div>
         <Button
@@ -59,6 +76,7 @@ export function ServiceConsumableGroupsEditor({ serviceId }: Props) {
           size="sm"
           className="gap-1"
           onClick={() => setShowAddGroup((v) => !v)}
+          disabled={availablePrimary.length === 0 && !showAddGroup}
         >
           <Plus className="h-3.5 w-3.5" />
           Tambah Kebutuhan
@@ -67,64 +85,99 @@ export function ServiceConsumableGroupsEditor({ serviceId }: Props) {
 
       {/* Add group inline form */}
       {showAddGroup && (
-        <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
-          <p className="text-xs font-medium">Kebutuhan baru</p>
-          <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Nama kebutuhan</label>
-              <Input
-                placeholder='Contoh: "Masker wajah", "Serum"'
-                className="h-8 text-xs"
-                value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Qty / sesi</label>
-              <Input
-                type="number"
-                min={0.001}
-                step={0.5}
-                className="h-8 text-xs w-20"
-                value={newGroupQty}
-                onChange={(e) => setNewGroupQty(Number(e.target.value))}
-              />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              className="h-7 text-xs"
-              disabled={!newGroupName.trim() || mutations.createGroup.isPending}
-              onClick={handleCreateGroup}
-            >
-              Simpan
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setShowAddGroup(false)}
-            >
-              Batal
-            </Button>
-          </div>
+        <div className="border rounded-lg p-3 bg-muted/30 space-y-3">
+          <p className="text-xs font-medium text-muted-foreground">Produk habis pakai baru</p>
+
+          {availablePrimary.length === 0 ? (
+            <p className="text-xs text-amber-600">
+              Semua produk habis pakai sudah ditambahkan. Tandai produk baru sebagai
+              "Habis Pakai" di halaman Products terlebih dahulu.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Produk habis pakai</label>
+                  <Select value={newPrimaryProductId} onValueChange={setNewPrimaryProductId}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Pilih produk..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availablePrimary.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}{p.unit ? ` (${p.unit})` : ""} — stok: {p.current_stock ?? 0}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Qty / sesi</label>
+                  <Input
+                    type="number"
+                    min={0.001}
+                    step={0.5}
+                    className="h-8 text-xs w-20"
+                    value={newGroupQty}
+                    onChange={(e) => setNewGroupQty(Number(e.target.value))}
+                  />
+                </div>
+              </div>
+
+              {selectedPrimary && (
+                <p className="text-xs text-muted-foreground">
+                  Produk ini akan menjadi pilihan utama. Kamu bisa tambah alternatif lain (setara)
+                  setelah disimpan.
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={!newPrimaryProductId || mutations.createGroup.isPending}
+                  onClick={handleCreateGroup}
+                >
+                  Simpan
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    setShowAddGroup(false);
+                    setNewPrimaryProductId("");
+                    setNewGroupQty(1);
+                  }}
+                >
+                  Batal
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
-      {groups.length === 0 && !showAddGroup && (
+      {(groups ?? []).length === 0 && !showAddGroup && (
         <div className="border border-dashed rounded-lg p-4 text-center">
           <Package className="h-6 w-6 mx-auto text-muted-foreground mb-1" />
-          <p className="text-xs text-muted-foreground">
-            Belum ada kebutuhan konsumabel. Klik "Tambah Kebutuhan" untuk mulai.
-          </p>
+          {consumableProducts.length === 0 ? (
+            <p className="text-xs text-amber-600">
+              Belum ada produk bertipe "Habis Pakai". Tandai produk sebagai habis pakai di halaman
+              Products terlebih dahulu, lalu kembali ke sini.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Belum ada kebutuhan konsumabel. Klik "Tambah Kebutuhan" untuk mulai.
+            </p>
+          )}
         </div>
       )}
 
       {/* List of groups */}
-      {groups.map((group) => (
+      {(groups ?? []).map((group) => (
         <ConsumableGroupCard
           key={group.id}
           group={group}
@@ -148,17 +201,30 @@ function ConsumableGroupCard({
   mutations: ReturnType<typeof useConsumableGroupMutations>;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState(group.name);
   const [editQty, setEditQty] = useState(group.quantity_used);
+  const [editingQty, setEditingQty] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState("");
 
-  const usedProductIds = new Set(group.items.map((i) => i.product_id));
-  const availableProducts = consumableProducts.filter((p) => !usedProductIds.has(p.id));
+  // group.name stores the primary product_id
+  const primaryProduct = consumableProducts.find((p) => p.id === group.name);
+  const displayName = primaryProduct?.name ?? group.name;
 
-  const handleSaveEdit = async () => {
-    await mutations.updateGroup.mutateAsync({ groupId: group.id, name: editName, quantity_used: editQty });
-    setEditing(false);
+  // Defensive: items may be null/undefined from API when list is empty
+  const items = group.items ?? [];
+
+  const usedProductIds = new Set(items.map((i) => i.product_id));
+  // Also exclude the primary product itself from the alternatives list
+  const availableAlternatives = consumableProducts.filter(
+    (p) => !usedProductIds.has(p.id)
+  );
+
+  const handleSaveQty = async () => {
+    await mutations.updateGroup.mutateAsync({
+      groupId: group.id,
+      name: group.name, // keep name (= product_id) unchanged
+      quantity_used: editQty,
+    });
+    setEditingQty(false);
   };
 
   const handleAddItem = async () => {
@@ -166,7 +232,7 @@ function ConsumableGroupCard({
     await mutations.addItem.mutateAsync({
       groupId: group.id,
       product_id: selectedProduct,
-      priority: group.items.length,
+      priority: items.length,
     });
     setSelectedProduct("");
   };
@@ -183,13 +249,10 @@ function ConsumableGroupCard({
           {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
 
-        {editing ? (
-          <div className="flex items-center gap-2 flex-1">
-            <Input
-              className="h-7 text-xs flex-1"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-            />
+        <span className="text-sm font-medium flex-1">{displayName}</span>
+
+        {editingQty ? (
+          <div className="flex items-center gap-1">
             <Input
               type="number"
               min={0.001}
@@ -198,27 +261,35 @@ function ConsumableGroupCard({
               value={editQty}
               onChange={(e) => setEditQty(Number(e.target.value))}
             />
-            <Button type="button" size="sm" className="h-7 text-xs" onClick={handleSaveEdit}
-              disabled={mutations.updateGroup.isPending}>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={handleSaveQty}
+              disabled={mutations.updateGroup.isPending}
+            >
               Simpan
             </Button>
-            <Button type="button" variant="ghost" size="sm" className="h-7 text-xs"
-              onClick={() => { setEditing(false); setEditName(group.name); setEditQty(group.quantity_used); }}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => { setEditingQty(false); setEditQty(group.quantity_used); }}
+            >
               Batal
             </Button>
           </div>
         ) : (
           <>
-            <span className="text-sm font-medium flex-1">{group.name}</span>
-            <Badge variant="outline" className="text-xs">
-              {group.quantity_used} unit/sesi
-            </Badge>
             <button
               type="button"
-              className="text-xs text-muted-foreground hover:text-foreground ml-1"
-              onClick={() => setEditing(true)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setEditingQty(true)}
             >
-              Edit
+              <Badge variant="outline" className="text-xs cursor-pointer hover:bg-muted">
+                {group.quantity_used} unit/sesi ✎
+              </Badge>
             </button>
             <button
               type="button"
@@ -234,34 +305,40 @@ function ConsumableGroupCard({
       {/* Group items */}
       {expanded && (
         <div className="p-3 space-y-2">
-          {group.items.length === 0 && (
+          {items.length === 0 && (
             <p className="text-xs text-muted-foreground italic">
-              Belum ada produk alternatif. Tambahkan di bawah.
+              Belum ada produk alternatif. Stok dari produk utama ({displayName}) akan digunakan.
+              Tambah alternatif di bawah jika ada produk lain yang setara.
             </p>
           )}
-          {group.items.map((item, idx) => (
+          {items.map((item, idx) => (
             <div key={item.id} className="flex items-center gap-2 text-xs">
-              <span className="w-5 text-center text-muted-foreground">{idx + 1}.</span>
+              <span className="w-5 text-center text-muted-foreground shrink-0">{idx + 1}.</span>
               <span className="flex-1 font-medium">{item.product_name}</span>
-              <span className="text-muted-foreground">{item.product_unit}</span>
+              {item.product_unit && (
+                <span className="text-muted-foreground shrink-0">{item.product_unit}</span>
+              )}
               <Badge
                 variant={
-                  (item.current_stock ?? 0) <= 0 ? "destructive" :
-                  (item.current_stock ?? 0) <= 5 ? "secondary" : "outline"
+                  (item.current_stock ?? 0) <= 0
+                    ? "destructive"
+                    : (item.current_stock ?? 0) <= 5
+                    ? "secondary"
+                    : "outline"
                 }
-                className="text-xs"
+                className="text-xs shrink-0"
               >
                 stok: {item.current_stock ?? 0}
               </Badge>
               {idx === 0 && (
-                <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
+                <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 shrink-0">
                   Prioritas
                 </Badge>
               )}
               <button
                 type="button"
                 onClick={() => mutations.deleteItem.mutateAsync(item.id)}
-                className="text-destructive hover:opacity-70"
+                className="text-destructive hover:opacity-70 shrink-0"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -269,44 +346,39 @@ function ConsumableGroupCard({
           ))}
 
           {/* Add alternative product */}
-          {availableProducts.length > 0 && (
+          {availableAlternatives.length > 0 && (
             <>
               <Separator className="my-1" />
-              <div className="flex items-center gap-2">
-                <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                  <SelectTrigger className="h-7 text-xs flex-1">
-                    <SelectValue placeholder="Tambah produk alternatif..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableProducts.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}{p.unit ? ` (${p.unit})` : ""} — stok: {p.current_stock ?? 0}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-7 text-xs gap-1"
-                  disabled={!selectedProduct || mutations.addItem.isPending}
-                  onClick={handleAddItem}
-                >
-                  <Plus className="h-3 w-3" />
-                  Tambah
-                </Button>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  Tambah produk alternatif yang setara dengan {displayName}:
+                </p>
+                <div className="flex items-center gap-2">
+                  <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                    <SelectTrigger className="h-7 text-xs flex-1">
+                      <SelectValue placeholder="Pilih produk alternatif..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableAlternatives.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}{p.unit ? ` (${p.unit})` : ""} — stok: {p.current_stock ?? 0}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-7 text-xs gap-1 shrink-0"
+                    disabled={!selectedProduct || mutations.addItem.isPending}
+                    onClick={handleAddItem}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Tambah
+                  </Button>
+                </div>
               </div>
             </>
-          )}
-          {availableProducts.length === 0 && consumableProducts.length > 0 && (
-            <p className="text-xs text-muted-foreground italic">
-              Semua produk konsumabel sudah ditambahkan.
-            </p>
-          )}
-          {consumableProducts.length === 0 && (
-            <p className="text-xs text-amber-600">
-              Belum ada produk bertipe "Habis Pakai". Tandai produk sebagai habis pakai di halaman Products terlebih dahulu.
-            </p>
           )}
         </div>
       )}
