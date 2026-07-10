@@ -138,6 +138,7 @@ export const API_ENDPOINTS = {
     },
 
     // Service Consumable Groups (alternative products system)
+    // Note: uses :id (not :serviceId) to match the existing Gin wildcard on /services/:id
     CONSUMABLE_GROUPS: {
         LIST:         (serviceId: string) => `/services/${serviceId}/consumable-groups`,
         CREATE:       (serviceId: string) => `/services/${serviceId}/consumable-groups`,

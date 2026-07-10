@@ -25,9 +25,9 @@ func NewModule() *Handler {
 
 // ─── Group endpoints ──────────────────────────────────────────────────────────
 
-// GET /services/:serviceId/consumable-groups
+// GET /services/:id/consumable-groups
 func (h *Handler) ListGroups(c *gin.Context) {
-	serviceID := c.Param("serviceId")
+	serviceID := c.Param("id")
 	orgID := c.GetString("org_id")
 	groups, err := h.svc.ListGroups(serviceID, orgID)
 	if err != nil {
@@ -37,9 +37,9 @@ func (h *Handler) ListGroups(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, groups)
 }
 
-// POST /services/:serviceId/consumable-groups
+// POST /services/:id/consumable-groups
 func (h *Handler) CreateGroup(c *gin.Context) {
-	serviceID := c.Param("serviceId")
+	serviceID := c.Param("id")
 	orgID := c.GetString("org_id")
 	userID := c.GetString("user_id")
 
