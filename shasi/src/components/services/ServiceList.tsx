@@ -191,6 +191,7 @@ export function ServiceList({ services, onEdit, isLoading }: ServiceListProps) {
         service={viewService}
         open={!!viewService}
         onOpenChange={(open) => { if (!open) setViewService(null); }}
+        onEdit={(s) => { setViewService(null); onEdit(s); }}
       />
     </>
   );
