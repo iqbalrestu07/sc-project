@@ -68,11 +68,13 @@
     --sidebar-ring: 350 60% 60%;
 
     /* Clinic-specific tokens */
-    --clinic-rose: 350 60% 60%;
-    --clinic-rose-light: 350 45% 95%;
-    --clinic-beige: 30 30% 95%;
-    --clinic-cream: 30 20% 99%;
-    --clinic-gold: 38 70% 55%;
+    --clinic-maroon: 353 75% 24%;
+    --clinic-maroon-light: 350 70% 32%;
+    --clinic-maroon-dark: 351 86% 11%;
+    --clinic-cream: 36 60% 96%;
+    --clinic-gold: 44 54% 54%;
+    --clinic-gold-light: 44 70% 67%;
+    --clinic-gold-pale: 46 72% 83%;
   }
 
   .dark {
@@ -119,11 +121,13 @@
     --sidebar-border: 20 15% 18%;
     --sidebar-ring: 350 55% 55%;
 
-    --clinic-rose: 350 55% 55%;
-    --clinic-rose-light: 350 40% 20%;
-    --clinic-beige: 20 15% 18%;
+    --clinic-maroon: 353 75% 24%;
+    --clinic-maroon-light: 350 70% 32%;
+    --clinic-maroon-dark: 351 86% 11%;
     --clinic-cream: 20 15% 10%;
-    --clinic-gold: 38 70% 50%;
+    --clinic-gold: 44 54% 54%;
+    --clinic-gold-light: 44 70% 67%;
+    --clinic-gold-pale: 46 72% 83%;
   }
 }
 
@@ -159,7 +163,7 @@
 @layer utilities {
   /* Clinic-specific utility classes */
   .gradient-clinic {
-    background: linear-gradient(135deg, hsl(var(--clinic-rose-light)) 0%, hsl(var(--clinic-beige)) 100%);
+    background: linear-gradient(135deg, hsl(var(--clinic-maroon-light)) 0%, hsl(var(--clinic-cream)) 100%);
   }
 
   .gradient-primary {

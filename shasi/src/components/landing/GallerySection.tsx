@@ -1,5 +1,6 @@
 import { useCmsGallery } from "@/hooks/useCmsData";
 import { ArrowRight, Sparkles } from "lucide-react";
+import { motion } from "framer-motion";
 
 const MAROON = "#6B0F1A";
 const MAROON_LIGHT = "#8B1A2A";
@@ -15,11 +16,27 @@ export function GallerySection() {
     return null;
   }
 
+  const containerVariants: any = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.15 } }
+  };
+
+  const itemVariants: any = {
+    hidden: { opacity: 0, y: 50 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: "easeOut" } }
+  };
+
   return (
     <section id="gallery" className="py-20 relative overflow-hidden" style={{ background: CREAM }}>
       <div className="container mx-auto px-4 relative z-10">
         {/* Section header */}
-        <div className="text-center mb-16">
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.8 }}
+          className="text-center mb-16"
+        >
           <span
             className="text-sm font-semibold uppercase tracking-[0.2em]"
             style={{ color: GOLD }}
@@ -38,14 +55,22 @@ export function GallerySection() {
           <p className="max-w-2xl mx-auto" style={{ color: "#6b4c40" }}>
             Lihat transformasi menakjubkan yang telah dicapai klien kami dengan perawatan profesional kami.
           </p>
-        </div>
+        </motion.div>
 
         {/* Gallery grid */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+        <motion.div 
+          variants={containerVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8"
+        >
           {gallery.map((item) => (
-            <div 
+            <motion.div 
+              variants={itemVariants}
+              whileHover={{ y: -8, boxShadow: `0 20px 40px rgba(107, 15, 26, 0.12)` }}
               key={item.id} 
-              className="group overflow-hidden rounded-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl bg-white"
+              className="group overflow-hidden rounded-2xl transition-all duration-300 bg-white"
               style={{
                 border: `1px solid rgba(201, 168, 76, 0.2)`,
                 boxShadow: `0 4px 24px rgba(107, 15, 26, 0.08)`,
@@ -109,9 +134,9 @@ export function GallerySection() {
                   </p>
                 </div>
               )}
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
     </section>
   );

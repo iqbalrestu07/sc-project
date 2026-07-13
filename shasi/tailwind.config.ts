@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 export default {
   darkMode: ["class"],
@@ -66,11 +67,13 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
         clinic: {
-          rose: "hsl(var(--clinic-rose))",
-          "rose-light": "hsl(var(--clinic-rose-light))",
-          beige: "hsl(var(--clinic-beige))",
+          maroon: "hsl(var(--clinic-maroon))",
+          "maroon-light": "hsl(var(--clinic-maroon-light))",
+          "maroon-dark": "hsl(var(--clinic-maroon-dark))",
           cream: "hsl(var(--clinic-cream))",
           gold: "hsl(var(--clinic-gold))",
+          "gold-light": "hsl(var(--clinic-gold-light))",
+          "gold-pale": "hsl(var(--clinic-gold-pale))",
         },
       },
       borderRadius: {
@@ -124,5 +127,5 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [tailwindcssAnimate],
 } satisfies Config;

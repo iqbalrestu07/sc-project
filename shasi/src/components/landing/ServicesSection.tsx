@@ -1,5 +1,6 @@
 import { useCmsServicesOverview } from "@/hooks/useCmsData";
 import { Sparkles } from "lucide-react";
+import { motion } from "framer-motion";
 
 const MAROON = "#6B0F1A";
 const MAROON_LIGHT = "#8B1A2A";
@@ -58,6 +59,16 @@ export function ServicesSection() {
   const serviceIcons = ["💆", "✨", "💫", "🌟", "💎", "🌸"];
   const displayServices = services && services.length > 0 ? services : defaultServices;
 
+  const containerVariants: any = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
+  };
+
+  const itemVariants: any = {
+    hidden: { opacity: 0, y: 50 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
+  };
+
   return (
     <section
       id="services"
@@ -68,7 +79,13 @@ export function ServicesSection() {
     >
       <div className="container mx-auto px-4">
         {/* Section header */}
-        <div className="text-center mb-16">
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.8 }}
+          className="text-center mb-16"
+        >
           <span
             className="text-sm font-semibold uppercase tracking-[0.2em]"
             style={{ color: GOLD }}
@@ -88,14 +105,22 @@ export function ServicesSection() {
             Temukan berbagai perawatan profesional yang dirancang untuk meningkatkan
             kecantikan alami dan kepercayaan diri Anda.
           </p>
-        </div>
+        </motion.div>
 
         {/* Services grid */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <motion.div 
+          variants={containerVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"
+        >
           {displayServices.map((service, index) => (
-            <div
+            <motion.div
+              variants={itemVariants}
+              whileHover={{ y: -8, boxShadow: `0 20px 40px rgba(107,15,26,0.12)` }}
               key={service.id}
-              className="group overflow-hidden rounded-2xl transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl"
+              className="group overflow-hidden rounded-2xl transition-all duration-300"
               style={{
                 background: "#fff",
                 border: `1px solid rgba(201, 168, 76, 0.2)`,
@@ -120,16 +145,16 @@ export function ServicesSection() {
                   <img
                     src={service.image_url}
                     alt={service.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                   />
                 ) : (
                   <div className="text-center">
-                    <span className="text-5xl block mb-2">
+                    <span className="text-5xl block mb-2 group-hover:scale-110 transition-transform duration-300">
                       {(service as any).icon || serviceIcons[index % serviceIcons.length]}
                     </span>
                     {/* Gold frame decoration */}
                     <div
-                      className="w-12 h-0.5 mx-auto"
+                      className="w-12 h-0.5 mx-auto transition-all duration-500 group-hover:w-24 group-hover:opacity-80"
                       style={{ background: `linear-gradient(to right, transparent, ${GOLD}, transparent)` }}
                     />
                   </div>
@@ -152,14 +177,21 @@ export function ServicesSection() {
                   {service.short_description}
                 </p>
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
 
         {/* Bottom note */}
-        <div className="text-center mt-12">
-          <div
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-sm"
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.4 }}
+          className="text-center mt-12"
+        >
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-sm cursor-pointer shadow-sm hover:shadow-md transition-shadow"
             style={{
               background: `linear-gradient(135deg, rgba(107,15,26,0.07) 0%, rgba(201,168,76,0.1) 100%)`,
               border: `1px solid rgba(201, 168, 76, 0.25)`,
@@ -168,8 +200,8 @@ export function ServicesSection() {
           >
             <Sparkles className="w-4 h-4" style={{ color: GOLD }} />
             Hubungi kami via WhatsApp untuk info lebih lanjut tentang layanan kami
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </div>
     </section>
   );

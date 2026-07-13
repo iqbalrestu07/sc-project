@@ -1,7 +1,7 @@
-import { useMemo } from "react";
-import { Button } from "@/components/ui/button";
+import { useMemo, useRef } from "react";
 import { MessageCircle, Calendar, Crown } from "lucide-react";
 import { useCmsHero } from "@/hooks/useCmsData";
+import { motion, useScroll, useTransform } from "framer-motion";
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const MAROON = "#6B0F1A";
@@ -60,7 +60,6 @@ function generateSparkles(count: number): Sparkle[] {
   }));
 }
 
-// ─── StarField ────────────────────────────────────────────────────────────────
 function StarField() {
   const stars = useMemo(() => generateStars(120), []);
   const sparkles = useMemo(() => generateSparkles(20), []);
@@ -126,42 +125,63 @@ function StarField() {
 export function HeroSection() {
   const { data: hero } = useCmsHero();
   const whatsappUrl = hero?.whatsapp_url || "https://wa.me/6282123523139";
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Parallax effects
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
+  const backgroundY = useTransform(scrollYProgress, [0, 1], ["0%", "50%"]);
+  const opacity = useTransform(scrollYProgress, [0, 1], [1, 0.2]);
+  const textY = useTransform(scrollYProgress, [0, 1], ["0%", "80%"]);
+
+  // Staggered Text Reveal
+  const containerVariants: any = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.15, delayChildren: 0.2 } },
+  };
+  const itemVariants: any = {
+    hidden: { opacity: 0, y: 30, filter: "blur(8px)" },
+    visible: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.8, ease: "easeOut" } },
+  };
 
   return (
-    <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
-      {/* Background */}
-      {hero?.background_image_url ? (
-        <>
-          <div
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: `url(${hero.background_image_url})` }}
-          />
-          <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, rgba(61,6,16,0.85) 0%, rgba(107,15,26,0.75) 100%)` }} />
-        </>
-      ) : (
-        <>
-          {/* Deep maroon dark gradient */}
-          <div className="absolute inset-0" style={{
-            background: `radial-gradient(ellipse at top left, ${MAROON_MID} 0%, ${MAROON} 35%, ${MAROON_DARK} 70%, #1a0208 100%)`
-          }} />
-          {/* Gold ambient glow — top center */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[350px]"
-            style={{ background: `radial-gradient(ellipse, rgba(201,168,76,0.18) 0%, transparent 70%)` }} />
-          {/* Warm glow — bottom right */}
-          <div className="absolute bottom-0 right-0 w-[500px] h-[400px]"
-            style={{ background: `radial-gradient(ellipse, rgba(201,168,76,0.12) 0%, transparent 70%)` }} />
-          {/* Deep red glow — left */}
-          <div className="absolute top-1/2 left-0 w-[400px] h-[500px] -translate-y-1/2"
-            style={{ background: `radial-gradient(ellipse, rgba(139,26,42,0.25) 0%, transparent 70%)` }} />
-        </>
-      )}
+    <section ref={ref} className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
+      {/* Background with Parallax */}
+      <motion.div style={{ y: backgroundY, opacity }} className="absolute inset-0">
+        {hero?.background_image_url ? (
+          <>
+            <div
+              className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+              style={{ backgroundImage: `url(${hero.background_image_url})` }}
+            />
+            <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, rgba(61,6,16,0.85) 0%, rgba(107,15,26,0.75) 100%)` }} />
+          </>
+        ) : (
+          <>
+            <div className="absolute inset-0" style={{
+              background: `radial-gradient(ellipse at top left, ${MAROON_MID} 0%, ${MAROON} 35%, ${MAROON_DARK} 70%, #1a0208 100%)`
+            }} />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[350px]"
+              style={{ background: `radial-gradient(ellipse, rgba(201,168,76,0.18) 0%, transparent 70%)` }} />
+            <div className="absolute bottom-0 right-0 w-[500px] h-[400px]"
+              style={{ background: `radial-gradient(ellipse, rgba(201,168,76,0.12) 0%, transparent 70%)` }} />
+            <div className="absolute top-1/2 left-0 w-[400px] h-[500px] -translate-y-1/2"
+              style={{ background: `radial-gradient(ellipse, rgba(139,26,42,0.25) 0%, transparent 70%)` }} />
+          </>
+        )}
+      </motion.div>
 
       <StarField />
 
       {/* Content */}
-      <div className="relative z-10 container mx-auto px-4 text-center">
+      <motion.div 
+        style={{ y: textY }}
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="relative z-10 container mx-auto px-4 text-center"
+      >
         {/* Badge */}
-        <div className="mb-6 animate-fade-in">
+        <motion.div variants={itemVariants} className="mb-6">
           <span
             className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium tracking-wider"
             style={{
@@ -174,11 +194,12 @@ export function HeroSection() {
             <Crown className="w-4 h-4" style={{ color: GOLD }} />
             Klinik Estetika Premium
           </span>
-        </div>
+        </motion.div>
 
         {/* Main heading */}
-        <h1
-          className="text-4xl md:text-6xl lg:text-7xl font-bold mb-5 animate-fade-in leading-tight"
+        <motion.h1
+          variants={itemVariants}
+          className="text-4xl md:text-6xl lg:text-7xl font-bold mb-5 leading-tight"
           style={{
             background: `linear-gradient(135deg, ${GOLD_PALE} 0%, ${GOLD_LIGHT} 40%, ${GOLD} 70%, #b8893c 100%)`,
             WebkitBackgroundClip: "text",
@@ -188,53 +209,61 @@ export function HeroSection() {
           }}
         >
           Shasi Beauty Care
-        </h1>
+        </motion.h1>
 
         {/* Gold divider */}
-        <div className="flex items-center justify-center gap-4 mb-5">
+        <motion.div variants={itemVariants} className="flex items-center justify-center gap-4 mb-5">
           <div className="h-px w-24" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
           <span style={{ color: GOLD, fontSize: "1.2rem" }}>✦</span>
           <div className="h-px w-24" style={{ background: `linear-gradient(to left, transparent, ${GOLD})` }} />
-        </div>
+        </motion.div>
 
         {/* Tagline */}
-        <p
-          className="text-xl md:text-2xl lg:text-3xl font-light mb-4 animate-fade-in tracking-wide"
+        <motion.p
+          variants={itemVariants}
+          className="text-xl md:text-2xl lg:text-3xl font-light mb-4 tracking-wide"
           style={{ color: GOLD_PALE }}
         >
           {hero?.tagline || "Kecantikan Anda, Dedikasi Kami"}
-        </p>
+        </motion.p>
 
         {/* Description */}
-        <p
-          className="text-base md:text-lg max-w-2xl mx-auto mb-10 animate-fade-in leading-relaxed"
+        <motion.p
+          variants={itemVariants}
+          className="text-base md:text-lg max-w-2xl mx-auto mb-10 leading-relaxed"
           style={{ color: "rgba(245, 230, 181, 0.72)" }}
         >
           {hero?.description || "Rasakan perawatan estetika premium dengan tim ahli kami yang berpengalaman dan bersertifikat."}
-        </p>
+        </motion.p>
 
         {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in">
-          <a
+        <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-4 justify-center">
+          <motion.a
+            whileHover={{ scale: 1.05, boxShadow: `0 4px 30px rgba(201, 168, 76, 0.6)` }}
+            whileTap={{ scale: 0.95 }}
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 text-lg px-8 py-4 rounded-full font-semibold transition-all duration-300 hover:scale-105 hover:shadow-2xl"
+            className="inline-flex items-center justify-center gap-2 text-lg px-8 py-4 rounded-full font-semibold transition-colors duration-300 relative group overflow-hidden"
             style={{
               background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD_LIGHT} 100%)`,
               color: MAROON,
               boxShadow: `0 4px 24px rgba(201, 168, 76, 0.45)`,
             }}
           >
-            <Calendar className="h-5 w-5" />
-            {hero?.cta_primary_text || "Buat Janji"}
-          </a>
+            {/* Magnetic/Glow sweep effect */}
+            <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12" />
+            <Calendar className="h-5 w-5 relative z-10" />
+            <span className="relative z-10">{hero?.cta_primary_text || "Buat Janji"}</span>
+          </motion.a>
 
-          <a
+          <motion.a
+            whileHover={{ scale: 1.05, backgroundColor: "rgba(201, 168, 76, 0.15)" }}
+            whileTap={{ scale: 0.95 }}
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 text-lg px-8 py-4 rounded-full font-semibold transition-all duration-300 hover:scale-105"
+            className="inline-flex items-center justify-center gap-2 text-lg px-8 py-4 rounded-full font-semibold transition-colors duration-300"
             style={{
               border: `2px solid rgba(201, 168, 76, 0.5)`,
               color: GOLD_LIGHT,
@@ -244,19 +273,20 @@ export function HeroSection() {
           >
             <MessageCircle className="h-5 w-5" />
             {hero?.cta_secondary_text || "Chat via WhatsApp"}
-          </a>
-        </div>
+          </motion.a>
+        </motion.div>
 
         {/* Trust badges */}
-        <div className="mt-16 flex flex-wrap justify-center gap-8 text-sm animate-fade-in">
+        <motion.div variants={itemVariants} className="mt-16 flex flex-wrap justify-center gap-8 text-sm">
           {[
             { text: "Tenaga Profesional Bersertifikat", icon: "🏆" },
             { text: "Produk Premium", icon: "💎" },
             { text: "Dipercaya 1000+ Klien", icon: "⭐" },
           ].map((item) => (
-            <div
+            <motion.div
+              whileHover={{ y: -5 }}
               key={item.text}
-              className="flex items-center gap-2 px-4 py-2 rounded-full"
+              className="flex items-center gap-2 px-4 py-2 rounded-full cursor-default"
               style={{
                 background: "rgba(201, 168, 76, 0.08)",
                 border: "1px solid rgba(201, 168, 76, 0.2)",
@@ -265,13 +295,18 @@ export function HeroSection() {
             >
               <span>{item.icon}</span>
               {item.text}
-            </div>
+            </motion.div>
           ))}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Scroll indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.5, duration: 1 }}
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce pointer-events-none"
+      >
         <div
           className="w-6 h-10 rounded-full flex justify-center pt-2"
           style={{ border: `2px solid rgba(201, 168, 76, 0.35)` }}
@@ -281,7 +316,7 @@ export function HeroSection() {
             style={{ background: `rgba(201, 168, 76, 0.6)` }}
           />
         </div>
-      </div>
+      </motion.div>
     </section>
   );
 }

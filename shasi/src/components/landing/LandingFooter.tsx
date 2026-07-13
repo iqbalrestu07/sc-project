@@ -119,8 +119,8 @@ export function LandingFooter() {
                       ((e.currentTarget as HTMLElement).style.color = GOLD_LIGHT)
                     }
                     onMouseLeave={(e) =>
-                      ((e.currentTarget as HTMLElement).style.color =
-                        "rgba(245,230,181,0.65)")
+                    ((e.currentTarget as HTMLElement).style.color =
+                      "rgba(245,230,181,0.65)")
                     }
                   >
                     <span style={{ color: GOLD, fontSize: "0.6rem" }}>✦</span>
@@ -151,8 +151,8 @@ export function LandingFooter() {
                     ((e.currentTarget as HTMLElement).style.color = GOLD_LIGHT)
                   }
                   onMouseLeave={(e) =>
-                    ((e.currentTarget as HTMLElement).style.color =
-                      "rgba(245,230,181,0.7)")
+                  ((e.currentTarget as HTMLElement).style.color =
+                    "rgba(245,230,181,0.7)")
                   }
                 >
                   +62 821 2352 3139
@@ -161,7 +161,7 @@ export function LandingFooter() {
               <li className="flex items-start gap-3">
                 <Clock className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: GOLD }} />
                 <span style={{ color: "rgba(245,230,181,0.7)" }}>
-                  Senin – Sabtu, 09.00 – 20.00
+                  Senin – Minggu, 09.00 – 20.00
                 </span>
               </li>
               <li className="flex items-start gap-3">
@@ -190,12 +190,12 @@ export function LandingFooter() {
             className="text-xs transition-colors duration-200"
             style={{ color: "rgba(201,168,76,0.35)" }}
             onMouseEnter={(e) =>
-              ((e.currentTarget as HTMLElement).style.color =
-                "rgba(201,168,76,0.65)")
+            ((e.currentTarget as HTMLElement).style.color =
+              "rgba(201,168,76,0.65)")
             }
             onMouseLeave={(e) =>
-              ((e.currentTarget as HTMLElement).style.color =
-                "rgba(201,168,76,0.35)")
+            ((e.currentTarget as HTMLElement).style.color =
+              "rgba(201,168,76,0.35)")
             }
           >
             Portal Admin
