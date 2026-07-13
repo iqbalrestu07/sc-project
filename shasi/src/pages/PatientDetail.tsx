@@ -161,8 +161,8 @@ export default function PatientDetail() {
             </div>
 
             <div className="mt-6 pt-6 border-t text-xs text-muted-foreground">
-              <p>Registered: {format(new Date(patient.created_at), "MMM d, yyyy")}</p>
-              <p>Last updated: {format(new Date(patient.updated_at), "MMM d, yyyy")}</p>
+              <p>Registered: {format(new Date(patient.created_at.replace(/Z$/, "")), "MMM d, yyyy")}</p>
+              <p>Last updated: {format(new Date(patient.updated_at.replace(/Z$/, "")), "MMM d, yyyy")}</p>
             </div>
           </CardContent>
         </Card>

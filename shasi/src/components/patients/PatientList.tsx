@@ -150,7 +150,7 @@ export function PatientList({ patients, onEdit, isLoading }: PatientListProps) {
                     )}
                   </TableCell>
                   <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
-                    {format(new Date(patient.created_at), "MMM d, yyyy")}
+                    {format(new Date(patient.created_at.replace(/Z$/, "")), "MMM d, yyyy")}
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
