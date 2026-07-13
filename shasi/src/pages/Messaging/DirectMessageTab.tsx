@@ -12,7 +12,9 @@ import { toast } from "sonner";
 import type { Recipient } from "@/types/whatsapp";
 
 export function DirectMessageTab() {
-  const { data: patients = [], isLoading: patientsLoading } = usePatients();
+  const patientsQuery = usePatients();
+  const patients = patientsQuery.data?.data ?? [];
+  const patientsLoading = patientsQuery.isLoading;
   const { data: devices = [], isLoading: devicesLoading } = useWhatsAppDevices();
   const bulkMutation = useSendWhatsAppBulk();
 

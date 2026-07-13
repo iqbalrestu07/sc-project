@@ -100,8 +100,8 @@ export function POSInterface() {
     isLoading: pendingGroupsLoading,
   } = useConsumableGroups(pendingService?.itemId ?? null);
 
-  const patients = patientsQuery.data || [];
-  const services = servicesQuery.data || [];
+  const patients = patientsQuery.data?.data ?? [];
+  const services = servicesQuery.data?.data ?? [];
 
   const filteredServices = services.filter((s) =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase())

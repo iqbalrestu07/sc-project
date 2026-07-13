@@ -65,8 +65,8 @@ export function AppointmentFormDialog({
   const { doctors, therapists } = useStaff();
   const isEditing = !!appointment;
 
-  const patients = patientsQuery.data || [];
-  const services = servicesQuery.data || [];
+  const patients = patientsQuery.data?.data ?? [];
+  const services = servicesQuery.data?.data ?? [];
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),

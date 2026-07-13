@@ -14,7 +14,8 @@ import type { Recipient } from "@/types/whatsapp";
 export function BlastTab() {
   const { data: templates = [], isLoading: templatesLoading } = useWhatsAppTemplates();
   const { data: devices = [], isLoading: devicesLoading } = useWhatsAppDevices();
-  const { data: patients = [] } = usePatients();
+  const patientsQuery = usePatients();
+  const patients = patientsQuery.data?.data ?? [];
   const blastMutation = useSendWhatsAppBlast();
 
   const connectedDevices = devices.filter(d => d.status === "connected");
