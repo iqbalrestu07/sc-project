@@ -6,7 +6,6 @@ func RegisterRoutes(router gin.IRouter, canRead, canWrite, canDelete gin.Handler
 	handler := NewModule()
 
 	router.GET("/patients", canRead, handler.List)
-	router.GET("/patients/search", canRead, handler.Search)
 	router.POST("/patients", canWrite, handler.Create)
 	router.GET("/patients/:id", canRead, handler.Get)
 	router.PUT("/patients/:id", canWrite, handler.Update)

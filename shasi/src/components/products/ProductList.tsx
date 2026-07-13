@@ -40,14 +40,19 @@ import type { Product } from "@/types/product";
 import { PRODUCT_CATEGORIES } from "@/types/product";
 import { format } from "date-fns";
 import { ProductDetailDialog } from "@/components/products/ProductDetailDialog";
+import { useDebounce } from "@/hooks/useDebounce";
 
 interface ProductListProps {
   onEdit: (product: Product) => void;
 }
 
 export function ProductList({ onEdit }: ProductListProps) {
-  const { products, isLoading, deleteProduct } = useProducts();
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const limit = 20;
+  const debouncedSearch = useDebounce(searchQuery, 300);
+
+  const { products, hasNext, isLoading, deleteProduct } = useProducts(true, debouncedSearch, page, limit);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewProduct, setViewProduct] = useState<Product | null>(null);
 
@@ -158,7 +163,10 @@ export function ProductList({ onEdit }: ProductListProps) {
               <Input
                 placeholder="Search by name, SKU, or category..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
                 className="pl-10"
               />
             </div>
@@ -317,6 +325,23 @@ export function ProductList({ onEdit }: ProductListProps) {
                 ))}
               </TableBody>
             </Table>
+          </div>
+          <div className="flex items-center justify-between p-4 border-t">
+            <Button
+              variant="outline"
+              disabled={page === 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground">Page {page}</span>
+            <Button
+              variant="outline"
+              disabled={!hasNext}
+              onClick={() => setPage(p => p + 1)}
+            >
+              Next
+            </Button>
           </div>
         </CardContent>
       </Card>

@@ -16,11 +16,12 @@ func NewHandler(service Service) *Handler {
 }
 
 func NewModule() *Handler {
-	return NewHandler(NewService(nil, nil))
+	return NewHandler(NewService(nil, nil, nil))
 }
 
-// ImportExcel accepts an Excel file and migrates product/service/consumable data.
-// Expected columns: nama, jenis, harga, komisi.
+// ImportExcel accepts an Excel file and migrates data based on `type`.
+// type = "catalog" -> product/service/consumable
+// type = "patient" -> patient
 // POST /migration/import
 func (h *Handler) ImportExcel(c *gin.Context) {
 	orgID := c.GetString("org_id")
@@ -30,14 +31,25 @@ func (h *Handler) ImportExcel(c *gin.Context) {
 	}
 	userID := c.GetString("user_id")
 
-	file, _, err := c.Request.FormFile("file")
+	importType := c.PostForm("type")
+	if importType == "" {
+		importType = "catalog" // default for backward compatibility
+	}
+
+	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, "file is required (multipart/form-data, field 'file')")
 		return
 	}
 	defer file.Close()
 
-	result, err := h.service.ImportExcel(file, orgID, userID)
+	var result *ImportResult
+	if importType == "patient" {
+		result, err = h.service.ImportPatientsExcel(file, header.Filename, orgID, userID)
+	} else {
+		result, err = h.service.ImportCatalogExcel(file, header.Filename, orgID, userID)
+	}
+
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return

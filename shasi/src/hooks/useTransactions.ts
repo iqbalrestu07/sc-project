@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { apiClient, API_ENDPOINTS } from "@/integrations/api";
+import { ApiListResponse } from "@/integrations/api/types";
 import type {
   TransactionInsert,
   TransactionUpdate,
@@ -10,17 +11,22 @@ import type {
 } from "@/types/transaction";
 import { toast } from "sonner";
 
-export function useTransactions() {
+export function useTransactions(page: number = 1, limit: number = 50) {
   const queryClient = useQueryClient();
 
   const transactionsQuery = useQuery({
-    queryKey: ["transactions"],
-    queryFn: async (): Promise<TransactionWithRelations[]> => {
+    queryKey: ["transactions", page, limit],
+    queryFn: async () => {
       try {
-        const data = await apiClient.get<{ data: TransactionWithRelations[] }>(
-          API_ENDPOINTS.TRANSACTIONS.LIST
+        const params: Record<string, any> = { page, limit };
+        const data = await apiClient.get<ApiListResponse<TransactionWithRelations>>(
+          API_ENDPOINTS.TRANSACTIONS.LIST,
+          params
         );
-        return data.data || [];
+        return {
+          data: data.data || [],
+          has_next: data.has_next || false,
+        };
       } catch (error) {
         console.error("Error fetching transactions:", error);
         throw error;
@@ -136,17 +142,19 @@ export function useTransactions() {
   });
 
   // Today's stats
-  const todayTransactions = transactionsQuery.data?.filter((t) => {
+  const transactionsList = transactionsQuery.data?.data || [];
+  const todayTransactions = transactionsList.filter((t) => {
     const today = new Date().toDateString();
     return new Date(t.created_at!).toDateString() === today;
-  }) || [];
+  });
 
   const todayRevenue = todayTransactions
     .filter((t) => t.payment_status === "paid")
     .reduce((sum, t) => sum + Number(t.total_amount || 0), 0);
 
   return {
-    transactions: transactionsQuery.data || [],
+    transactions: transactionsList,
+    hasNext: transactionsQuery.data?.has_next || false,
     isLoading: transactionsQuery.isLoading,
     error: transactionsQuery.error,
     createTransaction,

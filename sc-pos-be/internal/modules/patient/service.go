@@ -15,12 +15,12 @@ var ErrSearchRequired = errors.New("search query required")
 
 // Service is the public interface for the patient module business logic.
 type Service interface {
-	List(orgID string) ([]models.Patient, error)
+	ListAll(orgID string) ([]models.Patient, error)
+	List(orgID, search string, page, limit int) ([]models.Patient, bool, error)
 	Get(id, orgID string) (*models.Patient, error)
 	Create(req models.Patient, userID, orgID string) (*models.Patient, error)
 	Update(id string, req models.Patient, userID, orgID string) (*models.Patient, error)
 	Delete(id, orgID, userID string) error
-	Search(query, orgID string) ([]models.Patient, error)
 	GetVisits(patientID string) ([]VisitSummary, error)
 	GetTransactions(patientID string) ([]TransactionSummary, error)
 }
@@ -33,8 +33,13 @@ func NewService(repo *Repository) Service {
 	return &service{repo: repo}
 }
 
-func (s *service) List(orgID string) ([]models.Patient, error) {
+func (s *service) ListAll(orgID string) ([]models.Patient, error) {
 	return s.repo.GetAll(orgID)
+}
+
+func (s *service) List(orgID, search string, page, limit int) ([]models.Patient, bool, error) {
+	search = strings.TrimSpace(search)
+	return s.repo.List(orgID, search, page, limit)
 }
 
 func (s *service) Get(id, orgID string) (*models.Patient, error) {
@@ -126,11 +131,4 @@ func (s *service) GetTransactions(patientID string) ([]TransactionSummary, error
 	return s.repo.GetTransactions(patientID)
 }
 
-func (s *service) Search(query, orgID string) ([]models.Patient, error) {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return nil, ErrSearchRequired
-	}
-
-	return s.repo.Search(query, orgID)
-}
+// Search is handled by List now

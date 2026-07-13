@@ -13,7 +13,7 @@ export interface ApiResponse<T = unknown> {
 export interface ApiListResponse<T = unknown> {
     success: boolean;
     data: T[];
-    total?: number;
+    has_next?: boolean;
     page?: number;
     limit?: number;
 }

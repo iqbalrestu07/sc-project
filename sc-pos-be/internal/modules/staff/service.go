@@ -13,7 +13,7 @@ var ErrNotFound = errors.New("staff not found")
 
 // Service is the public contract for staff business logic.
 type Service interface {
-	List(orgID string) ([]models.Staff, error)
+	List(search, orgID string, page, limit int) ([]models.Staff, bool, error)
 	Get(id, orgID string) (*models.Staff, error)
 	GetByUserID(userID string) (*models.Staff, error)
 	Create(req models.Staff, userID, orgID string) (*models.Staff, error)
@@ -32,8 +32,8 @@ func NewService(repo ...*Repository) Service {
 	return &service{repo: NewRepository()}
 }
 
-func (s *service) List(orgID string) ([]models.Staff, error) {
-	return s.repo.List(orgID)
+func (s *service) List(search, orgID string, page, limit int) ([]models.Staff, bool, error) {
+	return s.repo.List(search, orgID, page, limit)
 }
 
 func (s *service) Get(id, orgID string) (*models.Staff, error) {

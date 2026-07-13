@@ -16,18 +16,32 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) List(orgID string) ([]models.Staff, error) {
-	rows, err := r.db.Query(`
+func (r *Repository) List(search, orgID string, page, limit int) ([]models.Staff, bool, error) {
+	offset := (page - 1) * limit
+	fetchLimit := limit + 1
+
+	query := `
 		SELECT id, user_id, full_name, role, phone, email, specialization,
 		       COALESCE(is_active, true), created_at, updated_at
 		FROM staff
 		WHERE COALESCE(is_active, true) = true
 		  AND deleted_at IS NULL
-		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
-		ORDER BY full_name ASC
-	`, orgID)
+		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))`
+	
+	args := []interface{}{orgID}
+	
+	if search != "" {
+		query += ` AND (full_name ILIKE $2 OR email ILIKE $2 OR phone ILIKE $2)`
+		args = append(args, "%"+search+"%")
+	}
+	
+	argIdx := len(args) + 1
+	query += fmt.Sprintf(` ORDER BY full_name ASC LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
+	args = append(args, fetchLimit, offset)
+
+	rows, err := r.db.Query(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query staff: %w", err)
+		return nil, false, fmt.Errorf("failed to query staff: %w", err)
 	}
 	defer rows.Close()
 
@@ -35,17 +49,23 @@ func (r *Repository) List(orgID string) ([]models.Staff, error) {
 	for rows.Next() {
 		staff, err := scanStaff(rows)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		staffList = append(staffList, staff)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read staff: %w", err)
+		return nil, false, fmt.Errorf("failed to read staff: %w", err)
 	}
 	if staffList == nil {
 		staffList = []models.Staff{}
 	}
-	return staffList, nil
+
+	hasNext := len(staffList) > limit
+	if hasNext {
+		staffList = staffList[:limit]
+	}
+
+	return staffList, hasNext, nil
 }
 
 func (r *Repository) Get(id, orgID string) (*models.Staff, error) {

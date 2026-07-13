@@ -1,19 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, API_ENDPOINTS } from "@/integrations/api";
+import { ApiListResponse } from "@/integrations/api/types";
 import { Patient, PatientFormData } from "@/types/patient";
 import { toast } from "sonner";
 
-export function usePatients(searchQuery?: string) {
+export function usePatients(searchQuery?: string, page: number = 1, limit: number = 50) {
   return useQuery({
-    queryKey: ["patients", searchQuery],
+    queryKey: ["patients", searchQuery, page, limit],
     queryFn: async () => {
       try {
-        const params = searchQuery ? { search: searchQuery } : {};
-        const data = await apiClient.get<{ data: Patient[] }>(
+        const params: Record<string, any> = { page, limit };
+        if (searchQuery) params.search = searchQuery;
+        
+        const data = await apiClient.get<ApiListResponse<Patient>>(
           API_ENDPOINTS.PATIENTS.LIST,
           params
         );
-        return data.data || [];
+        return {
+          data: data.data || [],
+          has_next: data.has_next || false,
+        };
       } catch (error) {
         console.error("Error fetching patients:", error);
         throw error;

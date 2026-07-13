@@ -52,7 +52,10 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) List(orgID string) ([]TransactionWithRelations, error) {
+func (r *Repository) List(orgID string, page, limit int) ([]TransactionWithRelations, bool, error) {
+	offset := (page - 1) * limit
+	fetchLimit := limit + 1
+
 	rows, err := r.db.Query(`
 		SELECT t.id, t.transaction_code, t.appointment_id, t.patient_id, t.subtotal,
 		       t.discount_amount, t.discount_type, t.total_amount, COALESCE(t.tax_amount, 0),
@@ -63,9 +66,10 @@ func (r *Repository) List(orgID string) ([]TransactionWithRelations, error) {
 		WHERE (t.organization_id = $1 OR ($1::text = '' AND t.organization_id IS NULL))
 		  AND t.deleted_at IS NULL
 		ORDER BY t.created_at DESC
-	`, orgID)
+		LIMIT $2 OFFSET $3
+	`, orgID, fetchLimit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query transactions: %w", err)
+		return nil, false, fmt.Errorf("failed to query transactions: %w", err)
 	}
 	defer rows.Close()
 
@@ -73,24 +77,30 @@ func (r *Repository) List(orgID string) ([]TransactionWithRelations, error) {
 	for rows.Next() {
 		transaction, err := scanTransaction(rows)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		transactions = append(transactions, transaction)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read transactions: %w", err)
+		return nil, false, fmt.Errorf("failed to read transactions: %w", err)
 	}
+	
+	hasNext := len(transactions) > limit
+	if hasNext {
+		transactions = transactions[:limit]
+	}
+	
 	for i := range transactions {
 		items, err := r.Items(transactions[i].ID)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		transactions[i].Items = items
 	}
 	if transactions == nil {
 		transactions = []TransactionWithRelations{}
 	}
-	return transactions, nil
+	return transactions, hasNext, nil
 }
 
 func (r *Repository) Get(id, orgID string) (*TransactionWithRelations, error) {

@@ -16,7 +16,10 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
-func (r *Repository) List(search, orgID string) ([]models.Service, error) {
+func (r *Repository) List(search, orgID string, page, limit int) ([]models.Service, bool, error) {
+	offset := (page - 1) * limit
+	fetchLimit := limit + 1
+
 	query := `
 		SELECT s.id, s.name, s.category_id, s.description, s.duration_minutes,
 		       s.base_price, COALESCE(s.doctor_commission_type, 'fixed'),
@@ -35,10 +38,11 @@ func (r *Repository) List(search, orgID string) ([]models.Service, error) {
 		  AND (s.organization_id = $2 OR ($2::text = '' AND s.organization_id IS NULL))
 		  AND s.deleted_at IS NULL
 		ORDER BY s.name ASC
+		LIMIT $3 OFFSET $4
 	`
-	rows, err := r.db.Query(query, search, orgID)
+	rows, err := r.db.Query(query, search, orgID, fetchLimit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query services: %w", err)
+		return nil, false, fmt.Errorf("failed to query services: %w", err)
 	}
 	defer rows.Close()
 
@@ -46,17 +50,23 @@ func (r *Repository) List(search, orgID string) ([]models.Service, error) {
 	for rows.Next() {
 		service, err := scanService(rows)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		services = append(services, service)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read services: %w", err)
+		return nil, false, fmt.Errorf("failed to read services: %w", err)
 	}
 	if services == nil {
 		services = []models.Service{}
 	}
-	return services, nil
+
+	hasNext := len(services) > limit
+	if hasNext {
+		services = services[:limit]
+	}
+
+	return services, hasNext, nil
 }
 
 func (r *Repository) Get(id, orgID string) (*models.Service, error) {

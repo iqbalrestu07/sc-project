@@ -11,11 +11,15 @@ import { useDebounce } from "@/hooks/useDebounce";
 
 export default function Patients() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const limit = 20; // 20 per page for better performance
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   
   const debouncedSearch = useDebounce(searchQuery, 300);
-  const { data: patients = [], isLoading } = usePatients(debouncedSearch);
+  const { data, isLoading } = usePatients(debouncedSearch, page, limit);
+  const patients = data?.data || [];
+  const hasNext = data?.has_next || false;
 
   const handleEdit = (patient: Patient) => {
     setEditingPatient(patient);
@@ -52,7 +56,10 @@ export default function Patients() {
                 placeholder="Search patients by name, phone, or ID..." 
                 className="pl-10"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
               />
             </div>
             <Button variant="outline">Filters</Button>
@@ -62,7 +69,26 @@ export default function Patients() {
 
       {/* Patient List or Empty State */}
       {patients.length > 0 ? (
-        <PatientList patients={patients} onEdit={handleEdit} isLoading={isLoading} />
+        <div className="space-y-4">
+          <PatientList patients={patients} onEdit={handleEdit} isLoading={isLoading} />
+          <div className="flex items-center justify-between">
+            <Button
+              variant="outline"
+              disabled={page === 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground">Page {page}</span>
+            <Button
+              variant="outline"
+              disabled={!hasNext}
+              onClick={() => setPage(p => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       ) : (
         <Card className="shadow-clinic">
           <CardContent className="py-16">

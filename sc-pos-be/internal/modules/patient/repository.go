@@ -39,6 +39,46 @@ func (r *Repository) GetAll(orgID string) ([]models.Patient, error) {
 	return scanPatients(rows)
 }
 
+func (r *Repository) List(orgID, search string, page, limit int) ([]models.Patient, bool, error) {
+	offset := (page - 1) * limit
+	fetchLimit := limit + 1
+
+	query := `SELECT` + selectColumns + `
+		FROM patients
+		WHERE is_active = true
+		  AND deleted_at IS NULL
+		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))`
+
+	args := []interface{}{orgID}
+
+	if search != "" {
+		query += ` AND (full_name ILIKE $2 OR phone ILIKE $2 OR patient_code ILIKE $2)`
+		args = append(args, "%"+search+"%")
+	}
+
+	argIdx := len(args) + 1
+	query += fmt.Sprintf(` ORDER BY full_name ASC LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
+	args = append(args, fetchLimit, offset)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to query patients: %w", err)
+	}
+	defer rows.Close()
+
+	patients, err := scanPatients(rows)
+	if err != nil {
+		return nil, false, err
+	}
+
+	hasNext := len(patients) > limit
+	if hasNext {
+		patients = patients[:limit]
+	}
+
+	return patients, hasNext, nil
+}
+
 func (r *Repository) GetByID(id, orgID string) (*models.Patient, error) {
 	query := `SELECT` + selectColumns + `
 		FROM patients
@@ -157,25 +197,7 @@ func (r *Repository) Delete(id, orgID, userByID string) error {
 	return nil
 }
 
-func (r *Repository) Search(query, orgID string) ([]models.Patient, error) {
-	sqlQuery := `SELECT` + selectColumns + `
-		FROM patients
-		WHERE is_active = true AND deleted_at IS NULL AND (
-			full_name ILIKE $1 OR
-			phone ILIKE $1 OR
-			patient_code ILIKE $1
-		)
-		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
-		ORDER BY created_at DESC`
-
-	rows, err := r.db.Query(sqlQuery, "%"+query+"%", orgID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search patients: %w", err)
-	}
-	defer rows.Close()
-
-	return scanPatients(rows)
-}
+// Search is now handled by List using the search parameter
 
 // VisitSummary is a condensed appointment record for patient history
 type VisitSummary struct {

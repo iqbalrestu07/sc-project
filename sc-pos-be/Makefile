@@ -18,13 +18,25 @@ dev:
 	@echo "Running in development mode..."
 	go run main.go
 
-build:
-	@echo "Building application..."
-	go build -o bin/sc-pos-backend main.go
+build-arm-rpi:
+	@echo "Building application for ARM..."
+	GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -o bin/sc-pos-be main.go
+
+build-arm-generic:
+	@echo "Building application for ARM..."
+	GOOS=linux GOARCH=arm CGO_ENABLED=0 go build -o bin/sc-pos-be main.go
+
+build-windows:
+	@echo "Building application for Windows..."
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o bin/sc-pos-be main.go
+
+build-linux:
+	@echo "Building application for Linux..."
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/sc-pos-be main.go
 
 run:
 	@echo "Running application..."
-	./bin/sc-pos-backend
+	./bin/sc-pos-be
 
 test:
 	@echo "Running tests..."
@@ -35,7 +47,7 @@ clean:
 	rm -rf bin/
 kill:
 	@echo "Killing running application..."
-	@pkill -f sc-pos-backend || true
+	@pkill -f sc-pos-be || true
 	@pkill -f "go run main.go" 2>/dev/null; pkill -f "/exe/main" 2>/dev/null; sleep 1; echo "killed"
 
 # Database migrations with psql

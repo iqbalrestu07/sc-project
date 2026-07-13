@@ -1,24 +1,29 @@
 package migration
 
 import (
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/modules/patient"
 	"github.com/sc-pos/backend/internal/modules/product"
 	serviceModule "github.com/sc-pos/backend/internal/modules/service"
 	"github.com/xuri/excelize/v2"
 )
 
 var (
-	ErrEmptyFile      = errors.New("file is empty")
-	ErrInvalidHeader  = errors.New("excel header must contain: nama, jenis, harga")
-	ErrInvalidRowType = errors.New("jenis must be one of: product, tindakan, barang habis pakai")
-	ErrMissingName    = errors.New("nama is required")
-	ErrInvalidPrice   = errors.New("harga must be a valid number")
+	ErrEmptyFile            = errors.New("file is empty")
+	ErrUnsupportedExt       = errors.New("format file tidak didukung, harap gunakan .xlsx atau .csv")
+	ErrInvalidHeader        = errors.New("excel header must contain: nama, jenis, harga")
+	ErrInvalidPatientHeader = errors.New("excel header must contain: nama, no_hp, alamat")
+	ErrInvalidRowType       = errors.New("jenis must be one of: product, tindakan, barang habis pakai")
+	ErrMissingName          = errors.New("nama is required")
+	ErrInvalidPrice         = errors.New("harga must be a valid number")
 )
 
 // ImportResult reports the outcome of an Excel migration.
@@ -46,42 +51,60 @@ func (r *ImportResult) track(created bool, err error, name string) {
 
 // Service is the public contract for migration business logic.
 type Service interface {
-	ImportExcel(file io.Reader, orgID, userID string) (*ImportResult, error)
+	ImportCatalogExcel(file io.Reader, filename, orgID, userID string) (*ImportResult, error)
+	ImportPatientsExcel(file io.Reader, filename, orgID, userID string) (*ImportResult, error)
 }
 
 type service struct {
 	productSvc product.Service
 	serviceSvc serviceModule.Service
+	patientSvc patient.Service
 }
 
-func NewService(productSvc product.Service, serviceSvc serviceModule.Service) Service {
+func NewService(productSvc product.Service, serviceSvc serviceModule.Service, patientSvc patient.Service) Service {
 	if productSvc == nil {
 		productSvc = product.NewService()
 	}
 	if serviceSvc == nil {
 		serviceSvc = serviceModule.NewService()
 	}
+	if patientSvc == nil {
+		patientSvc = patient.NewService(patient.NewRepository())
+	}
 	return &service{
 		productSvc: productSvc,
 		serviceSvc: serviceSvc,
+		patientSvc: patientSvc,
 	}
 }
 
-func (s *service) ImportExcel(file io.Reader, orgID, userID string) (*ImportResult, error) {
-	f, err := excelize.OpenReader(file)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open excel file: %w", err)
-	}
-	defer f.Close()
+func parseRows(file io.Reader, filename string) ([][]string, error) {
+	ext := strings.ToLower(filepath.Ext(filename))
+	if ext == ".csv" {
+		reader := csv.NewReader(file)
+		// Disable fields per record check in case of jagged CSVs
+		reader.FieldsPerRecord = -1
+		return reader.ReadAll()
+	} else if ext == ".xlsx" {
+		f, err := excelize.OpenReader(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open excel file: %w", err)
+		}
+		defer f.Close()
 
-	sheet := f.GetSheetName(0)
-	if sheet == "" {
-		return nil, ErrEmptyFile
+		sheet := f.GetSheetName(0)
+		if sheet == "" {
+			return nil, ErrEmptyFile
+		}
+		return f.GetRows(sheet)
 	}
+	return nil, ErrUnsupportedExt
+}
 
-	rows, err := f.GetRows(sheet)
+func (s *service) ImportCatalogExcel(file io.Reader, filename, orgID, userID string) (*ImportResult, error) {
+	rows, err := parseRows(file, filename)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read rows: %w", err)
+		return nil, err
 	}
 	if len(rows) < 2 {
 		return nil, ErrEmptyFile
@@ -213,6 +236,122 @@ func mapHeader(header []string) (headerIndex, error) {
 	// nama, jenis, harga are required; komisi and modal are optional
 	if idx.name < 0 || idx.jenis < 0 || idx.harga < 0 {
 		return idx, ErrInvalidHeader
+	}
+	return idx, nil
+}
+
+// ---- PATIENT IMPORT ----
+
+func (s *service) ImportPatientsExcel(file io.Reader, filename, orgID, userID string) (*ImportResult, error) {
+	rows, err := parseRows(file, filename)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) < 2 {
+		return nil, ErrEmptyFile
+	}
+
+	idx, err := mapPatientHeader(rows[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch all patients for duplicate checking (by name or phone)
+	patients, err := s.patientSvc.ListAll(orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch existing patients: %w", err)
+	}
+
+	result := &ImportResult{}
+	for i, row := range rows[1:] {
+		line := i + 2 // human-readable row number (1-based header + 1)
+		if len(row) == 0 || allEmpty(row) {
+			continue
+		}
+
+		name := strings.TrimSpace(getCell(row, idx.name))
+		if name == "" {
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", line, ErrMissingName))
+			continue
+		}
+
+		phone := strings.TrimSpace(getCell(row, idx.phone))
+		address := strings.TrimSpace(getCell(row, idx.address))
+
+		created, upsertErr := s.upsertPatient(name, phone, address, orgID, userID, patients)
+		result.track(created, upsertErr, fmt.Sprintf("row %d (%s)", line, name))
+	}
+
+	return result, nil
+}
+
+func (s *service) upsertPatient(name, phone, address, orgID, userID string, existingPatients []models.Patient) (bool, error) {
+	req := models.Patient{
+		FullName: name,
+	}
+	if phone != "" {
+		req.Phone = &phone
+		req.WhatsApp = &phone
+	}
+	if address != "" {
+		req.Address = &address
+	}
+
+	// Find match
+	var matched *models.Patient
+	for _, p := range existingPatients {
+		if strings.EqualFold(p.FullName, name) || (phone != "" && p.Phone != nil && *p.Phone == phone) {
+			matched = &p
+			break
+		}
+	}
+
+	if matched != nil {
+		// Update
+		req.ID = matched.ID
+		req.PatientCode = matched.PatientCode
+		req.CreatedAt = matched.CreatedAt
+		req.PhotoURL = matched.PhotoURL
+		req.DateOfBirth = matched.DateOfBirth
+		req.Gender = matched.Gender
+		req.Email = matched.Email
+		req.AllergyHistory = matched.AllergyHistory
+		req.MedicalConditions = matched.MedicalConditions
+		req.SkinType = matched.SkinType
+		req.Notes = matched.Notes
+		req.Tags = matched.Tags
+
+		_, err := s.patientSvc.Update(matched.ID, req, userID, orgID)
+		return false, err
+	}
+
+	// Create
+	_, err := s.patientSvc.Create(req, userID, orgID)
+	return true, err
+}
+
+type patientHeaderIndex struct {
+	name, phone, address int
+}
+
+func mapPatientHeader(header []string) (patientHeaderIndex, error) {
+	idx := patientHeaderIndex{name: -1, phone: -1, address: -1}
+	for i, h := range header {
+		col := strings.TrimSpace(strings.ToLower(h))
+		switch col {
+		case "nama":
+			idx.name = i
+		case "no_hp":
+			idx.phone = i
+		case "alamat":
+			idx.address = i
+		}
+	}
+
+	// nama is required
+	if idx.name < 0 {
+		return idx, ErrInvalidPatientHeader
 	}
 	return idx, nil
 }

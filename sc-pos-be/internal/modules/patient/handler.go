@@ -23,24 +23,18 @@ func NewModule() *Handler {
 
 func (h *Handler) List(c *gin.Context) {
 	orgID := c.GetString("org_id")
-	// Support optional ?search= query param for inline search
-	if search := c.Query("search"); search != "" {
-		patients, err := h.service.Search(search, orgID)
-		if err != nil {
-			h.handleError(c, err)
-			return
-		}
-		utils.SuccessResponse(c, http.StatusOK, patients)
-		return
-	}
+	
+	page := utils.ParseIntQuery(c, "page", 1)
+	limit := utils.ParseIntQuery(c, "limit", 50)
+	search := c.Query("search")
 
-	patients, err := h.service.List(orgID)
+	patients, hasNext, err := h.service.List(orgID, search, page, limit)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, patients)
+	utils.ListSuccessResponse(c, patients, hasNext, page, limit)
 }
 
 func (h *Handler) Get(c *gin.Context) {
@@ -101,16 +95,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	utils.SuccessResponseWithMessage(c, http.StatusOK, "Patient deleted successfully", nil)
 }
 
-func (h *Handler) Search(c *gin.Context) {
-	orgID := c.GetString("org_id")
-	patients, err := h.service.Search(c.Query("search"), orgID)
-	if err != nil {
-		h.handleError(c, err)
-		return
-	}
-
-	utils.SuccessResponse(c, http.StatusOK, patients)
-}
+// Search is now handled by List
 
 func (h *Handler) Visits(c *gin.Context) {
 	visits, err := h.service.GetVisits(c.Param("id"))

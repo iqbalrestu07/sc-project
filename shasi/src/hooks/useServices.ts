@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, API_ENDPOINTS } from "@/integrations/api";
+import { ApiListResponse } from "@/integrations/api/types";
 import { Service, ServiceFormData, ServiceCategory } from "@/types/service";
 import { toast } from "sonner";
 
@@ -71,17 +72,22 @@ export function useServiceCategories() {
   return { ...categoriesQuery, createCategory, updateCategory, deleteCategory };
 }
 
-export function useServices(searchQuery?: string) {
+export function useServices(searchQuery?: string, page: number = 1, limit: number = 50) {
   return useQuery({
-    queryKey: ["services", searchQuery],
+    queryKey: ["services", searchQuery, page, limit],
     queryFn: async () => {
       try {
-        const params = searchQuery ? { search: searchQuery } : {};
-        const data = await apiClient.get<{ data: Service[] }>(
+        const params: Record<string, any> = { page, limit };
+        if (searchQuery) params.search = searchQuery;
+
+        const data = await apiClient.get<ApiListResponse<Service>>(
           API_ENDPOINTS.SERVICES.LIST,
           params
         );
-        return data.data || [];
+        return {
+          data: data.data || [],
+          has_next: data.has_next || false,
+        };
       } catch (error) {
         console.error("Error fetching services:", error);
         throw error;

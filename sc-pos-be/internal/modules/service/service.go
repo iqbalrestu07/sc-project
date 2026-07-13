@@ -14,7 +14,7 @@ var ErrNotFound = errors.New("service not found")
 
 // Service is the public interface for the service module business logic.
 type Service interface {
-	List(search, orgID string) ([]models.Service, error)
+	List(search, orgID string, page, limit int) ([]models.Service, bool, error)
 	Get(id, orgID string) (*models.Service, error)
 	GetByName(name, orgID string) (*models.Service, error)
 	Create(req models.Service, orgID, userID string) (*models.Service, error)
@@ -38,8 +38,8 @@ func NewService(repo ...*Repository) Service {
 	return &service{repo: NewRepository()}
 }
 
-func (s *service) List(search, orgID string) ([]models.Service, error) {
-	return s.repo.List(strings.TrimSpace(search), orgID)
+func (s *service) List(search, orgID string, page, limit int) ([]models.Service, bool, error) {
+	return s.repo.List(strings.TrimSpace(search), orgID, page, limit)
 }
 
 func (s *service) Get(id, orgID string) (*models.Service, error) {

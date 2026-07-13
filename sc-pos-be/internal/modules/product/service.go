@@ -14,7 +14,7 @@ var ErrNotFound = errors.New("product not found")
 
 // Service is the public contract for product business logic.
 type Service interface {
-	List(orgID string) ([]models.Product, error)
+	List(orgID, search string, page, limit int) ([]models.Product, bool, error)
 	Get(id, orgID string) (*models.Product, error)
 	GetByName(name, orgID string) (*models.Product, error)
 	Create(req models.Product, orgID, userID string) (*models.Product, error)
@@ -38,8 +38,8 @@ func NewService(repo ...*Repository) Service {
 	return &service{repo: NewRepository()}
 }
 
-func (s *service) List(orgID string) ([]models.Product, error) {
-	return s.repo.List(orgID)
+func (s *service) List(orgID, search string, page, limit int) ([]models.Product, bool, error) {
+	return s.repo.List(orgID, search, page, limit)
 }
 
 func (s *service) Get(id, orgID string) (*models.Product, error) {

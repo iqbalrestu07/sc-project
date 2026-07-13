@@ -14,7 +14,7 @@ var ErrNotFound = errors.New("transaction not found")
 
 // Service is the public interface for the transaction module business logic.
 type Service interface {
-	List(orgID string) ([]TransactionWithRelations, error)
+	List(orgID string, page, limit int) ([]TransactionWithRelations, bool, error)
 	Get(id, orgID string) (*TransactionWithRelations, error)
 	Create(req CreateRequest, userID *string, orgID string) (*TransactionWithRelations, error)
 	Update(id, orgID, userID string, req models.Transaction, sendWhatsApp *bool) (*TransactionWithRelations, error)
@@ -33,8 +33,8 @@ func NewService(repo ...*Repository) Service {
 	return &service{repo: NewRepository()}
 }
 
-func (s *service) List(orgID string) ([]TransactionWithRelations, error) {
-	return s.repo.List(orgID)
+func (s *service) List(orgID string, page, limit int) ([]TransactionWithRelations, bool, error) {
+	return s.repo.List(orgID, page, limit)
 }
 
 func (s *service) Get(id, orgID string) (*TransactionWithRelations, error) {

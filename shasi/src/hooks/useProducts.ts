@@ -1,19 +1,27 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, API_ENDPOINTS } from "@/integrations/api";
+import { ApiListResponse } from "@/integrations/api/types";
 import type { Product, ProductCategory, ProductInsert, ProductUpdate, ProductFormData } from "@/types/product";
 import { toast } from "sonner";
 
-export function useProducts(enabled = true) {
+export function useProducts(enabled = true, searchQuery?: string, page: number = 1, limit: number = 50) {
   const queryClient = useQueryClient();
 
   const productsQuery = useQuery({
-    queryKey: ["products"],
-    queryFn: async (): Promise<Product[]> => {
+    queryKey: ["products", searchQuery, page, limit],
+    queryFn: async () => {
       try {
-        const data = await apiClient.get<{ data: Product[] }>(
-          API_ENDPOINTS.PRODUCTS.LIST
+        const params: Record<string, any> = { page, limit };
+        if (searchQuery) params.search = searchQuery;
+
+        const data = await apiClient.get<ApiListResponse<Product>>(
+          API_ENDPOINTS.PRODUCTS.LIST,
+          params
         );
-        return data.data || [];
+        return {
+          data: data.data || [],
+          has_next: data.has_next || false,
+        };
       } catch (error) {
         console.error("Error fetching products:", error);
         throw error;
@@ -85,20 +93,24 @@ export function useProducts(enabled = true) {
   });
 
   // Stock statistics
-  const lowStockProducts = productsQuery.data?.filter(
+  // Stock statistics (using the current page data, which may be incomplete for total stats,
+  // but enough for current view)
+  const productsList = productsQuery.data?.data || [];
+  const lowStockProducts = productsList.filter(
     (p) => (p.current_stock ?? 0) <= (p.minimum_stock ?? 5)
-  ) || [];
+  );
 
-  const expiringProducts = productsQuery.data?.filter((p) => {
+  const expiringProducts = productsList.filter((p) => {
     if (!p.expiry_date) return false;
     const expiryDate = new Date(p.expiry_date);
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
     return expiryDate <= thirtyDaysFromNow;
-  }) || [];
+  });
 
   return {
-    products: productsQuery.data || [],
+    products: productsList,
+    hasNext: productsQuery.data?.has_next || false,
     isLoading: productsQuery.isLoading,
     error: productsQuery.error,
     createProduct,
@@ -106,7 +118,7 @@ export function useProducts(enabled = true) {
     deleteProduct,
     lowStockProducts,
     expiringProducts,
-    totalProducts: productsQuery.data?.length || 0,
+    totalProducts: productsList.length,
   };
 }
 

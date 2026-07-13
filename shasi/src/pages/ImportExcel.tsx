@@ -10,12 +10,15 @@ import {
   Loader2,
   Info,
   RotateCcw,
+  Users,
+  Package,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiClient } from "@/integrations/api/client";
 import { API_ENDPOINTS } from "@/integrations/api/endpoints";
 import { toast } from "sonner";
@@ -29,28 +32,41 @@ interface ImportResult {
   errors?: string[];
 }
 
-async function importExcel(file: File): Promise<{ success: boolean; message: string; data: ImportResult }> {
+async function importExcel(params: { file: File; type: string }): Promise<{ success: boolean; message: string; data: ImportResult }> {
   const formData = new FormData();
-  formData.append("file", file);
+  formData.append("file", params.file);
+  formData.append("type", params.type);
   return apiClient.postForm(API_ENDPOINTS.MIGRATION.IMPORT_EXCEL, formData);
 }
 
 // ─── Template Download Helper ─────────────────────────────────────────────────
-function downloadTemplate() {
-  const headers = ["nama", "jenis", "harga", "komisi", "modal"];
-  const examples = [
-    ["Facial Brightening", "tindakan", "150000", "15000", ""],
-    ["Serum Vitamin C", "product", "120000", "", "65000"],
-    ["Handuk Kecil", "barang habis pakai", "25000", "", "12000"],
-    ["Peeling Acne", "tindakan", "200000", "20000", ""],
-    ["Masker Kolagen", "product", "85000", "", "40000"],
-  ];
+function downloadTemplate(type: "catalog" | "patient") {
+  let headers: string[];
+  let examples: string[][];
+
+  if (type === "patient") {
+    headers = ["nama", "no_hp", "alamat"];
+    examples = [
+      ["Wita Kp,tungilis", "6281280896670", "kp.tungilis"],
+      ["aurora perum AL", "628988954816", "perumah AL"],
+    ];
+  } else {
+    headers = ["nama", "jenis", "harga", "komisi", "modal"];
+    examples = [
+      ["Facial Brightening", "tindakan", "150000", "15000", ""],
+      ["Serum Vitamin C", "product", "120000", "", "65000"],
+      ["Handuk Kecil", "barang habis pakai", "25000", "", "12000"],
+      ["Peeling Acne", "tindakan", "200000", "20000", ""],
+      ["Masker Kolagen", "product", "85000", "", "40000"],
+    ];
+  }
+
   const csvContent = [headers, ...examples].map((r) => r.join(",")).join("\n");
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "template-import.csv";
+  link.download = `template-import-${type}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -81,6 +97,7 @@ const JENIS_INFO = [
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ImportExcel() {
+  const [activeTab, setActiveTab] = useState<"catalog" | "patient">("catalog");
   const [dragOver, setDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -152,79 +169,109 @@ export default function ImportExcel() {
         description="Upload file Excel untuk menambahkan data produk, layanan, atau barang habis pakai secara massal"
       />
 
-      {/* Info card */}
-      <Card className="border-blue-100 bg-blue-50/50">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold text-blue-800 flex items-center gap-2">
-            <Info className="h-4 w-4" />
-            Format File yang Diterima
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            {/* Column info */}
-            <div>
-              <p className="font-semibold text-blue-900 mb-2">Kolom yang dibutuhkan:</p>
-              <div className="space-y-1.5">
-                {[
-                  { col: "nama", req: true, desc: "Nama item" },
-                  { col: "jenis", req: true, desc: "Tipe data (lihat di bawah)" },
-                  { col: "harga", req: true, desc: "Harga jual (angka/Rp)" },
-                  { col: "komisi", req: false, desc: "Komisi tindakan" },
-                  { col: "modal", req: false, desc: "Harga beli / HPP" },
-                ].map((col) => (
-                  <div key={col.col} className="flex items-center gap-2">
-                    <code className="text-xs bg-white border border-blue-200 px-1.5 py-0.5 rounded font-mono text-blue-700 min-w-[60px]">
-                      {col.col}
-                    </code>
-                    <span className={cn("text-xs", col.req ? "text-blue-700 font-medium" : "text-blue-500")}>
-                      {col.desc}{col.req ? " *" : ""}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+      {/* Tabs Selection */}
+      <Tabs value={activeTab} onValueChange={(val) => {
+        setActiveTab(val as "catalog" | "patient");
+        handleReset();
+      }} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsTrigger value="catalog" className="gap-2"><Package className="h-4 w-4" /> Produk & Layanan</TabsTrigger>
+          <TabsTrigger value="patient" className="gap-2"><Users className="h-4 w-4" /> Pasien</TabsTrigger>
+        </TabsList>
 
-            {/* Jenis info */}
-            <div className="col-span-2">
-              <p className="font-semibold text-blue-900 mb-2">
-                Nilai kolom{" "}
-                <code className="text-xs bg-white border border-blue-200 px-1 rounded font-mono">jenis</code>:
-              </p>
-              <div className="space-y-2">
-                {JENIS_INFO.map((j) => (
-                  <div
-                    key={j.label}
-                    className={cn("flex items-start gap-2 p-2 rounded-md border", j.color)}
-                  >
-                    <span className="text-base leading-none mt-0.5">{j.icon}</span>
-                    <div>
-                      <code className="text-xs font-bold font-mono">{j.label}</code>
-                      <p className="text-xs mt-0.5 opacity-80">{j.desc}</p>
-                      <p className="text-xs mt-0.5 opacity-60">Kolom relevan: {j.fields}</p>
+        {/* Info card */}
+        <Card className="border-blue-100 bg-blue-50/50 mb-6">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-blue-800 flex items-center gap-2">
+              <Info className="h-4 w-4" />
+              Format File yang Diterima ({activeTab === "catalog" ? "Produk & Layanan" : "Pasien"})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {activeTab === "catalog" ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <p className="font-semibold text-blue-900 mb-2">Kolom yang dibutuhkan:</p>
+                  <div className="space-y-1.5">
+                    {[
+                      { col: "nama", req: true, desc: "Nama item" },
+                      { col: "jenis", req: true, desc: "Tipe data (lihat di bawah)" },
+                      { col: "harga", req: true, desc: "Harga jual (angka/Rp)" },
+                      { col: "komisi", req: false, desc: "Komisi tindakan" },
+                      { col: "modal", req: false, desc: "Harga beli / HPP" },
+                    ].map((col) => (
+                      <div key={col.col} className="flex items-center gap-2">
+                        <code className="text-xs bg-white border border-blue-200 px-1.5 py-0.5 rounded font-mono text-blue-700 min-w-[60px]">
+                          {col.col}
+                        </code>
+                        <span className={cn("text-xs", col.req ? "text-blue-700 font-medium" : "text-blue-500")}>
+                          {col.desc}{col.req ? " *" : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="col-span-2">
+                  <p className="font-semibold text-blue-900 mb-2">
+                    Nilai kolom{" "}
+                    <code className="text-xs bg-white border border-blue-200 px-1 rounded font-mono">jenis</code>:
+                  </p>
+                  <div className="space-y-2">
+                    {JENIS_INFO.map((j) => (
+                      <div
+                        key={j.label}
+                        className={cn("flex items-start gap-2 p-2 rounded-md border", j.color)}
+                      >
+                        <span className="text-base leading-none mt-0.5">{j.icon}</span>
+                        <div>
+                          <code className="text-xs font-bold font-mono">{j.label}</code>
+                          <p className="text-xs mt-0.5 opacity-80">{j.desc}</p>
+                          <p className="text-xs mt-0.5 opacity-60">Kolom relevan: {j.fields}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm">
+                <p className="font-semibold text-blue-900 mb-2">Kolom yang dibutuhkan:</p>
+                <div className="space-y-1.5">
+                  {[
+                    { col: "nama", req: true, desc: "Nama lengkap pasien" },
+                    { col: "no_hp", req: false, desc: "Nomor Handphone / WhatsApp (contoh: 628123456789)" },
+                    { col: "alamat", req: false, desc: "Alamat tempat tinggal" },
+                  ].map((col) => (
+                    <div key={col.col} className="flex items-center gap-2">
+                      <code className="text-xs bg-white border border-blue-200 px-1.5 py-0.5 rounded font-mono text-blue-700 min-w-[60px]">
+                        {col.col}
+                      </code>
+                      <span className={cn("text-xs", col.req ? "text-blue-700 font-medium" : "text-blue-500")}>
+                        {col.desc}{col.req ? " *" : ""}
+                      </span>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          </div>
+            )}
 
-          <div className="flex items-center gap-3 pt-2 border-t border-blue-100">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 border-blue-200 text-blue-700 hover:bg-blue-100"
-              onClick={downloadTemplate}
-            >
-              <Download className="h-4 w-4" />
-              Download Template CSV
-            </Button>
-            <p className="text-xs text-blue-600">
-              Jika nama sudah ada, data akan diperbarui (update). Jika belum ada, data baru akan dibuat (insert).
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="flex items-center gap-3 pt-2 border-t border-blue-100">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 border-blue-200 text-blue-700 hover:bg-blue-100"
+                onClick={() => downloadTemplate(activeTab)}
+              >
+                <Download className="h-4 w-4" />
+                Download Template CSV
+              </Button>
+              <p className="text-xs text-blue-600">
+                Jika nama {activeTab === "patient" && "atau nomor HP "}sudah ada, data akan diperbarui (update). Jika belum ada, data baru akan dibuat (insert).
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
       {/* Upload area */}
       <Card>
@@ -306,7 +353,7 @@ export default function ImportExcel() {
             <div className="flex gap-3">
               <Button
                 className="flex-1 gap-2"
-                onClick={() => mutation.mutate(selectedFile)}
+                onClick={() => mutation.mutate({ file: selectedFile, type: activeTab })}
                 disabled={mutation.isPending}
               >
                 {mutation.isPending ? (
@@ -419,6 +466,7 @@ export default function ImportExcel() {
           </CardContent>
         </Card>
       )}
+      </Tabs>
     </div>
   );
 }

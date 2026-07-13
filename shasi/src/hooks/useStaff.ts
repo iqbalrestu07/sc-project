@@ -1,19 +1,27 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, API_ENDPOINTS } from "@/integrations/api";
+import { ApiListResponse } from "@/integrations/api/types";
 import type { Staff, StaffInsert, StaffUpdate } from "@/types/appointment";
 import { toast } from "sonner";
 
-export function useStaff() {
+export function useStaff(searchQuery?: string, page: number = 1, limit: number = 50) {
   const queryClient = useQueryClient();
 
   const staffQuery = useQuery({
-    queryKey: ["staff"],
-    queryFn: async (): Promise<Staff[]> => {
+    queryKey: ["staff", searchQuery, page, limit],
+    queryFn: async () => {
       try {
-        const data = await apiClient.get<{ data: Staff[] }>(
-          API_ENDPOINTS.STAFF.LIST
+        const params: Record<string, any> = { page, limit };
+        if (searchQuery) params.search = searchQuery;
+
+        const data = await apiClient.get<ApiListResponse<Staff>>(
+          API_ENDPOINTS.STAFF.LIST,
+          params
         );
-        return data.data || [];
+        return {
+          data: data.data || [],
+          has_next: data.has_next || false,
+        };
       } catch (error) {
         console.error("Error fetching staff:", error);
         throw error;
@@ -65,11 +73,13 @@ export function useStaff() {
     },
   });
 
-  const doctors = staffQuery.data?.filter((s) => s.role === "doctor") || [];
-  const therapists = staffQuery.data?.filter((s) => s.role === "therapist") || [];
+  const staffList = staffQuery.data?.data || [];
+  const doctors = staffList.filter((s) => s.role === "doctor");
+  const therapists = staffList.filter((s) => s.role === "therapist");
 
   return {
-    staff: staffQuery.data || [],
+    staff: staffList,
+    hasNext: staffQuery.data?.has_next || false,
     doctors,
     therapists,
     isLoading: staffQuery.isLoading,

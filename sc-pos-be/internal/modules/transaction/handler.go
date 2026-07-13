@@ -23,12 +23,16 @@ func NewModule() *Handler {
 
 func (h *Handler) List(c *gin.Context) {
 	orgID := c.GetString("org_id")
-	transactions, err := h.service.List(orgID)
+	
+	page := utils.ParseIntQuery(c, "page", 1)
+	limit := utils.ParseIntQuery(c, "limit", 50)
+
+	transactions, hasNext, err := h.service.List(orgID, page, limit)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	utils.SuccessResponse(c, http.StatusOK, transactions)
+	utils.ListSuccessResponse(c, transactions, hasNext, page, limit)
 }
 
 func (h *Handler) Get(c *gin.Context) {

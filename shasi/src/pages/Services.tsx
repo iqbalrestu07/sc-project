@@ -11,11 +11,15 @@ import { useDebounce } from "@/hooks/useDebounce";
 
 export default function Services() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const limit = 20; // 20 per page
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   
   const debouncedSearch = useDebounce(searchQuery, 300);
-  const { data: services = [], isLoading } = useServices(debouncedSearch);
+  const { data, isLoading } = useServices(debouncedSearch, page, limit);
+  const services = data?.data || [];
+  const hasNext = data?.has_next || false;
 
   const handleEdit = (service: Service) => {
     setEditingService(service);
@@ -52,7 +56,10 @@ export default function Services() {
                 placeholder="Search services..." 
                 className="pl-10"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
               />
             </div>
             <Button variant="outline">Filters</Button>
@@ -62,7 +69,26 @@ export default function Services() {
 
       {/* Service List or Empty State */}
       {services.length > 0 ? (
-        <ServiceList services={services} onEdit={handleEdit} isLoading={isLoading} />
+        <div className="space-y-4">
+          <ServiceList services={services} onEdit={handleEdit} isLoading={isLoading} />
+          <div className="flex items-center justify-between">
+            <Button
+              variant="outline"
+              disabled={page === 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground">Page {page}</span>
+            <Button
+              variant="outline"
+              disabled={!hasNext}
+              onClick={() => setPage(p => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       ) : (
         <Card className="shadow-clinic">
           <CardContent className="py-16">

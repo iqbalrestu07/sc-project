@@ -2,9 +2,23 @@ package utils
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
+
+// ParseIntQuery parses an integer query parameter with a fallback default value
+func ParseIntQuery(c *gin.Context, key string, defaultValue int) int {
+	valStr := c.Query(key)
+	if valStr == "" {
+		return defaultValue
+	}
+	val, err := strconv.Atoi(valStr)
+	if err != nil || val <= 0 {
+		return defaultValue
+	}
+	return val
+}
 
 // APIResponse standard response format
 type APIResponse struct {
@@ -18,7 +32,7 @@ type APIResponse struct {
 type ListResponse struct {
 	Success bool        `json:"success"`
 	Data    interface{} `json:"data"`
-	Total   int         `json:"total,omitempty"`
+	HasNext bool        `json:"has_next"`
 	Page    int         `json:"page,omitempty"`
 	Limit   int         `json:"limit,omitempty"`
 	Error   string      `json:"error,omitempty"`
@@ -58,11 +72,11 @@ func ErrorResponse(c *gin.Context, statusCode int, error string) {
 }
 
 // ListSuccessResponse returns list with pagination
-func ListSuccessResponse(c *gin.Context, data interface{}, total, page, limit int) {
+func ListSuccessResponse(c *gin.Context, data interface{}, hasNext bool, page, limit int) {
 	c.JSON(http.StatusOK, ListResponse{
 		Success: true,
 		Data:    data,
-		Total:   total,
+		HasNext: hasNext,
 		Page:    page,
 		Limit:   limit,
 	})

@@ -25,7 +25,10 @@ interface StaffListProps {
 }
 
 export function StaffList({ onEdit }: StaffListProps) {
-  const { staff, isLoading, doctors, therapists } = useStaff();
+  const [page, setPage] = useState(1);
+  const limit = 20;
+
+  const { staff, hasNext, isLoading, doctors, therapists } = useStaff(undefined, page, limit);
 
   if (isLoading) {
     return (
@@ -120,6 +123,23 @@ export function StaffList({ onEdit }: StaffListProps) {
             ))}
           </TableBody>
         </Table>
+        <div className="flex items-center justify-between p-4 border-t">
+          <Button
+            variant="outline"
+            disabled={page === 1}
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">Page {page}</span>
+          <Button
+            variant="outline"
+            disabled={!hasNext}
+            onClick={() => setPage(p => p + 1)}
+          >
+            Next
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
