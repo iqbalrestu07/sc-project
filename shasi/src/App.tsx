@@ -35,6 +35,7 @@ import RBACManagement from "./pages/RBACManagement";
 import StockOpname from "./pages/StockOpname";
 import ConsumableItems from "./pages/ConsumableItems/index";
 import ImportExcel from "./pages/ImportExcel";
+import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -179,6 +180,12 @@ function AppRoutes() {
       <Route path="/import-excel" element={
         <ProtectedRoute requirePermission="products:write">
           <MainLayout onSignOut={signOut}><ImportExcel /></MainLayout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/reports" element={
+        <ProtectedRoute requirePermission="reports:read">
+          <MainLayout onSignOut={signOut}><Reports /></MainLayout>
         </ProtectedRoute>
       } />
 

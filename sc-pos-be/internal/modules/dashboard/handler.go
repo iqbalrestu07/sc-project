@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -61,14 +62,26 @@ func (h *Handler) Revenue(c *gin.Context) {
 
 func (h *Handler) TopServices(c *gin.Context) {
 	orgID := c.GetString("org_id")
-	data, err := h.service.TopServices(parseDateRange(c), orgID)
-	respond(c, data, err)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	data, hasNext, err := h.service.TopServices(parseDateRange(c), orgID, page, limit)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	utils.ListSuccessResponse(c, data, hasNext, page, limit)
 }
 
 func (h *Handler) TopProducts(c *gin.Context) {
 	orgID := c.GetString("org_id")
-	data, err := h.service.TopProducts(parseDateRange(c), orgID)
-	respond(c, data, err)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	data, hasNext, err := h.service.TopProducts(parseDateRange(c), orgID, page, limit)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	utils.ListSuccessResponse(c, data, hasNext, page, limit)
 }
 
 func (h *Handler) TopCustomers(c *gin.Context) {

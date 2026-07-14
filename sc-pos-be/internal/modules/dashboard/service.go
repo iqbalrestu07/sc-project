@@ -4,8 +4,8 @@ package dashboard
 type Service interface {
 	Stats(dr DateRange, orgID string) (map[string]interface{}, error)
 	Revenue(dr DateRange, orgID string) ([]RevenueRow, error)
-	TopServices(dr DateRange, orgID string) ([]TopItem, error)
-	TopProducts(dr DateRange, orgID string) ([]TopItem, error)
+	TopServices(dr DateRange, orgID string, page, limit int) ([]TopItem, bool, error)
+	TopProducts(dr DateRange, orgID string, page, limit int) ([]TopItem, bool, error)
 	TopCustomers(dr DateRange, orgID string, limit int) ([]TopCustomerRow, error)
 	AppointmentsToday(orgID string) ([]AppointmentTodayRow, error)
 }
@@ -29,12 +29,12 @@ func (s *service) Revenue(dr DateRange, orgID string) ([]RevenueRow, error) {
 	return s.repo.Revenue(dr, orgID)
 }
 
-func (s *service) TopServices(dr DateRange, orgID string) ([]TopItem, error) {
-	return s.repo.TopServices(dr, orgID)
+func (s *service) TopServices(dr DateRange, orgID string, page, limit int) ([]TopItem, bool, error) {
+	return s.repo.TopServices(dr, orgID, page, limit)
 }
 
-func (s *service) TopProducts(dr DateRange, orgID string) ([]TopItem, error) {
-	return s.repo.TopProducts(dr, orgID)
+func (s *service) TopProducts(dr DateRange, orgID string, page, limit int) ([]TopItem, bool, error) {
+	return s.repo.TopProducts(dr, orgID, page, limit)
 }
 
 func (s *service) TopCustomers(dr DateRange, orgID string, limit int) ([]TopCustomerRow, error) {

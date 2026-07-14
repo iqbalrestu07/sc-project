@@ -48,14 +48,19 @@ export interface AppointmentTodayItem {
 export interface DateRangeParams {
   from?: Date;
   to?: Date;
+  page?: number;
+  limit?: number;
 }
 
 function buildDateParams(dr?: DateRangeParams): Record<string, string> {
-  if (!dr?.from || !dr?.to) return {};
-  return {
-    from: format(dr.from, "yyyy-MM-dd"),
-    to: format(dr.to, "yyyy-MM-dd"),
-  };
+  const params: Record<string, string> = {};
+  if (dr?.from && dr?.to) {
+    params.from = format(dr.from, "yyyy-MM-dd");
+    params.to = format(dr.to, "yyyy-MM-dd");
+  }
+  if (dr?.page) params.page = dr.page.toString();
+  if (dr?.limit) params.limit = dr.limit.toString();
+  return params;
 }
 
 export function useDashboardStats(dr?: DateRangeParams) {
@@ -87,26 +92,32 @@ export function useDashboardRevenue(dr?: DateRangeParams) {
 
 export function useDashboardTopServices(dr?: DateRangeParams) {
   return useQuery({
-    queryKey: ["dashboard-top-services", dr?.from?.toISOString(), dr?.to?.toISOString()],
-    queryFn: async (): Promise<TopServiceItem[]> => {
-      const data = await apiClient.get<{ data: TopServiceItem[] }>(
+    queryKey: ["dashboard-top-services", dr?.from?.toISOString(), dr?.to?.toISOString(), dr?.page, dr?.limit],
+    queryFn: async () => {
+      const data = await apiClient.get<{ data: TopServiceItem[], has_next?: boolean }>(
         API_ENDPOINTS.DASHBOARD.TOP_SERVICES,
         buildDateParams(dr)
       );
-      return data.data || [];
+      return {
+        data: data.data || [],
+        has_next: data.has_next || false,
+      };
     },
   });
 }
 
 export function useDashboardTopProducts(dr?: DateRangeParams) {
   return useQuery({
-    queryKey: ["dashboard-top-products", dr?.from?.toISOString(), dr?.to?.toISOString()],
-    queryFn: async (): Promise<TopProductItem[]> => {
-      const data = await apiClient.get<{ data: TopProductItem[] }>(
+    queryKey: ["dashboard-top-products", dr?.from?.toISOString(), dr?.to?.toISOString(), dr?.page, dr?.limit],
+    queryFn: async () => {
+      const data = await apiClient.get<{ data: TopProductItem[], has_next?: boolean }>(
         API_ENDPOINTS.DASHBOARD.TOP_PRODUCTS,
         buildDateParams(dr)
       );
-      return data.data || [];
+      return {
+        data: data.data || [],
+        has_next: data.has_next || false,
+      };
     },
   });
 }

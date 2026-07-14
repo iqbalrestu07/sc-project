@@ -148,7 +148,15 @@ type TopItem struct {
 	Revenue  float64 `json:"revenue"`
 }
 
-func (r *Repository) TopServices(dr DateRange, orgID string) ([]TopItem, error) {
+func (r *Repository) TopServices(dr DateRange, orgID string, page, limit int) ([]TopItem, bool, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+	fetchLimit := limit + 1
 	var rows *sql.Rows
 	var err error
 	if dr.From != nil && dr.To != nil {
@@ -163,8 +171,8 @@ func (r *Repository) TopServices(dr DateRange, orgID string) ([]TopItem, error) 
 			  AND (t.organization_id = $3 OR ($3::text = '' AND t.organization_id IS NULL))
 			GROUP BY s.id, s.name
 			ORDER BY revenue DESC
-			LIMIT 10
-		`, dr.From, dr.To, orgID)
+			LIMIT $4 OFFSET $5
+		`, dr.From, dr.To, orgID, fetchLimit, offset)
 	} else {
 		rows, err = r.db.Query(`
 			SELECT s.id, s.name, COUNT(*)::float8 AS quantity, COALESCE(SUM(ti.total_price), 0)::float8 AS revenue
@@ -175,17 +183,34 @@ func (r *Repository) TopServices(dr DateRange, orgID string) ([]TopItem, error) 
 			  AND (t.organization_id = $1 OR ($1::text = '' AND t.organization_id IS NULL))
 			GROUP BY s.id, s.name
 			ORDER BY revenue DESC
-			LIMIT 10
-		`, orgID)
+			LIMIT $2 OFFSET $3
+		`, orgID, fetchLimit, offset)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to query top services: %w", err)
+		return nil, false, fmt.Errorf("failed to query top services: %w", err)
 	}
 	defer rows.Close()
-	return scanTopItems(rows)
+	items, err := scanTopItems(rows)
+	if err != nil {
+		return nil, false, err
+	}
+	hasNext := false
+	if len(items) > limit {
+		hasNext = true
+		items = items[:limit]
+	}
+	return items, hasNext, nil
 }
 
-func (r *Repository) TopProducts(dr DateRange, orgID string) ([]TopItem, error) {
+func (r *Repository) TopProducts(dr DateRange, orgID string, page, limit int) ([]TopItem, bool, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+	fetchLimit := limit + 1
 	var rows *sql.Rows
 	var err error
 	if dr.From != nil && dr.To != nil {
@@ -200,8 +225,8 @@ func (r *Repository) TopProducts(dr DateRange, orgID string) ([]TopItem, error) 
 			  AND (t.organization_id = $3 OR ($3::text = '' AND t.organization_id IS NULL))
 			GROUP BY p.id, p.name
 			ORDER BY revenue DESC
-			LIMIT 10
-		`, dr.From, dr.To, orgID)
+			LIMIT $4 OFFSET $5
+		`, dr.From, dr.To, orgID, fetchLimit, offset)
 	} else {
 		rows, err = r.db.Query(`
 			SELECT p.id, p.name, COALESCE(SUM(ti.quantity), 0)::float8 AS quantity, COALESCE(SUM(ti.total_price), 0)::float8 AS revenue
@@ -212,14 +237,23 @@ func (r *Repository) TopProducts(dr DateRange, orgID string) ([]TopItem, error) 
 			  AND (t.organization_id = $1 OR ($1::text = '' AND t.organization_id IS NULL))
 			GROUP BY p.id, p.name
 			ORDER BY revenue DESC
-			LIMIT 10
-		`, orgID)
+			LIMIT $2 OFFSET $3
+		`, orgID, fetchLimit, offset)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to query top products: %w", err)
+		return nil, false, fmt.Errorf("failed to query top products: %w", err)
 	}
 	defer rows.Close()
-	return scanTopItems(rows)
+	items, err := scanTopItems(rows)
+	if err != nil {
+		return nil, false, err
+	}
+	hasNext := false
+	if len(items) > limit {
+		hasNext = true
+		items = items[:limit]
+	}
+	return items, hasNext, nil
 }
 
 func scanTopItems(rows *sql.Rows) ([]TopItem, error) {

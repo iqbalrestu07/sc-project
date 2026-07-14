@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { 
-  DollarSign, 
-  Calendar, 
-  Clock, 
+import {
+  DollarSign,
+  Calendar,
+  Clock,
   AlertTriangle,
   UserPlus,
   CalendarPlus,
@@ -17,17 +17,24 @@ import {
 } from "lucide-react";
 import { PatientFormDialog } from "@/components/patients";
 import { useAuth } from "@/contexts/AuthContext";
-import { useDashboardStats, useDashboardRevenue, useDashboardAppointmentsToday, useDashboardTopCustomers } from "@/hooks/useDashboard";
+import {
+  useDashboardStats,
+  useDashboardRevenue,
+  useDashboardAppointmentsToday,
+  useDashboardTopCustomers,
+  useDashboardTopServices,
+  useDashboardTopProducts
+} from "@/hooks/useDashboard";
 import { useCommissions } from "@/hooks/useCommissions";
 import { useProducts } from "@/hooks/useProducts";
 import { DateRangeFilter, type PeriodPreset } from "@/components/filters";
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -47,7 +54,7 @@ export default function Dashboard() {
     to: endOfDay(new Date()),
     preset: "today",
   });
-  
+
   // Build date range for backend filtering (only when not "all")
   const backendDateRange = dateFilter.preset !== "all" && dateFilter.from && dateFilter.to
     ? { from: dateFilter.from, to: dateFilter.to }
@@ -58,6 +65,10 @@ export default function Dashboard() {
   const { data: revenuePoints } = useDashboardRevenue(backendDateRange);
   const { data: appointmentsToday } = useDashboardAppointmentsToday();
   const { data: topCustomers } = useDashboardTopCustomers(backendDateRange);
+  const { data: topServicesResp } = useDashboardTopServices(backendDateRange);
+  const { data: topProductsResp } = useDashboardTopProducts(backendDateRange);
+  const topServices = topServicesResp?.data || [];
+  const topProducts = topProductsResp?.data || [];
   const { commissions } = useCommissions(hasPermission("commissions:read"));
   const { products } = useProducts(hasPermission("products:read"));
 
@@ -101,7 +112,7 @@ export default function Dashboard() {
   // Top staff by commission (filtered by date range)
   const getTopStaffCommissions = () => {
     const staffMap: Record<string, { name: string; role: string; total: number; pending: number }> = {};
-    
+
     filteredCommissions.forEach((comm) => {
       if (!comm.staff) return;
       const staffId = comm.staff_id;
@@ -186,8 +197,8 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 pt-16 lg:pt-8 animate-fade-in">
-      <PageHeader 
-        title="Dashboard" 
+      <PageHeader
+        title="Dashboard"
         description="Selamat datang! Berikut ringkasan klinik Anda."
         action={
           <DateRangeFilter
@@ -200,8 +211,8 @@ export default function Dashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         {statCards.map((stat) => (
-          <Card 
-            key={stat.title} 
+          <Card
+            key={stat.title}
             className="shadow-clinic cursor-pointer hover:shadow-md transition-shadow"
             onClick={stat.onClick}
           >
@@ -265,8 +276,8 @@ export default function Dashboard() {
               Tren Pendapatan
             </CardTitle>
             <CardDescription>
-              {dateFilter.preset === "all" ? "7 hari terakhir" : 
-                dateFilter.from && dateFilter.to ? 
+              {dateFilter.preset === "all" ? "7 hari terakhir" :
+                dateFilter.from && dateFilter.to ?
                   `${format(dateFilter.from, "dd MMM", { locale: id })} - ${format(dateFilter.to, "dd MMM yyyy", { locale: id })}` :
                   "Periode terpilih"
               }
@@ -284,14 +295,14 @@ export default function Dashboard() {
                 <BarChart data={revenueData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="label" className="text-xs" />
-                  <YAxis 
+                  <YAxis
                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
                     className="text-xs"
                   />
-                  <Tooltip 
+                  <Tooltip
                     formatter={(value: number) => [formatPrice(value), "Pendapatan"]}
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '8px'
                     }}
@@ -458,6 +469,83 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* Top Items (Services & Products) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        {/* Top Services */}
+        <Card className="shadow-clinic cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/reports?tab=services")}>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              Laporan Transaksi Layanan
+            </CardTitle>
+            <CardDescription>
+              Berdasarkan kuantitas yang terjual
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!topServices || topServices.length === 0 ? (
+              <div className="py-10 flex items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/30">
+                <p className="text-muted-foreground text-sm">Belum ada data penjualan layanan</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {topServices.slice(0, 5).map((service, idx) => (
+                  <div key={service.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/20 border-border">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-muted-foreground w-4">{idx + 1}</span>
+                      <div>
+                        <p className="font-medium text-sm">{service.name}</p>
+                        <p className="text-xs text-muted-foreground">{service.quantity} kali digunakan</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-sm text-primary">{formatPrice(service.revenue)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Top Products */}
+        <Card className="shadow-clinic cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/reports?tab=products")}>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5 text-primary" />
+              Laporan Penjualan Produk
+            </CardTitle>
+            <CardDescription>
+              Berdasarkan kuantitas yang terjual
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!topProducts || topProducts.length === 0 ? (
+              <div className="py-10 flex items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/30">
+                <p className="text-muted-foreground text-sm">Belum ada data penjualan produk</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {topProducts.slice(0, 5).map((product, idx) => (
+                  <div key={product.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/20 border-border">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-muted-foreground w-4">{idx + 1}</span>
+                      <div>
+                        <p className="font-medium text-sm">{product.name}</p>
+                        <p className="text-xs text-muted-foreground">{product.quantity} pcs terjual</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-sm text-primary">{formatPrice(product.revenue)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Low Stock Alerts */}
       {lowStockProducts.length > 0 && (
         <Card className="shadow-clinic mt-6 border-destructive/50">
@@ -471,8 +559,8 @@ export default function Dashboard() {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {lowStockProducts.slice(0, 6).map((product) => (
-                <div 
-                  key={product.id} 
+                <div
+                  key={product.id}
                   className="p-3 rounded-lg bg-destructive/10 border border-destructive/20"
                 >
                   <p className="font-medium text-sm">{product.name}</p>
@@ -484,8 +572,8 @@ export default function Dashboard() {
               ))}
             </div>
             {lowStockProducts.length > 6 && (
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="w-full mt-3"
                 onClick={() => navigate("/products")}
               >
@@ -497,8 +585,8 @@ export default function Dashboard() {
       )}
 
       {/* Patient Form Dialog */}
-      <PatientFormDialog 
-        open={isPatientFormOpen} 
+      <PatientFormDialog
+        open={isPatientFormOpen}
         onOpenChange={setIsPatientFormOpen}
         patient={null}
       />

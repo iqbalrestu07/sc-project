@@ -69,7 +69,11 @@ export function POSInterface() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>("");
   const [patientPopoverOpen, setPatientPopoverOpen] = useState(false);
+  const [patientSearch, setPatientSearch] = useState("");
+  const [patientPage, setPatientPage] = useState(1);
+  const [accumulatedPatients, setAccumulatedPatients] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+
   const [activeTab, setActiveTab] = useState<"services" | "products">("services");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [discount, setDiscount] = useState(0);
@@ -87,7 +91,28 @@ export function POSInterface() {
     nonce: number;
   } | null>(null);
 
-  const patientsQuery = usePatients();
+  const patientsQuery = usePatients(patientSearch, patientPage, 20);
+  
+  // Accumulate patients when page changes or search changes
+  useEffect(() => {
+    if (patientsQuery.data?.data) {
+      if (patientPage === 1) {
+        setAccumulatedPatients(patientsQuery.data.data);
+      } else {
+        setAccumulatedPatients(prev => {
+          // Prevent duplicates
+          const newPatients = patientsQuery.data!.data.filter(p => !prev.some(existing => existing.id === p.id));
+          return [...prev, ...newPatients];
+        });
+      }
+    }
+  }, [patientsQuery.data, patientPage]);
+
+  // Reset page when search changes
+  useEffect(() => {
+    setPatientPage(1);
+  }, [patientSearch]);
+
   const servicesQuery = useServices();
   const { products } = useProducts();
   const { doctors, therapists } = useStaff();
@@ -100,7 +125,7 @@ export function POSInterface() {
     isLoading: pendingGroupsLoading,
   } = useConsumableGroups(pendingService?.itemId ?? null);
 
-  const patients = patientsQuery.data?.data ?? [];
+  const patients = accumulatedPatients;
   const services = servicesQuery.data?.data ?? [];
 
   const filteredServices = services.filter((s) =>
@@ -497,9 +522,22 @@ export function POSInterface() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[300px] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search patient by name or code..." />
-                  <CommandList>
+                <Command shouldFilter={false}>
+                  <CommandInput 
+                    placeholder="Search patient by name or code..." 
+                    value={patientSearch}
+                    onValueChange={setPatientSearch}
+                  />
+                  <CommandList
+                    onScroll={(e) => {
+                      const target = e.target as HTMLDivElement;
+                      if (target.scrollHeight - target.scrollTop <= target.clientHeight + 10) {
+                        if (patientsQuery.data?.has_next && !patientsQuery.isFetching) {
+                          setPatientPage(p => p + 1);
+                        }
+                      }
+                    }}
+                  >
                     <CommandEmpty>No patient found.</CommandEmpty>
                     <CommandGroup>
                       {patients.map((patient) => (
@@ -523,6 +561,9 @@ export function POSInterface() {
                           </div>
                         </CommandItem>
                       ))}
+                      {patientsQuery.isFetching && (
+                        <div className="py-2 text-center text-xs text-muted-foreground">Loading...</div>
+                      )}
                     </CommandGroup>
                   </CommandList>
                 </Command>
