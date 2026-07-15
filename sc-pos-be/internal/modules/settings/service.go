@@ -10,7 +10,7 @@ import (
 // Service is the public interface for the settings module business logic.
 type Service interface {
 	GetClinic(orgID string) (*models.ClinicSettings, error)
-	GetClinicPublic() (*models.ClinicSettings, error)
+	GetClinicPublic(orgID string) (*models.ClinicSettings, error)
 	UpdateClinic(req models.ClinicSettings, orgID, userByID string) (*models.ClinicSettings, error)
 }
 
@@ -40,11 +40,10 @@ func (s *service) GetClinic(orgID string) (*models.ClinicSettings, error) {
 	return defaults, nil
 }
 
-// GetClinicPublic returns the first clinic settings without org filtering
-// and without auto-creating a default row.
-// Use this for public/unauthenticated endpoints (e.g. landing page).
-func (s *service) GetClinicPublic() (*models.ClinicSettings, error) {
-	return s.repo.GetFirstClinic()
+// GetClinicPublic returns clinic settings for a resolved public organization
+// without auto-creating a default row.
+func (s *service) GetClinicPublic(orgID string) (*models.ClinicSettings, error) {
+	return s.repo.GetClinic(orgID)
 }
 
 func (s *service) UpdateClinic(req models.ClinicSettings, orgID, userByID string) (*models.ClinicSettings, error) {

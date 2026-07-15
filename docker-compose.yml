@@ -42,6 +42,7 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
       BASE_URL: ${BACKEND_BASE_URL:-http://localhost:8080}
       UPLOAD_DIR: uploads/cms
+      DEFAULT_PUBLIC_ORG_SLUG: ${DEFAULT_PUBLIC_ORG_SLUG:-}
       WHATSAPP_API_URL: ${WHATSAPP_API_URL:-}
       WHATSAPP_API_TOKEN: ${WHATSAPP_API_TOKEN:-}
     volumes:

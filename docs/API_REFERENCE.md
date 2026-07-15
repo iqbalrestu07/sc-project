@@ -546,7 +546,22 @@ Upload logo. `multipart/form-data` field: `file`
 
 ### GET `/public/clinic-info`
 
-Info klinik publik (tanpa auth) — untuk landing page.
+Info klinik publik (tanpa auth) — untuk landing page. Query opsional: `?org=<organization-slug>`. Jika `org` tidak dikirim, backend memakai `DEFAULT_PUBLIC_ORG_SLUG`; bila variabel tersebut kosong, backend memilih organisasi aktif pertama.
+
+---
+
+## Public CMS Tenant Resolution
+
+Endpoint CMS publik menerima query opsional `?org=<organization-slug>`:
+
+```text
+GET /cms/pages/promotions?org=klinik-cantik
+GET /cms/pages/hero?org=klinik-cantik
+```
+
+Slug selalu di-resolve backend ke organisasi aktif sebelum query `cms_pages`; UUID organisasi tidak perlu dan tidak dipublikasikan. Jika slug tidak ditemukan atau organisasi nonaktif, response adalah `404`.
+
+Pada frontend, root `/` memakai organisasi default. Landing tenant spesifik menggunakan `/<organization-slug>`, misalnya `/klinik-cantik`, dan semua hook CMS/clinic info meneruskan slug tersebut sebagai query `org`.
 
 ---
 

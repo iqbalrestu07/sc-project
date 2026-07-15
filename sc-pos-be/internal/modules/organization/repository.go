@@ -69,6 +69,31 @@ func (r *Repository) GetBySlug(slug string) (*models.Organization, error) {
 	return &org, nil
 }
 
+func (r *Repository) GetPublicOrganization(slug string) (*models.Organization, error) {
+	query := `SELECT id, name, slug, description, logo_url, is_active, created_by, created_at, updated_at
+		FROM organizations
+		WHERE is_active = true AND deleted_at IS NULL`
+	args := []interface{}{}
+	if slug != "" {
+		query += ` AND slug = $1`
+		args = append(args, slug)
+	}
+	query += ` ORDER BY created_at ASC LIMIT 1`
+
+	var org models.Organization
+	err := r.db.QueryRow(query, args...).Scan(
+		&org.ID, &org.Name, &org.Slug, &org.Description, &org.LogoURL,
+		&org.IsActive, &org.CreatedBy, &org.CreatedAt, &org.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve public organization: %w", err)
+	}
+	return &org, nil
+}
+
 func (r *Repository) Update(org *models.Organization, userByID string) error {
 	query := `UPDATE organizations
 		SET name = $1, description = $2, logo_url = $3, updated_at = NOW(), updated_by = $4

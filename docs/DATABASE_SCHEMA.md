@@ -543,14 +543,17 @@ CREATE TABLE cms_pages (
     id              VARCHAR(36) PRIMARY KEY,
     page_id         VARCHAR(100) NOT NULL,    -- slug/identifier halaman (e.g. "home", "about")
     data            JSONB,                     -- konten halaman (schema bebas)
-    organization_id VARCHAR(36) NOT NULL REFERENCES organizations(id),
+    organization_id VARCHAR(36) REFERENCES organizations(id),
     created_by      VARCHAR(36),
     updated_by      VARCHAR(36),
     deleted_at      TIMESTAMP,
     created_at      TIMESTAMP   NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMP   NOT NULL DEFAULT NOW()
+    updated_at      TIMESTAMP   NOT NULL DEFAULT NOW(),
+    UNIQUE(page_id, organization_id)
 );
 ```
+
+`UNIQUE(page_id, organization_id)` membuat setiap tenant dapat menyimpan page yang sama, misalnya `promotions`, tanpa menimpa tenant lain. Row legacy dengan `organization_id = NULL` tetap dapat menjadi fallback saat tenant belum memiliki page CMS sendiri; row tenant selalu diprioritaskan saat dibaca.
 
 ---
 

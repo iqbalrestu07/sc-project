@@ -108,6 +108,21 @@ await switchOrg(selectedOrg);
 
 ---
 
+## Public Tenant Landing Flow
+
+Landing page publik memakai slug organisasi sebagai identifier tenant:
+
+```text
+/                    → DEFAULT_PUBLIC_ORG_SLUG
+/klinik-cantik       → org=klinik-cantik
+```
+
+Hook CMS dan clinic-info mengirim slug melalui query parameter `org`. Backend memvalidasi bahwa slug menunjuk ke organisasi aktif, menerjemahkannya menjadi `organization_id`, lalu mengakses `cms_pages` dan `clinic_settings` dengan UUID internal. UUID organisasi tidak diekspos pada URL publik.
+
+Jika `DEFAULT_PUBLIC_ORG_SLUG` belum diatur, backend menggunakan organisasi aktif pertama untuk kompatibilitas. Konfigurasi production sebaiknya selalu mengatur slug default secara eksplisit.
+
+---
+
 ## RBAC — Permission Flow
 
 ```

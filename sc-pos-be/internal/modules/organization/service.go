@@ -2,6 +2,8 @@ package organization
 
 import (
 	"errors"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,6 +22,7 @@ var (
 type Service interface {
 	CreateOrg(name, description, createdBy string) (*models.Organization, error)
 	GetByID(id string) (*models.Organization, error)
+	ResolvePublicOrganization(slug string) (*models.Organization, error)
 	Update(org *models.Organization, userByID string) error
 	Delete(orgID, userByID string) error
 	GetUserOrganizations(userID string) ([]models.OrganizationWithRole, error)
@@ -69,6 +72,22 @@ func (s *service) CreateOrg(name, description, createdBy string) (*models.Organi
 
 func (s *service) GetByID(id string) (*models.Organization, error) {
 	org, err := s.repo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if org == nil {
+		return nil, ErrOrgNotFound
+	}
+	return org, nil
+}
+
+func (s *service) ResolvePublicOrganization(slug string) (*models.Organization, error) {
+	slug = strings.TrimSpace(slug)
+	if slug == "" {
+		slug = strings.TrimSpace(os.Getenv("DEFAULT_PUBLIC_ORG_SLUG"))
+	}
+
+	org, err := s.repo.GetPublicOrganization(slug)
 	if err != nil {
 		return nil, err
 	}

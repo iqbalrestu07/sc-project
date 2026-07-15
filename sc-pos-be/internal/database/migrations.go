@@ -24,6 +24,7 @@ func RunMigrations() error {
 		addWhatsappTables,
 		addOmnichannelTables,
 		addServiceConsumableGroups,
+		migrateCmsPagesTenantUnique,
 	}
 
 	for i, migration := range migrations {
@@ -422,7 +423,7 @@ CREATE TABLE IF NOT EXISTS cms_pages (
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-	UNIQUE(page_id)
+	UNIQUE(page_id, organization_id)
 );
 
 -- ── Inventory and service consumables ─────────────────────────────────────
@@ -757,6 +758,31 @@ CREATE INDEX IF NOT EXISTS idx_scgi_active    ON service_consumable_group_items(
 -- Track which specific consumable product was used for a service item
 ALTER TABLE transaction_items
     ADD COLUMN IF NOT EXISTS selected_consumable_product_id VARCHAR(36) REFERENCES products(id);
+`
+
+const migrateCmsPagesTenantUnique = `
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'cms_pages'::regclass
+          AND conname = 'cms_pages_page_id_key'
+    ) THEN
+        ALTER TABLE cms_pages DROP CONSTRAINT cms_pages_page_id_key;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'cms_pages'::regclass
+          AND conname = 'cms_pages_page_id_organization_id_key'
+    ) THEN
+        ALTER TABLE cms_pages
+            ADD CONSTRAINT cms_pages_page_id_organization_id_key
+            UNIQUE (page_id, organization_id);
+    END IF;
+END $$;
 `
 
 const addOmnichannelTables = `

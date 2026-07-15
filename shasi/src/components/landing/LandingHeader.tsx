@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -15,6 +15,7 @@ const COLORS = {
 };
 
 export function LandingHeader() {
+  const { orgSlug } = useParams<{ orgSlug?: string }>();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -55,7 +56,7 @@ export function LandingHeader() {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3">
+          <Link to={orgSlug ? `/${orgSlug}` : "/"} className="flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center"
               style={{

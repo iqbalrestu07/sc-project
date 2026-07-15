@@ -189,6 +189,8 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
 
+      <Route path="/:orgSlug" element={<LandingPage />} />
+
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />
     </Routes>

@@ -27,7 +27,13 @@ func NewRepository() *Repository {
 }
 
 func (r *Repository) ListPages(orgID string) ([]Page, error) {
-	rows, err := r.db.Query(`SELECT id, page_id, data, created_at, updated_at FROM cms_pages WHERE (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL)) AND deleted_at IS NULL ORDER BY page_id ASC`, orgID)
+	rows, err := r.db.Query(`
+		SELECT DISTINCT ON (page_id) id, page_id, data, created_at, updated_at
+		FROM cms_pages
+		WHERE (organization_id = $1 OR organization_id IS NULL)
+		  AND deleted_at IS NULL
+		ORDER BY page_id ASC, (organization_id = $1) DESC, updated_at DESC
+	`, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query cms pages: %w", err)
 	}
@@ -51,7 +57,15 @@ func (r *Repository) ListPages(orgID string) ([]Page, error) {
 }
 
 func (r *Repository) GetPage(pageID, orgID string) (*Page, error) {
-	row := r.db.QueryRow(`SELECT id, page_id, data, created_at, updated_at FROM cms_pages WHERE page_id = $1 AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL)) AND deleted_at IS NULL`, pageID, orgID)
+	row := r.db.QueryRow(`
+		SELECT id, page_id, data, created_at, updated_at
+		FROM cms_pages
+		WHERE page_id = $1
+		  AND (organization_id = $2 OR organization_id IS NULL)
+		  AND deleted_at IS NULL
+		ORDER BY (organization_id = $2) DESC, updated_at DESC
+		LIMIT 1
+	`, pageID, orgID)
 	page, err := scanPage(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -70,7 +84,7 @@ func (r *Repository) UpsertPage(pageID, orgID string, data interface{}, userID s
 	_, err = r.db.Exec(`
 		INSERT INTO cms_pages (id, page_id, data, organization_id, created_by, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		ON CONFLICT (page_id)
+		ON CONFLICT (page_id, organization_id)
 		DO UPDATE SET data = EXCLUDED.data, updated_by = $5, updated_at = CURRENT_TIMESTAMP
 	`, uuid.New().String(), pageID, string(payload), orgID, nullableString(userID))
 	if err != nil {

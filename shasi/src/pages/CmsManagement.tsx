@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { ImageUpload } from "@/components/cms";
 import { 
   Sparkles, 
@@ -32,84 +33,94 @@ import type { CmsHero, CmsAbout, CmsCta, CmsContact, CmsPromotion, CmsTestimonia
 
 export default function CmsManagement() {
   const { toast } = useToast();
+  const { activeOrg } = useAuth();
   const queryClient = useQueryClient();
+  const publicOrgParams = activeOrg ? { org: activeOrg.slug } : undefined;
 
   // Fetch all CMS data
   const { data: hero, isLoading: heroLoading } = useQuery({
-    queryKey: ["cms-hero-admin"],
+    queryKey: ["cms-hero-admin", activeOrg?.slug],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<CmsHero>>(
-        API_ENDPOINTS.CMS.PAGE_DETAIL("hero")
+        API_ENDPOINTS.CMS.PAGE_DETAIL("hero"),
+        publicOrgParams
       );
       return res.data || null;
     },
   });
 
   const { data: about } = useQuery({
-    queryKey: ["cms-about-admin"],
+    queryKey: ["cms-about-admin", activeOrg?.slug],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<CmsAbout>>(
-        API_ENDPOINTS.CMS.PAGE_DETAIL("about")
+        API_ENDPOINTS.CMS.PAGE_DETAIL("about"),
+        publicOrgParams
       );
       return res.data || null;
     },
   });
 
   const { data: cta } = useQuery({
-    queryKey: ["cms-cta-admin"],
+    queryKey: ["cms-cta-admin", activeOrg?.slug],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<CmsCta>>(
-        API_ENDPOINTS.CMS.PAGE_DETAIL("cta")
+        API_ENDPOINTS.CMS.PAGE_DETAIL("cta"),
+        publicOrgParams
       );
       return res.data || null;
     },
   });
 
   const { data: contact } = useQuery({
-    queryKey: ["cms-contact-admin"],
+    queryKey: ["cms-contact-admin", activeOrg?.slug],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<CmsContact>>(
-        API_ENDPOINTS.CMS.PAGE_DETAIL("contact")
+        API_ENDPOINTS.CMS.PAGE_DETAIL("contact"),
+        publicOrgParams
       );
       return res.data || null;
     },
   });
 
   const { data: promotions } = useQuery({
-    queryKey: ["cms-promotions-admin"],
+    queryKey: ["cms-promotions-admin", activeOrg?.slug],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<CmsPromotion[]>>(
-        API_ENDPOINTS.CMS.PAGE_DETAIL("promotions")
+        API_ENDPOINTS.CMS.PAGE_DETAIL("promotions"),
+        publicOrgParams
       );
       return res.data || [];
     },
   });
 
   const { data: testimonials } = useQuery({
-    queryKey: ["cms-testimonials-admin"],
+    queryKey: ["cms-testimonials-admin", activeOrg?.slug],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<CmsTestimonial[]>>(
-        API_ENDPOINTS.CMS.PAGE_DETAIL("testimonials")
+        API_ENDPOINTS.CMS.PAGE_DETAIL("testimonials"),
+        publicOrgParams
       );
       return res.data || [];
     },
   });
 
   const { data: servicesOverview } = useQuery({
-    queryKey: ["cms-services-overview-admin"],
+    queryKey: ["cms-services-overview-admin", activeOrg?.slug],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<CmsServiceOverview[]>>(
-        API_ENDPOINTS.CMS.PAGE_DETAIL("services-overview")
+        API_ENDPOINTS.CMS.PAGE_DETAIL("services-overview"),
+        publicOrgParams
       );
       return res.data || [];
     },
   });
 
   const { data: gallery } = useQuery({
-    queryKey: ["cms-gallery-admin"],
+    queryKey: ["cms-gallery-admin", activeOrg?.slug],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<CmsGallery[]>>(
-        API_ENDPOINTS.CMS.PAGE_DETAIL("gallery")
+        API_ENDPOINTS.CMS.PAGE_DETAIL("gallery"),
+        publicOrgParams
       );
       return res.data || [];
     },

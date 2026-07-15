@@ -195,6 +195,21 @@ const total = patientsQuery.data?.total; // tersedia untuk usePatients(..., true
 
 ---
 
+## Public Tenant Landing Routes
+
+Landing page mendukung dua bentuk URL:
+
+```text
+/                    → organisasi default dari backend
+/<organization-slug> → landing page tenant tertentu, contoh: /klinik-cantik
+```
+
+`useCmsData` dan `usePublicClinicInfo` membaca `orgSlug` melalui React Router lalu meneruskannya sebagai parameter `org` ke endpoint publik. Query key juga mencakup slug agar cache tenant tidak tertukar.
+
+Route aplikasi yang statis seperti `/dashboard`, `/cms`, `/products`, dan `/admin/login` tetap memiliki prioritas lebih tinggi daripada route dynamic `/:orgSlug`.
+
+---
+
 ## AuthContext — Pusat Auth State
 
 `AuthContext` menyediakan state auth global. Akses via `useAuth()` hook:

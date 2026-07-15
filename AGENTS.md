@@ -10,14 +10,14 @@
 > File-file berikut di `docs/` berisi dokumentasi lebih lengkap dan terstruktur.
 > Baca dokumen yang relevan sesuai task yang dikerjakan.
 
-| Dokumen | Kapan Dibaca |
-|---------|-------------|
-| [`docs/BACKEND_STRUCTURE.md`](docs/BACKEND_STRUCTURE.md) | Sebelum membuat/edit kode backend |
-| [`docs/FRONTEND_STRUCTURE.md`](docs/FRONTEND_STRUCTURE.md) | Sebelum membuat/edit kode frontend |
-| [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md) | Debugging integrasi, auth, org context |
-| [`docs/CREATING_NEW_FEATURE.md`](docs/CREATING_NEW_FEATURE.md) | Step-by-step membuat fitur baru |
-| [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) | Referensi schema tabel, tipe data, index |
-| [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md) | Referensi semua endpoint + request/response |
+| Dokumen                                                        | Kapan Dibaca                                |
+| -------------------------------------------------------------- | ------------------------------------------- |
+| [`docs/BACKEND_STRUCTURE.md`](docs/BACKEND_STRUCTURE.md)       | Sebelum membuat/edit kode backend           |
+| [`docs/FRONTEND_STRUCTURE.md`](docs/FRONTEND_STRUCTURE.md)     | Sebelum membuat/edit kode frontend          |
+| [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md)       | Debugging integrasi, auth, org context      |
+| [`docs/CREATING_NEW_FEATURE.md`](docs/CREATING_NEW_FEATURE.md) | Step-by-step membuat fitur baru             |
+| [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md)           | Referensi schema tabel, tipe data, index    |
+| [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)               | Referensi semua endpoint + request/response |
 
 ---
 
@@ -51,7 +51,8 @@ Terdiri dari dua sub-project dalam satu monorepo:
 ```
 sc-pos-be/
 ├── main.go                         # Entry point
-├── config/config.go                # Load env vars
+├── config/
+│   └── config.go                    # Load env vars
 ├── internal/
 │   ├── auth/jwt.go                 # JWT sign/verify + bcrypt
 │   ├── database/
@@ -85,9 +86,15 @@ sc-pos-be/
 │   │   ├── dashboard/
 │   │   ├── settings/
 │   │   ├── cms/
-│   │   ├── whatsapp/
-│   │   ├── stock/                  # stock_movements
-│   │   └── consumable/             # service_consumables
+│   │   ├── whatsapp/               # WhatsApp multi-device + templates
+│   │   ├── omnichannel/            # Chat omnichannel via WebSocket
+│   │   ├── organization/            # Organization CRUD + member management
+│   │   ├── rbac/                    # Permission management
+│   │   ├── stock/                   # stock_movements
+│   │   ├── consumable/              # legacy service_consumables
+│   │   ├── service_package/         # consumable groups + alternatif produk service
+│   │   ├── consumable_item/         # Produk habis pakai + usage logs
+│   │   └── migration/               # Import Excel bulk data
 │   ├── routes/routes.go            # Central router setup
 │   └── utils/response.go          # Standard JSON response helpers
 ```
@@ -119,6 +126,7 @@ DB_SSLMODE=disable
 JWT_SECRET_KEY=your-secret-key-change-in-production
 UPLOAD_DIR=uploads/cms          # opsional, default: uploads/cms
 BASE_URL=http://localhost:8080   # untuk generate URL upload
+DEFAULT_PUBLIC_ORG_SLUG=         # slug tenant untuk landing root (/); fallback org aktif pertama
 WHATSAPP_API_URL=               # opsional: endpoint eksternal WA
 WHATSAPP_API_TOKEN=             # opsional: token API WA
 ```
@@ -149,8 +157,10 @@ Semua endpoint menggunakan `utils.SuccessResponse` / `utils.ErrorResponse`:
 // Error
 { "success": false, "error": "pesan error" }
 
-// List (dengan pagination)
-{ "success": true, "data": [...], "total": 100, "page": 1, "limit": 20 }
+// List (pagination)
+{ "success": true, "data": [...], "has_next": true, "page": 1, "limit": 20 }
+// Umumnya backend tidak mengirim total. Exception: GET /patients?has_whatsapp=true
+// menyertakan total recipient WhatsApp.
 
 // Auth
 { "success": true, "access_token": "...", "user": {...} }
@@ -281,6 +291,8 @@ Request body update-status:
 { "ids": ["uuid1", "uuid2"], "status": "paid" }
 ```
 
+Services dan products mendukung dua rate komisi: **handling** (`*_commission_*`) untuk PIC, dan **offering** (`*_offering_commission_*`) yang opsional. Ketika `commission_eligible=true` dan rate offering tersedia pada transaction item, offering menggantikan handling agar tidak ada double commission.
+
 #### Dashboard
 
 | Method | Path                            | Permission     | Notes                                           |
@@ -297,10 +309,12 @@ Query stats "hari ini" juga dihitung dalam WIB, bukan UTC server.
 
 #### CMS (public)
 
-| Method | Path                 |
-| ------ | -------------------- |
-| GET    | `/cms/pages`         |
-| GET    | `/cms/pages/:pageId` |
+| Method | Path                 | Notes                               |
+| ------ | -------------------- | ----------------------------------- |
+| GET    | `/cms/pages`         | `?org=<organization-slug>` opsional |
+| GET    | `/cms/pages/:pageId` | `?org=<organization-slug>` opsional |
+
+Public CMS selalu resolve slug menjadi organisasi aktif sebelum query data. Bila parameter `org` kosong, backend memakai `DEFAULT_PUBLIC_ORG_SLUG`; jika variabel kosong, fallback ke organisasi aktif pertama. CMS page unik per `(page_id, organization_id)`, sehingga tenant dapat memiliki `hero`, `promotions`, dan page yang sama secara terpisah.
 
 #### CMS (protected admin)
 
@@ -344,21 +358,29 @@ Request body POST:
 
 #### Service Consumables
 
-| Method | Path                       | Role  | Notes                                             |
-| ------ | -------------------------- | ----- | ------------------------------------------------- |
-| GET    | `/service-consumables`     | Semua | `?service_id=uuid` opsional                       |
-| POST   | `/service-consumables`     | Admin | body: `{ service_id, product_id, quantity_used }` |
-| DELETE | `/service-consumables/:id` | Admin |                                                   |
+`/service-consumables` adalah mapping legacy satu produk per service. Konfigurasi baru menggunakan consumable groups:
+
+| Method     | Path                                | Permission       | Notes                     |
+| ---------- | ----------------------------------- | ---------------- | ------------------------- |
+| GET        | `/services/:id/consumable-groups`   | `services:read`  | Group + produk alternatif |
+| POST       | `/services/:id/consumable-groups`   | `services:write` | Buat kebutuhan konsumabel |
+| PUT/DELETE | `/consumable-groups/:groupId`       | `services:write` | Ubah/hapus group          |
+| POST       | `/consumable-groups/:groupId/items` | `services:write` | Tambah alternatif         |
+| DELETE     | `/consumable-group-items/:itemId`   | `services:write` | Hapus alternatif          |
+
+POS mengirim satu `selected_consumable_product_id` per transaction item. Stok pilihan itu divalidasi dan dikurangi saat pembayaran; beberapa group per service belum didukung penuh oleh payload transaksi.
 
 #### WhatsApp
 
-| Method | Path                  | Notes                                                                      |
-| ------ | --------------------- | -------------------------------------------------------------------------- |
-| POST   | `/whatsapp/send`      | `{ "to": "+628...", "message": "..." }`                                    |
-| POST   | `/whatsapp/send-bulk` | `{ "recipients": [{"to":"...", "patient_name":"..."}], "message": "..." }` |
-| GET    | `/whatsapp/templates` | List template pesan                                                        |
-
-Jika `WHATSAPP_API_URL` tidak diset, endpoint ini hanya simulasi (tidak benar-benar kirim).
+| Method              | Path                  | Notes                                |
+| ------------------- | --------------------- | ------------------------------------ |
+| GET                 | `/whatsapp/devices`   | Daftar device organisasi             |
+| GET                 | `/whatsapp/login`     | QR login device                      |
+| POST                | `/whatsapp/logout`    | Logout device                        |
+| POST                | `/whatsapp/send`      | Kirim pesan individual               |
+| POST                | `/whatsapp/send-bulk` | Kirim bulk recipient                 |
+| POST                | `/whatsapp/blast`     | Blast memakai template dan recipient |
+| GET/POST/PUT/DELETE | `/whatsapp/templates` | Kelola template pesan                |
 
 ---
 
@@ -380,15 +402,16 @@ user_permissions     -- extra grant per user per org (id, user_id, org_id, permi
 service_categories   -- (id, name, description, is_active, organization_id,
                      --   created_by, updated_by, deleted_at, created_at, updated_at)
 services             -- (id, name, category_id, description, duration_minutes, base_price,
-                     --   doctor_commission_type, doctor_commission_value,
-                     --   therapist_commission_type, therapist_commission_value, requires_doctor,
+                     --   doctor/therapist handling commission fields,
+                     --   doctor/therapist offering commission fields, requires_doctor,
                      --   is_active, organization_id, created_by, updated_by, deleted_at,
                      --   created_at, updated_at)
 product_categories   -- (id, name, description, is_active, organization_id,
                      --   created_by, updated_by, deleted_at, created_at, updated_at)
 products             -- (id, name, category, sku, supplier, purchase_price, selling_price,
-                     --   current_stock, minimum_stock, unit, expiry_date, is_active,
-                     --   organization_id, created_by, updated_by, deleted_at, created_at, updated_at)
+                     --   current_stock, minimum_stock, unit, expiry_date, is_active, is_consumable,
+                     --   handling/offering commission fields, organization_id, created_by, updated_by,
+                     --   deleted_at, created_at, updated_at)
 staff                -- (id, user_id, full_name, role, phone, email, specialization,
                      --   is_active, organization_id, created_by, updated_by, deleted_at,
                      --   created_at, updated_at)
@@ -404,11 +427,12 @@ transactions         -- (id, transaction_code, appointment_id, patient_id, subto
                      --   payment_method, payment_status, notes, paid_at, organization_id,
                      --   created_by, updated_by, deleted_at, created_at, updated_at)
 transaction_items    -- (id, transaction_id, item_type, service_id, product_id, quantity,
-                     --   unit_price, discount_amount, total_price, doctor_id, therapist_id,
+                     --   unit_price, discount_amount, discount_type, total_price, doctor_id, therapist_id,
+                     --   commission_eligible, commission_notes, selected_consumable_product_id,
                      --   organization_id, created_by, updated_by, deleted_at, created_at)
 commissions          -- (id, staff_id, staff_role, transaction_id, transaction_item_id,
                      --   base_amount, commission_type, commission_value, commission_amount,
-                     --   status, organization_id, created_by, updated_by, deleted_at,
+                     --   commission_reason, status, organization_id, created_by, updated_by, deleted_at,
                      --   created_at, updated_at)
 clinic_settings      -- (id, clinic_name, address, phone, email, tax_rate, tax_inclusive,
                      --   low_stock_alerts, appointment_reminders, expiry_warnings,
@@ -417,12 +441,12 @@ clinic_settings      -- (id, clinic_name, address, phone, email, tax_rate, tax_i
                      --   invoice_header_description, invoice_footer_text, organization_id,
                      --   created_by, updated_by, deleted_at, created_at, updated_at)
 cms_pages            -- (id, page_id, data JSONB, organization_id, created_by, updated_by,
-                     --   deleted_at, created_at, updated_at)
+                     --   deleted_at, created_at, updated_at), UNIQUE(page_id, organization_id)
 stock_movements      -- (id, product_id, movement_type, quantity, reason, reference_id,
                      --   reference_type, notes, organization_id, created_by, created_at)
-service_consumables  -- (id, service_id, product_id, quantity_used, organization_id, created_by,
-                     --   updated_by, deleted_at, created_at, updated_at)
-                     --   UNIQUE(service_id, product_id)
+service_consumables  -- legacy mapping (id, service_id, product_id, quantity_used, ...)
+service_consumable_groups -- kebutuhan konsumabel service (id, service_id, name, quantity_used, ...)
+service_consumable_group_items -- alternatif produk group (id, group_id, product_id, priority, ...)
 ```
 
 ### Notes Penting DB
@@ -492,29 +516,44 @@ shasi/src/
 │   ├── useCommissions.ts
 │   ├── useCmsData.ts
 │   ├── useClinicSettings.ts
-│   ├── useDashboard.ts         # (baru) Stats, Revenue, AppointmentsToday dari backend
-│   └── useDebounce.ts
+│   ├── useDashboard.ts
+│   ├── useConsumableGroups.ts
+│   ├── useConsumableItems.ts
+│   ├── useOmniChat.ts
+│   ├── usePublicClinicInfo.ts
+│   ├── useDebounce.ts
+│   ├── use-mobile.tsx
+│   └── use-toast.ts
 ├── types/
 │   ├── product.ts              # Interface Product (manual, aligned dengan Go model)
 │   ├── service.ts              # Interface Service, ServiceCategory, re-export Product
-│   └── cms.ts                  # CMS types
+│   ├── transaction.ts          # Transaction, TransactionItem, CartItem
+│   ├── consumable.ts           # Consumable item types
+│   ├── consumable_group.ts     # Service consumable groups + alternative products
+│   ├── cms.ts                  # CMS types
+│   ├── whatsapp.ts             # WhatsApp types
+│   └── omni.ts                 # Omnichannel types
 ├── components/
 │   ├── layout/                 # MainLayout, Sidebar, PageHeader
 │   ├── auth/ProtectedRoute.tsx # Guard route dengan role check
 │   ├── patients/               # PatientFormDialog, PatientList
 │   ├── appointments/           # AppointmentCalendar, AppointmentFormDialog
-│   ├── services/               # ServiceFormDialog, ServiceList
+│   ├── services/               # Form/detail service + consumable group editor
 │   ├── products/               # ProductFormDialog, ProductList
 │   ├── staff/                  # StaffFormDialog, StaffList
-│   ├── pos/POSInterface.tsx    # Antarmuka kasir/POS
+│   ├── transactions/           # Detail transaksi + receipt
+│   ├── pos/                    # POS + pilihan consumable
 │   ├── cms/ImageUpload.tsx     # Upload gambar ke backend (multipart)
+│   ├── whatsapp/               # Komponen WhatsApp
 │   ├── filters/DateRangeFilter.tsx
 │   ├── landing/                # Semua section landing page publik
 │   └── ui/                     # shadcn components (jangan edit manual)
 └── pages/
-    ├── LandingPage.tsx         # Public landing page (/)
+    ├── LandingPage.tsx         # Public landing page (/ atau /:orgSlug)
     ├── Auth.tsx                # Login page (/admin/login)
+    ├── Onboarding.tsx          # Buat/join organisasi pertama
     ├── Dashboard.tsx           # /dashboard
+    ├── Reports.tsx             # /reports
     ├── Patients.tsx            # /patients
     ├── PatientDetail.tsx       # /patients/:id
     ├── Appointments.tsx        # /appointments
@@ -524,8 +563,13 @@ shasi/src/
     ├── Transactions.tsx        # /transactions
     ├── Commissions.tsx         # /commissions
     ├── Staff.tsx               # /staff (admin only)
+    ├── Members.tsx             # /members
     ├── Settings.tsx            # /settings (admin only)
-    ├── WhatsAppMessaging.tsx   # /whatsapp
+    ├── StockOpname.tsx         # /stock-opname
+    ├── ImportExcel.tsx         # /import-excel
+    ├── ConsumableItems/        # /consumable-items
+    ├── Messaging/              # /messaging
+    ├── RBACManagement.tsx      # /rbac
     ├── CmsManagement.tsx       # /cms (admin only)
     └── NotFound.tsx
 ```
@@ -558,15 +602,15 @@ await apiClient.put(API_ENDPOINTS.PATIENTS.UPDATE(id), updates);
 // DELETE
 await apiClient.delete(API_ENDPOINTS.PATIENTS.DELETE(id));
 
-// File upload (multipart) — gunakan fetch langsung karena apiClient pakai application/json
-const token = apiClient.getAccessToken();
+// File upload (multipart) — gunakan apiClient.postForm agar Authorization dan
+// X-Organization-ID dari interceptor tetap dikirim.
 const formData = new FormData();
 formData.append("file", file);
-const response = await fetch(`${baseURL}${API_ENDPOINTS.CMS.UPLOAD_IMAGE}`, {
-  method: "POST",
-  headers: { Authorization: `Bearer ${token}` },
-  body: formData,
-});
+formData.append("folder", "promotions");
+const response = await apiClient.postForm(
+  API_ENDPOINTS.CMS.UPLOAD_IMAGE,
+  formData,
+);
 ```
 
 Token disimpan di `localStorage`:
@@ -579,26 +623,27 @@ Jika refresh gagal → redirect ke `/admin/login`.
 
 ### 4.4 Route Pages & Akses
 
-| Path            | Page              | Role yang boleh akses    |
-| --------------- | ----------------- | ------------------------ |
-| `/`             | LandingPage       | Public                   |
-| `/admin/login`  | Auth              | Public                   |
-| `/dashboard`    | Dashboard         | `reports:read`           |
-| `/patients`     | Patients          | admin, doctor, therapist |
-| `/patients/:id` | PatientDetail     | admin, doctor, therapist |
-| `/appointments` | Appointments      | Semua                    |
-| `/services`     | Services          | admin                    |
-| `/products`     | Products          | admin                    |
-| `/categories`   | Categories        | admin                    |
-| `/pos`          | POS               | Semua                    |
-| `/transactions` | Transactions      | admin, cashier           |
-| `/commissions`  | Commissions       | admin, doctor, therapist |
-| `/staff`        | Staff             | admin                    |
-| `/members`      | Members           | admin (org admin)        |
-| `/settings`     | Settings          | admin                    |
-| `/whatsapp`     | WhatsAppMessaging | admin, cashier           |
-| `/cms`          | CmsManagement     | admin                    |
-| `/rbac`         | RBACManagement    | admin                    |
+| Path            | Page              | Role yang boleh akses           |
+| --------------- | ----------------- | ------------------------------- |
+| `/`             | LandingPage       | Public; default public org      |
+| `/:orgSlug`     | LandingPage       | Public; tenant berdasarkan slug |
+| `/admin/login`  | Auth              | Public                          |
+| `/dashboard`    | Dashboard         | `reports:read`                  |
+| `/patients`     | Patients          | admin, doctor, therapist        |
+| `/patients/:id` | PatientDetail     | admin, doctor, therapist        |
+| `/appointments` | Appointments      | Semua                           |
+| `/services`     | Services          | admin                           |
+| `/products`     | Products          | admin                           |
+| `/categories`   | Categories        | admin                           |
+| `/pos`          | POS               | Semua                           |
+| `/transactions` | Transactions      | admin, cashier                  |
+| `/commissions`  | Commissions       | admin, doctor, therapist        |
+| `/staff`        | Staff             | admin                           |
+| `/members`      | Members           | admin (org admin)               |
+| `/settings`     | Settings          | admin                           |
+| `/whatsapp`     | WhatsAppMessaging | admin, cashier                  |
+| `/cms`          | CmsManagement     | admin                           |
+| `/rbac`         | RBACManagement    | admin                           |
 
 **Default redirect setelah login:** berdasarkan role organisasi aktif:
 
@@ -693,12 +738,12 @@ User klik "Bayar" di POS.tsx
 
 - [ ] `settings/handler.go` → `UploadLogo()` — belum implementasi upload nyata (masih return empty)
 - [ ] `appointment/handler.go` → `AvailableSlots()` — perlu cek jadwal staff
-- [ ] Pagination — semua endpoint LIST belum ada pagination (`page`, `limit` query params)
+- [ ] Filter lanjutan transactions (`from`, `to`, `status`) — endpoint list saat ini baru mendukung `page` dan `limit`
 
 ### Fungsionalitas Frontend yang belum ada
 
 - [ ] Form untuk `stock_movements` (tambah stok manual) di halaman Products
-- [ ] UI untuk `service_consumables` (link produk ke layanan) di halaman Services
+- [ ] Dukungan selection transaksi per consumable group; implementasi saat ini hanya menyimpan satu selected product per transaction item
 - [ ] `reminder_opt_in` toggle di form patient
 - [ ] WhatsApp bulk reminder menggunakan `SEND_BULK` endpoint (sekarang masih loop individual)
 - [ ] Export data (PDF/Excel) untuk laporan transaksi dan komisi
@@ -759,7 +804,8 @@ go test ./...                     # run tests (belum ada test files)
 cd shasi
 npm run dev                       # dev server
 npm run build                     # production build
-npx tsc --noEmit --ignoreDeprecations 5.0  # typecheck
+npx tsc -p tsconfig.app.json --noEmit      # typecheck menyeluruh
+npm run lint                                # lint frontend
 
 # Database (contoh psql)
 psql -U postgres -d sc_pos        # connect
@@ -871,7 +917,7 @@ ca2cdde - Add AGENTS.md
 
 ---
 
-_Terakhir diupdate: commit d3a2814 — commissions missing organization_id fix_
+_Terakhir diupdate: 2026-07-15 — CMS multi-tenant public slug, consumable groups, pagination, dan dual commission_
 
 ---
 
@@ -1105,10 +1151,11 @@ Default role assignments (role_permissions):
 
 ### 5.1 Verifikasi TypeScript (Khusus Frontend Vite)
 
-Pada project berbasis **Vite + React + TypeScript** yang menggunakan arsitektur TypeScript 5 References (`tsconfig.json` memiliki `"files": []`), perintah standar `npx tsc --noEmit` **TIDAK AKAN** mengecek kode sumber (`src/`) secara menyeluruh. Hal ini dapat menyebabkan lolosnya error seperti *missing imports*, *undefined props*, atau masalah *type* lainnya (terutama saat memecah/modularisasi file).
+Pada project berbasis **Vite + React + TypeScript** yang menggunakan arsitektur TypeScript 5 References (`tsconfig.json` memiliki `"files": []`), perintah standar `npx tsc --noEmit` **TIDAK AKAN** mengecek kode sumber (`src/`) secara menyeluruh. Hal ini dapat menyebabkan lolosnya error seperti _missing imports_, _undefined props_, atau masalah _type_ lainnya (terutama saat memecah/modularisasi file).
 
 **ATURAN WAJIB SAAT REFACTOR / MODULARISASI:**
 Untuk melakukan pengecekan secara komprehensif, pastikan Anda menggunakan file konfigurasi yang benar:
+
 ```bash
 # Lakukan pengecekan menyeluruh pada direktori frontend (shasi)
 npx tsc -p tsconfig.app.json --noEmit
@@ -1116,4 +1163,5 @@ npx tsc -p tsconfig.app.json --noEmit
 # Jangan lupa untuk juga menjalankan linter
 npm run lint
 ```
-Selalu jalankan perintah ini setelah mengekstrak, memecah file monolitik, atau mengubah *props* antar komponen agar aplikasi dijamin stabil secara tipe (type-safe) dan terbebas dari *ReferenceError* atau variabel tidak terdefinisi di runtime.
+
+Selalu jalankan perintah ini setelah mengekstrak, memecah file monolitik, atau mengubah _props_ antar komponen agar aplikasi dijamin stabil secara tipe (type-safe) dan terbebas dari _ReferenceError_ atau variabel tidak terdefinisi di runtime.

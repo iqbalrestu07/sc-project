@@ -200,6 +200,18 @@ Saat transaksi dibayar, `transaction.Repository.MarkPaidEffects` menjalankan sem
 
 ---
 
+## Public Tenant Resolution
+
+Public landing data is isolated by organization slug rather than exposing an organization UUID. CMS and clinic-info public endpoints accept `?org=<slug>`; the organization module resolves an active slug to its internal UUID before CMS or settings queries run.
+
+- When `org` is supplied, an unknown or inactive slug returns `404`.
+- When `org` is absent, `DEFAULT_PUBLIC_ORG_SLUG` is used.
+- If that variable is empty, the oldest active organization is used as the compatibility fallback.
+- CMS pages are unique per `(page_id, organization_id)`, so each organization can own `hero`, `promotions`, and other standard page IDs independently.
+- Legacy CMS rows with `organization_id = NULL` remain readable as a fallback when the resolved organization does not have its own row.
+
+---
+
 ## Middleware Stack
 
 ```

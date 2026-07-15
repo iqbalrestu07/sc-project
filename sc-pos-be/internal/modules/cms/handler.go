@@ -1,6 +1,7 @@
 package cms
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,23 +12,28 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	orgModule "github.com/sc-pos/backend/internal/modules/organization"
 	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Handler struct {
-	service Service
+	service    Service
+	orgService orgModule.Service
 }
 
-func NewHandler(service Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service Service, orgService orgModule.Service) *Handler {
+	return &Handler{service: service, orgService: orgService}
 }
 
 func NewModule() *Handler {
-	return NewHandler(NewService(NewRepository()))
+	return NewHandler(NewService(NewRepository()), orgModule.NewService(orgModule.NewRepository()))
 }
 
 func (h *Handler) ListPages(c *gin.Context) {
-	orgID := c.GetString("org_id")
+	orgID, ok := h.resolvePublicOrgID(c)
+	if !ok {
+		return
+	}
 	pageID := c.Query("page")
 	if pageID != "" {
 		page, err := h.service.GetPage(pageID, orgID)
@@ -47,13 +53,29 @@ func (h *Handler) ListPages(c *gin.Context) {
 }
 
 func (h *Handler) GetPage(c *gin.Context) {
-	orgID := c.GetString("org_id")
+	orgID, ok := h.resolvePublicOrgID(c)
+	if !ok {
+		return
+	}
 	page, err := h.service.GetPage(c.Param("pageId"), orgID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	utils.SuccessResponse(c, http.StatusOK, page)
+}
+
+func (h *Handler) resolvePublicOrgID(c *gin.Context) (string, bool) {
+	org, err := h.orgService.ResolvePublicOrganization(c.Query("org"))
+	if errors.Is(err, orgModule.ErrOrgNotFound) {
+		utils.ErrorResponse(c, http.StatusNotFound, "public organization not found")
+		return "", false
+	}
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
+		return "", false
+	}
+	return org.ID, true
 }
 
 func (h *Handler) CreatePage(c *gin.Context) {

@@ -1,23 +1,26 @@
 package settings
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sc-pos/backend/internal/models"
+	orgModule "github.com/sc-pos/backend/internal/modules/organization"
 	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Handler struct {
-	service Service
+	service    Service
+	orgService orgModule.Service
 }
 
-func NewHandler(service Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service Service, orgService orgModule.Service) *Handler {
+	return &Handler{service: service, orgService: orgService}
 }
 
 func NewModule() *Handler {
-	return NewHandler(NewService(NewRepository()))
+	return NewHandler(NewService(NewRepository()), orgModule.NewService(orgModule.NewRepository()))
 }
 
 func (h *Handler) GetClinic(c *gin.Context) {
@@ -55,7 +58,16 @@ func (h *Handler) UploadLogo(c *gin.Context) {
 // It reads directly from the repository to avoid the auto-create side-effect
 // that GetClinic() triggers when no row exists yet.
 func (h *Handler) PublicClinicInfo(c *gin.Context) {
-	s, err := h.service.GetClinicPublic()
+	org, err := h.orgService.ResolvePublicOrganization(c.Query("org"))
+	if errors.Is(err, orgModule.ErrOrgNotFound) {
+		utils.ErrorResponse(c, http.StatusNotFound, "public organization not found")
+		return
+	}
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s, err := h.service.GetClinicPublic(org.ID)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return

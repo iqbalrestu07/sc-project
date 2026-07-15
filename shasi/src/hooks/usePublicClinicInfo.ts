@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useParams } from "react-router-dom";
 import { apiClient, API_ENDPOINTS } from "@/integrations/api";
 
 export interface PublicClinicInfo {
@@ -15,11 +16,14 @@ export interface PublicClinicInfo {
  * Endpoint: GET /api/public/clinic-info
  */
 export function usePublicClinicInfo() {
+  const { orgSlug } = useParams<{ orgSlug?: string }>();
+
   return useQuery({
-    queryKey: ["public-clinic-info"],
+    queryKey: ["public-clinic-info", orgSlug ?? "default"],
     queryFn: async (): Promise<PublicClinicInfo | null> => {
       const data = await apiClient.get<{ data: PublicClinicInfo }>(
-        API_ENDPOINTS.SETTINGS.PUBLIC_CLINIC_INFO
+        API_ENDPOINTS.SETTINGS.PUBLIC_CLINIC_INFO,
+        orgSlug ? { org: orgSlug } : undefined
       );
       return data.data ?? null;
     },
