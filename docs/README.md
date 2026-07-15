@@ -7,15 +7,15 @@
 
 ## 📁 Daftar Dokumen
 
-| Dokumen | Deskripsi |
-|---------|-----------|
-| [`AGENTS.md`](../AGENTS.md) | Context lengkap project untuk AI agent (entry point utama) |
-| [`docs/BACKEND_STRUCTURE.md`](./BACKEND_STRUCTURE.md) | Struktur direktori backend, pola module, middleware, conventions |
-| [`docs/FRONTEND_STRUCTURE.md`](./FRONTEND_STRUCTURE.md) | Struktur direktori frontend, routing, auth context, API client |
-| [`docs/INTEGRATION_GUIDE.md`](./INTEGRATION_GUIDE.md) | Cara integrasi frontend-backend: auth flow, org context, RBAC |
-| [`docs/CREATING_NEW_FEATURE.md`](./CREATING_NEW_FEATURE.md) | Step-by-step membuat fitur baru di backend dan frontend |
-| [`docs/DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md) | Schema semua tabel PostgreSQL + konvensi data |
-| [`docs/API_REFERENCE.md`](./API_REFERENCE.md) | Referensi semua endpoint API dengan request/response format |
+| Dokumen                                                     | Deskripsi                                                        |
+| ----------------------------------------------------------- | ---------------------------------------------------------------- |
+| [`AGENTS.md`](../AGENTS.md)                                 | Context lengkap project untuk AI agent (entry point utama)       |
+| [`docs/BACKEND_STRUCTURE.md`](./BACKEND_STRUCTURE.md)       | Struktur direktori backend, pola module, middleware, conventions |
+| [`docs/FRONTEND_STRUCTURE.md`](./FRONTEND_STRUCTURE.md)     | Struktur direktori frontend, routing, auth context, API client   |
+| [`docs/INTEGRATION_GUIDE.md`](./INTEGRATION_GUIDE.md)       | Cara integrasi frontend-backend: auth flow, org context, RBAC    |
+| [`docs/CREATING_NEW_FEATURE.md`](./CREATING_NEW_FEATURE.md) | Step-by-step membuat fitur baru di backend dan frontend          |
+| [`docs/DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)           | Schema semua tabel PostgreSQL + konvensi data                    |
+| [`docs/API_REFERENCE.md`](./API_REFERENCE.md)               | Referensi semua endpoint API dengan request/response format      |
 
 ---
 
@@ -68,4 +68,4 @@ npm run dev
 
 ---
 
-*Last updated: 2026-07-09*
+_Last updated: 2026-07-15_

@@ -231,9 +231,7 @@ class ApiClient {
     }
 
     public async postForm<T = unknown>(url: string, formData: FormData) {
-        const response = await this.client.post<T>(url, formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-        });
+        const response = await this.client.postForm<T>(url, formData);
         return response.data;
     }
 }

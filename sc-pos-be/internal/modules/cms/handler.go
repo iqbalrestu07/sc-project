@@ -97,8 +97,9 @@ func (h *Handler) UpdatePage(c *gin.Context) {
 // UploadImage handles multipart file upload and saves to ./uploads/cms/ directory.
 // Returns the public URL of the uploaded file.
 func (h *Handler) UploadImage(c *gin.Context) {
-	const maxSize = 5 << 20 // 5 MB
+	const maxSize = 10 << 20 // 10 MB
 	if err := c.Request.ParseMultipartForm(maxSize); err != nil {
+		fmt.Println("max size", maxSize, err)
 		utils.ErrorResponse(c, http.StatusBadRequest, "file too large or invalid multipart form")
 		return
 	}
@@ -131,7 +132,12 @@ func (h *Handler) UploadImage(c *gin.Context) {
 	}
 	folder := c.PostForm("folder")
 	if folder != "" {
-		uploadDir = filepath.Join(uploadDir, filepath.Clean(folder))
+		cleanFolder := filepath.Clean(folder)
+		if filepath.IsAbs(cleanFolder) || cleanFolder == ".." || strings.HasPrefix(cleanFolder, ".."+string(filepath.Separator)) {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid upload folder")
+			return
+		}
+		uploadDir = filepath.Join(uploadDir, cleanFolder)
 	}
 
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {

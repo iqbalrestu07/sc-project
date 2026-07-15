@@ -23,17 +23,22 @@ func NewModule() *Handler {
 
 func (h *Handler) List(c *gin.Context) {
 	orgID := c.GetString("org_id")
-	
+
 	page := utils.ParseIntQuery(c, "page", 1)
 	limit := utils.ParseIntQuery(c, "limit", 50)
 	search := c.Query("search")
+	whatsappOnly := c.Query("has_whatsapp") == "true"
 
-	patients, hasNext, err := h.service.List(orgID, search, page, limit)
+	patients, hasNext, total, err := h.service.List(orgID, search, page, limit, whatsappOnly)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	if whatsappOnly {
+		utils.ListSuccessResponseWithTotal(c, patients, hasNext, page, limit, total)
+		return
+	}
 	utils.ListSuccessResponse(c, patients, hasNext, page, limit)
 }
 

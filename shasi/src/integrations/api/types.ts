@@ -16,6 +16,7 @@ export interface ApiListResponse<T = unknown> {
     has_next?: boolean;
     page?: number;
     limit?: number;
+    total?: number;
 }
 
 export interface ApiErrorResponse {

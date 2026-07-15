@@ -409,7 +409,7 @@ func (s *service) SendInvoice(orgID, deviceID string, data InvoiceData) error {
 	}
 
 	headerTitle := "INVOICE TRANSAKSI"
-	headerDesc := fmt.Sprintf("Halo %s,\nTerima kasih atas kunjungan Anda.", data.PatientName)
+	headerDesc := "Shasi Beauty Care"
 	patientGreeting := fmt.Sprintf("Halo %s,\nTerima kasih atas kunjungan Anda.", data.PatientName)
 	footerText := "Terima kasih!"
 

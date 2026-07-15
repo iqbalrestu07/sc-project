@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,13 +9,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Send, Users, Smartphone } from "lucide-react";
 import { useSendWhatsAppBulk, useWhatsAppDevices } from "@/hooks/useWhatsApp";
 import { usePatients } from "@/hooks/usePatients";
+import { useDebounce } from "@/hooks/useDebounce";
 import { toast } from "sonner";
+import type { Patient } from "@/types/patient";
 import type { Recipient } from "@/types/whatsapp";
 
 export function DirectMessageTab() {
-  const patientsQuery = usePatients();
-  const patients = patientsQuery.data?.data ?? [];
+  const [recipientSearch, setRecipientSearch] = useState("");
+  const [recipientPage, setRecipientPage] = useState(1);
+  const [accumulatedPatients, setAccumulatedPatients] = useState<Patient[]>([]);
+  const debouncedRecipientSearch = useDebounce(recipientSearch, 300);
+  const patientsQuery = usePatients(debouncedRecipientSearch, recipientPage, 50, true);
   const patientsLoading = patientsQuery.isLoading;
+  const hasMorePatients = patientsQuery.data?.has_next ?? false;
+  const totalRecipients = patientsQuery.data?.total ?? 0;
   const { data: devices = [], isLoading: devicesLoading } = useWhatsAppDevices();
   const bulkMutation = useSendWhatsAppBulk();
 
@@ -23,8 +31,24 @@ export function DirectMessageTab() {
   const [selectedDevice, setSelectedDevice] = useState<string>("");
   const [result, setResult] = useState<{ attempted: number; success: number } | null>(null);
 
-  // Filter only patients with valid whatsapp numbers
-  const validPatients = patients.filter(p => p.whatsapp && p.whatsapp.trim() !== "");
+  useEffect(() => {
+    setRecipientPage(1);
+    setAccumulatedPatients([]);
+    setSelectedPatients([]);
+  }, [debouncedRecipientSearch]);
+
+  useEffect(() => {
+    const pagePatients = patientsQuery.data?.data;
+    if (!pagePatients) return;
+    setAccumulatedPatients((previous) =>
+      recipientPage === 1
+        ? pagePatients
+        : [...previous, ...pagePatients.filter((patient) => !previous.some((item) => item.id === patient.id))]
+    );
+  }, [patientsQuery.data, recipientPage]);
+
+  // Filter only patients with valid WhatsApp numbers from every loaded page.
+  const validPatients = accumulatedPatients.filter((patient) => patient.whatsapp?.trim());
   const connectedDevices = devices.filter(d => d.status === "connected");
 
   const handleTogglePatient = (patientId: string) => {
@@ -39,7 +63,18 @@ export function DirectMessageTab() {
     if (selectedPatients.length === validPatients.length) {
       setSelectedPatients([]);
     } else {
-      setSelectedPatients(validPatients.map(p => p.id));
+      setSelectedPatients(validPatients.map((patient) => patient.id));
+    }
+  };
+
+  const handleRecipientsScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+    if (
+      scrollHeight - scrollTop - clientHeight < 32 &&
+      hasMorePatients &&
+      !patientsQuery.isFetching
+    ) {
+      setRecipientPage((page) => page + 1);
     }
   };
 
@@ -157,13 +192,21 @@ export function DirectMessageTab() {
                 onCheckedChange={handleSelectAll}
               />
               <Label htmlFor="select-all" className="cursor-pointer text-sm font-normal">
-                Select All ({validPatients.length})
+                Pilih semua yang dimuat ({validPatients.length} / {totalRecipients})
               </Label>
             </div>
           </div>
           
-          <div className="border rounded-md divide-y max-h-60 overflow-y-auto bg-muted/5">
-            {patientsLoading ? (
+          <Input
+            value={recipientSearch}
+            onChange={(event) => setRecipientSearch(event.target.value)}
+            placeholder="Cari nama, kode pasien, nomor telepon, atau WhatsApp..."
+          />
+          <div
+            className="border rounded-md divide-y max-h-60 overflow-y-auto bg-muted/5"
+            onScroll={handleRecipientsScroll}
+          >
+            {patientsLoading && accumulatedPatients.length === 0 ? (
               <div className="p-4 flex justify-center">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
@@ -172,25 +215,37 @@ export function DirectMessageTab() {
                 No patients with valid WhatsApp numbers found.
               </div>
             ) : (
-              validPatients.map(patient => (
-                <div key={patient.id} className="flex items-center gap-3 p-3 hover:bg-muted/10 transition-colors">
-                  <Checkbox 
-                    id={`contact-${patient.id}`}
-                    checked={selectedPatients.includes(patient.id)}
-                    onCheckedChange={() => handleTogglePatient(patient.id)}
-                  />
-                  <div className="grid gap-0.5 leading-none">
-                    <Label htmlFor={`contact-${patient.id}`} className="font-medium cursor-pointer">
-                      {patient.full_name}
-                    </Label>
-                    <span className="text-xs text-muted-foreground">{patient.whatsapp}</span>
+              <>
+                {validPatients.map((patient) => (
+                  <div key={patient.id} className="flex items-center gap-3 p-3 hover:bg-muted/10 transition-colors">
+                    <Checkbox
+                      id={`contact-${patient.id}`}
+                      checked={selectedPatients.includes(patient.id)}
+                      onCheckedChange={() => handleTogglePatient(patient.id)}
+                    />
+                    <div className="grid gap-0.5 leading-none">
+                      <Label htmlFor={`contact-${patient.id}`} className="font-medium cursor-pointer">
+                        {patient.full_name}
+                      </Label>
+                      <span className="text-xs text-muted-foreground">{patient.whatsapp}</span>
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+                {patientsQuery.isFetching && (
+                  <div className="p-3 flex justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+                {!hasMorePatients && (
+                  <p className="p-3 text-center text-xs text-muted-foreground">
+                    Semua kontak yang cocok sudah dimuat.
+                  </p>
+                )}
+              </>
             )}
           </div>
           <p className="text-xs text-muted-foreground text-right">
-            {selectedPatients.length} selected
+            {selectedPatients.length} selected · {validPatients.length} kontak dimuat
           </p>
         </div>
 

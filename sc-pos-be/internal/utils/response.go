@@ -35,6 +35,7 @@ type ListResponse struct {
 	HasNext bool        `json:"has_next"`
 	Page    int         `json:"page,omitempty"`
 	Limit   int         `json:"limit,omitempty"`
+	Total   *int        `json:"total,omitempty"`
 	Error   string      `json:"error,omitempty"`
 }
 
@@ -79,6 +80,17 @@ func ListSuccessResponse(c *gin.Context, data interface{}, hasNext bool, page, l
 		HasNext: hasNext,
 		Page:    page,
 		Limit:   limit,
+	})
+}
+
+func ListSuccessResponseWithTotal(c *gin.Context, data interface{}, hasNext bool, page, limit, total int) {
+	c.JSON(http.StatusOK, ListResponse{
+		Success: true,
+		Data:    data,
+		HasNext: hasNext,
+		Page:    page,
+		Limit:   limit,
+		Total:   &total,
 	})
 }
 

@@ -4,13 +4,19 @@ import { ApiListResponse } from "@/integrations/api/types";
 import { Patient, PatientFormData } from "@/types/patient";
 import { toast } from "sonner";
 
-export function usePatients(searchQuery?: string, page: number = 1, limit: number = 50) {
+export function usePatients(
+  searchQuery?: string,
+  page: number = 1,
+  limit: number = 50,
+  whatsappOnly: boolean = false
+) {
   return useQuery({
-    queryKey: ["patients", searchQuery, page, limit],
+    queryKey: ["patients", searchQuery, page, limit, whatsappOnly],
     queryFn: async () => {
       try {
         const params: Record<string, any> = { page, limit };
         if (searchQuery) params.search = searchQuery;
+        if (whatsappOnly) params.has_whatsapp = "true";
         
         const data = await apiClient.get<ApiListResponse<Patient>>(
           API_ENDPOINTS.PATIENTS.LIST,
@@ -19,6 +25,7 @@ export function usePatients(searchQuery?: string, page: number = 1, limit: numbe
         return {
           data: data.data || [],
           has_next: data.has_next || false,
+          total: data.total,
         };
       } catch (error) {
         console.error("Error fetching patients:", error);

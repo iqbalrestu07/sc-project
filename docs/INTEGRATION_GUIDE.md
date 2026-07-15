@@ -63,6 +63,7 @@ config.headers["X-Organization-ID"] = localStorage.getItem("active_org_id");
 ### 3. Auto Token Refresh
 
 Jika response `401`:
+
 1. `ApiClient` coba `POST /api/auth/refresh` dengan `refresh_token`
 2. Simpan `access_token` baru
 3. Ulangi request yang gagal
@@ -73,7 +74,7 @@ Jika response `401`:
 ```typescript
 // Frontend
 await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT);
-apiClient.clearTokens();  // hapus semua token + org dari localStorage
+apiClient.clearTokens(); // hapus semua token + org dari localStorage
 ```
 
 ---
@@ -81,10 +82,12 @@ apiClient.clearTokens();  // hapus semua token + org dari localStorage
 ## Organization Context
 
 Setiap request ke API protected memerlukan **dua hal**:
+
 1. `Authorization: Bearer <token>` → siapa user ini
 2. `X-Organization-ID: <org_id>` → data org mana yang diminta
 
 **Backend** membaca `X-Organization-ID` via `OrgMiddleware` dan:
+
 - Validasi user adalah member aktif org ini
 - Set `org_id` dan `org_role` ke Gin context
 - Handler gunakan `c.GetString("org_id")` untuk filter data
@@ -162,27 +165,31 @@ router.POST("/patients", canWrite, handler.Create)
 Backend selalu mengembalikan JSON dalam format yang konsisten:
 
 ### Success (tanpa data)
+
 ```json
-{"success": true, "message": "Berhasil"}
+{ "success": true, "message": "Berhasil" }
 ```
 
 ### Success (dengan data)
+
 ```json
 {"success": true, "data": {...}}
 ```
 
 ### Success (list + pagination)
+
 ```json
 {
   "success": true,
   "data": [...],
-  "total": 100,
+  "has_next": true,
   "page": 1,
   "limit": 20
 }
 ```
 
 ### Auth success
+
 ```json
 {
   "success": true,
@@ -193,23 +200,36 @@ Backend selalu mengembalikan JSON dalam format yang konsisten:
 ```
 
 ### Error
+
 ```json
-{"success": false, "error": "pesan error"}
+{ "success": false, "error": "pesan error" }
 ```
 
 ### Parsing di Frontend
 
 ```typescript
-// GET list
-const data = await apiClient.get<{ data: Patient[] }>(API_ENDPOINTS.PATIENTS.LIST);
-const patients = data.data ?? [];
+// GET list terpaginated (patients/services/products/staff/transactions)
+const response = await apiClient.get<ApiListResponse<Patient>>(
+  API_ENDPOINTS.PATIENTS.LIST,
+  { page: 1, limit: 50, search: "Budi" },
+);
+const patients = response.data ?? [];
+const hasNext = response.has_next ?? false;
 
 // GET single
-const data = await apiClient.get<{ data: Patient }>(API_ENDPOINTS.PATIENTS.DETAIL(id));
+const data = await apiClient.get<{ data: Patient }>(
+  API_ENDPOINTS.PATIENTS.DETAIL(id),
+);
 const patient = data.data;
 
+// Hasil usePatients/useServices juga berupa wrapper `{ data, has_next }`.
+// Ambil daftar melalui query.data?.data, bukan query.data langsung.
+
 // POST/PUT
-const data = await apiClient.post<{ data: Patient }>(API_ENDPOINTS.PATIENTS.CREATE, payload);
+const data = await apiClient.post<{ data: Patient }>(
+  API_ENDPOINTS.PATIENTS.CREATE,
+  payload,
+);
 const created = data.data;
 ```
 
@@ -217,12 +237,12 @@ const created = data.data;
 
 ## HTTP Headers yang Diperlukan
 
-| Header               | Wajib?    | Nilai              | Catatan                              |
-|----------------------|-----------|--------------------|--------------------------------------|
-| `Authorization`      | Ya        | `Bearer <jwt>`     | Semua protected routes               |
-| `X-Organization-ID`  | Ya*       | `<org_uuid>`       | *Wajib untuk routes yang butuh data org |
-| `Content-Type`       | Ya (POST) | `application/json` | Untuk request dengan body JSON       |
-| `Content-Type`       | Ya (upload)| `multipart/form-data` | Untuk upload file               |
+| Header              | Wajib?      | Nilai                 | Catatan                                  |
+| ------------------- | ----------- | --------------------- | ---------------------------------------- |
+| `Authorization`     | Ya          | `Bearer <jwt>`        | Semua protected routes                   |
+| `X-Organization-ID` | Ya\*        | `<org_uuid>`          | \*Wajib untuk routes yang butuh data org |
+| `Content-Type`      | Ya (POST)   | `application/json`    | Untuk request dengan body JSON           |
+| `Content-Type`      | Ya (upload) | `multipart/form-data` | Untuk upload file                        |
 
 ---
 
@@ -230,13 +250,13 @@ const created = data.data;
 
 ### Backend Error Codes
 
-| HTTP Status | Kondisi                                  |
-|-------------|------------------------------------------|
-| `400`       | Bad request / validasi gagal             |
-| `401`       | Token tidak valid atau tidak ada         |
-| `403`       | Permission denied / bukan member org     |
-| `404`       | Resource tidak ditemukan                 |
-| `500`       | Internal server error                    |
+| HTTP Status | Kondisi                              |
+| ----------- | ------------------------------------ |
+| `400`       | Bad request / validasi gagal         |
+| `401`       | Token tidak valid atau tidak ada     |
+| `403`       | Permission denied / bukan member org |
+| `404`       | Resource tidak ditemukan             |
+| `500`       | Internal server error                |
 
 ### Frontend Error Handling
 
@@ -256,7 +276,7 @@ onError: (error) => {
   } else {
     toast.error(apiError.message);
   }
-}
+};
 ```
 
 ---
@@ -294,9 +314,9 @@ const formData = new FormData();
 formData.append("file", imageFile);
 formData.append("folder", "logos");
 
-const result = await apiClient.postForm<{data: {url: string}}>(
+const result = await apiClient.postForm<{ data: { url: string } }>(
   API_ENDPOINTS.CMS.UPLOAD_IMAGE,
-  formData
+  formData,
 );
 const imageUrl = result.data.url;
 // → "http://localhost:8080/uploads/cms/logos/filename.jpg"
@@ -341,12 +361,14 @@ Untuk production, sebaiknya set origin spesifik.
 ## Environment Variables — Summary
 
 ### Frontend (`shasi/.env`)
+
 ```env
 VITE_API_BASE_URL=http://localhost:8080/api
 VITE_API_TIMEOUT=30000
 ```
 
 ### Backend (`sc-pos-be/.env`)
+
 ```env
 SERVER_HOST=0.0.0.0
 SERVER_PORT=8080
@@ -405,15 +427,15 @@ docker-compose up -d
 
 ## Troubleshooting
 
-| Masalah | Kemungkinan Penyebab | Solusi |
-|---------|---------------------|--------|
-| `401 Unauthorized` | Token expired atau tidak ada | Re-login, ApiClient auto-handles refresh |
-| `403 Forbidden` | Permission tidak ada | Cek `role_permissions` di DB, grant permission via `/rbac` |
-| `403: not a member` | Org ID salah atau user bukan member | Pastikan `X-Organization-ID` header dikirim dengan benar |
-| `CORS error` | Backend tidak jalan atau URL salah | Cek `VITE_API_BASE_URL`, pastikan backend running |
-| Data kosong | Org ID tidak di-set | Login ulang, pastikan `active_org_id` ada di localStorage |
-| Token tidak di-refresh | Refresh token expired (7 hari) | Re-login manual |
+| Masalah                | Kemungkinan Penyebab                | Solusi                                                     |
+| ---------------------- | ----------------------------------- | ---------------------------------------------------------- |
+| `401 Unauthorized`     | Token expired atau tidak ada        | Re-login, ApiClient auto-handles refresh                   |
+| `403 Forbidden`        | Permission tidak ada                | Cek `role_permissions` di DB, grant permission via `/rbac` |
+| `403: not a member`    | Org ID salah atau user bukan member | Pastikan `X-Organization-ID` header dikirim dengan benar   |
+| `CORS error`           | Backend tidak jalan atau URL salah  | Cek `VITE_API_BASE_URL`, pastikan backend running          |
+| Data kosong            | Org ID tidak di-set                 | Login ulang, pastikan `active_org_id` ada di localStorage  |
+| Token tidak di-refresh | Refresh token expired (7 hari)      | Re-login manual                                            |
 
 ---
 
-*Last updated: 2026-07-09*
+_Last updated: 2026-07-09_

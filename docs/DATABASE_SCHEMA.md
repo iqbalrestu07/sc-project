@@ -7,13 +7,13 @@
 
 ## Konvensi Global
 
-| Konvensi | Penjelasan |
-|----------|------------|
-| `organization_id` | Ada di setiap tabel bisnis. Multi-tenant: selalu filter `WHERE organization_id = $n` |
-| `deleted_at` | Soft delete. Data aktif: `WHERE deleted_at IS NULL` |
-| `created_by` / `updated_by` | Audit trail. Isi dari `user_id` context (VARCHAR 36) |
-| `id` | UUID sebagai string VARCHAR(36), bukan UUID native PostgreSQL |
-| `is_active` | Beberapa tabel punya flag ini untuk disable tanpa delete |
+| Konvensi                    | Penjelasan                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| `organization_id`           | Ada di setiap tabel bisnis. Multi-tenant: selalu filter `WHERE organization_id = $n` |
+| `deleted_at`                | Soft delete. Data aktif: `WHERE deleted_at IS NULL`                                  |
+| `created_by` / `updated_by` | Audit trail. Isi dari `user_id` context (VARCHAR 36)                                 |
+| `id`                        | UUID sebagai string VARCHAR(36), bukan UUID native PostgreSQL                        |
+| `is_active`                 | Beberapa tabel punya flag ini untuk disable tanpa delete                             |
 
 ---
 
@@ -33,6 +33,7 @@ CREATE TABLE users (
 ```
 
 **Notes:**
+
 - Role global di JWT: `admin`, `doctor`, `therapist`, `cashier`
 - Role efektif per org ada di `organization_members.role`
 - Password: bcrypt hash via `golang.org/x/crypto`
@@ -93,6 +94,7 @@ CREATE TABLE permissions (
 ```
 
 **Contoh data:**
+
 ```
 id               | resource     | action
 patients:read    | patients     | read
@@ -200,8 +202,12 @@ CREATE TABLE services (
     base_price                 DECIMAL(15,2)  NOT NULL DEFAULT 0,
     doctor_commission_type     VARCHAR(20),   -- "percentage" | "fixed"
     doctor_commission_value    DECIMAL(15,2),
-    therapist_commission_type  VARCHAR(20),   -- "percentage" | "fixed"
+    therapist_commission_type  VARCHAR(20),   -- handling: "percentage" | "fixed"
     therapist_commission_value DECIMAL(15,2),
+    doctor_offering_commission_type     VARCHAR(20),   -- optional: "percentage" | "fixed"
+    doctor_offering_commission_value    DECIMAL(10,2),
+    therapist_offering_commission_type  VARCHAR(20),   -- optional: "percentage" | "fixed"
+    therapist_offering_commission_value DECIMAL(10,2),
     requires_doctor            BOOLEAN        NOT NULL DEFAULT FALSE,
     is_active                  BOOLEAN        NOT NULL DEFAULT TRUE,
     organization_id            VARCHAR(36)    NOT NULL REFERENCES organizations(id),
@@ -212,6 +218,8 @@ CREATE TABLE services (
     updated_at                 TIMESTAMP      NOT NULL DEFAULT NOW()
 );
 ```
+
+**Komisi:** kolom tanpa `offering` adalah rate **handling**. Kolom `*_offering_*` bersifat nullable; saat offering commission berlaku untuk suatu transaction item, rate offering menggantikan handling agar komisi tidak terduplikasi.
 
 ---
 
@@ -251,6 +259,15 @@ CREATE TABLE products (
     expiry_date     DATE,           -- nullable: models.NullableTime
     is_active       BOOLEAN        NOT NULL DEFAULT TRUE,
     is_consumable   BOOLEAN        NOT NULL DEFAULT FALSE,  -- produk habis pakai
+    consumable_category VARCHAR(100),
+    doctor_commission_type     VARCHAR(20),   -- handling, optional
+    doctor_commission_value    DECIMAL(10,2),
+    therapist_commission_type  VARCHAR(20),   -- handling, optional
+    therapist_commission_value DECIMAL(10,2),
+    doctor_offering_commission_type     VARCHAR(20), -- offering, optional
+    doctor_offering_commission_value    DECIMAL(10,2),
+    therapist_offering_commission_type  VARCHAR(20), -- offering, optional
+    therapist_offering_commission_value DECIMAL(10,2),
     organization_id VARCHAR(36)    NOT NULL REFERENCES organizations(id),
     created_by      VARCHAR(36),
     updated_by      VARCHAR(36),
@@ -357,6 +374,7 @@ CREATE TABLE transaction_items (
     therapist_id        VARCHAR(36)    REFERENCES staff(id),
     commission_eligible BOOLEAN        NOT NULL DEFAULT TRUE,
     commission_notes    TEXT,
+    selected_consumable_product_id VARCHAR(36) REFERENCES products(id),
     organization_id     VARCHAR(36)    NOT NULL REFERENCES organizations(id),
     created_by          VARCHAR(36),
     updated_by          VARCHAR(36),
@@ -381,6 +399,7 @@ CREATE TABLE commissions (
     commission_value    DECIMAL(15,2)  NOT NULL,
     commission_amount   DECIMAL(15,2)  NOT NULL,
     status              VARCHAR(50)    NOT NULL DEFAULT 'pending',
+    commission_reason   VARCHAR(20),   -- "handling" | "offering"; NULL untuk data lama
     -- status: pending | paid | cancelled
     organization_id     VARCHAR(36)    NOT NULL REFERENCES organizations(id),
     created_by          VARCHAR(36),
@@ -469,6 +488,51 @@ CREATE TABLE service_consumables (
     UNIQUE(service_id, product_id)
 );
 ```
+
+> **Legacy:** `service_consumables` adalah mapping satu produk per service dari implementasi lama. Konfigurasi baru menggunakan tabel group di bawah.
+
+---
+
+## Tabel: `service_consumable_groups`
+
+Satu row mewakili satu kebutuhan produk habis pakai per service, misalnya satu masker per sesi.
+
+```sql
+CREATE TABLE service_consumable_groups (
+    id              VARCHAR(36)    PRIMARY KEY,
+    service_id      VARCHAR(36)    NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+    name            VARCHAR(255)   NOT NULL,
+    quantity_used   DECIMAL(10,3)  NOT NULL DEFAULT 1,
+    organization_id VARCHAR(36)    REFERENCES organizations(id),
+    created_by      VARCHAR(36)    REFERENCES users(id),
+    updated_by      VARCHAR(36)    REFERENCES users(id),
+    deleted_at      TIMESTAMP,
+    created_at      TIMESTAMP      DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP      DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## Tabel: `service_consumable_group_items`
+
+Produk alternatif yang dapat memenuhi sebuah group. Nilai `priority` lebih kecil berarti diprioritaskan lebih tinggi.
+
+```sql
+CREATE TABLE service_consumable_group_items (
+    id              VARCHAR(36) PRIMARY KEY,
+    group_id        VARCHAR(36) NOT NULL REFERENCES service_consumable_groups(id) ON DELETE CASCADE,
+    product_id      VARCHAR(36) NOT NULL REFERENCES products(id),
+    priority        INT NOT NULL DEFAULT 0,
+    organization_id VARCHAR(36) REFERENCES organizations(id),
+    created_by      VARCHAR(36) REFERENCES users(id),
+    deleted_at      TIMESTAMP,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (group_id, product_id)
+);
+```
+
+`transaction_items.selected_consumable_product_id` menyimpan product alternatif yang dipilih kasir untuk satu item service. Saat pembayaran, stok product tersebut dikurangi dan dicatat sebagai stock movement dengan `reason = 'service_consumable'`.
+
+> **Batasan saat ini:** satu `transaction_item` hanya dapat merekam satu selected product. Jika satu service memiliki lebih dari satu group, tidak ada tabel detail pilihan per group sehingga model ini belum mendukung semua group secara penuh.
 
 ---
 
@@ -561,6 +625,12 @@ CREATE INDEX IF NOT EXISTS idx_patients_phone     ON patients(phone);
 CREATE INDEX IF NOT EXISTS idx_transactions_code  ON transactions(transaction_code);
 CREATE INDEX IF NOT EXISTS idx_stock_product      ON stock_movements(product_id);
 CREATE INDEX IF NOT EXISTS idx_service_consumable ON service_consumables(service_id, product_id);
+CREATE INDEX IF NOT EXISTS idx_scg_service        ON service_consumable_groups(service_id);
+CREATE INDEX IF NOT EXISTS idx_scg_org            ON service_consumable_groups(organization_id);
+CREATE INDEX IF NOT EXISTS idx_scg_active         ON service_consumable_groups(service_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_scgi_group         ON service_consumable_group_items(group_id);
+CREATE INDEX IF NOT EXISTS idx_scgi_product       ON service_consumable_group_items(product_id);
+CREATE INDEX IF NOT EXISTS idx_scgi_active        ON service_consumable_group_items(group_id) WHERE deleted_at IS NULL;
 ```
 
 ---
@@ -575,4 +645,4 @@ CREATE INDEX IF NOT EXISTS idx_service_consumable ON service_consumables(service
 
 ---
 
-*Last updated: 2026-07-09*
+_Last updated: 2026-07-09_

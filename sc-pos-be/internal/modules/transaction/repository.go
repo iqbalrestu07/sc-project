@@ -84,12 +84,12 @@ func (r *Repository) List(orgID string, page, limit int) ([]TransactionWithRelat
 	if err := rows.Err(); err != nil {
 		return nil, false, fmt.Errorf("failed to read transactions: %w", err)
 	}
-	
+
 	hasNext := len(transactions) > limit
 	if hasNext {
 		transactions = transactions[:limit]
 	}
-	
+
 	for i := range transactions {
 		items, err := r.Items(transactions[i].ID)
 		if err != nil {
@@ -161,7 +161,7 @@ func (r *Repository) Create(req CreateRequest, orgID string) (*TransactionWithRe
 	for _, item := range req.Items {
 		// Default commission_eligible to true for service items when not explicitly provided.
 		commEligible := item.CommissionEligible
-		if item.ItemType == "service" && commEligible == nil {
+		if commEligible == nil {
 			t := true
 			commEligible = &t
 		}

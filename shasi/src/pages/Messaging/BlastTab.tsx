@@ -8,14 +8,41 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Send, Rocket } from "lucide-react";
 import { useWhatsAppTemplates, useSendWhatsAppBlast, useWhatsAppDevices } from "@/hooks/useWhatsApp";
 import { usePatients } from "@/hooks/usePatients";
+import { apiClient, API_ENDPOINTS } from "@/integrations/api";
+import type { ApiListResponse } from "@/integrations/api/types";
 import { toast } from "sonner";
+import type { Patient } from "@/types/patient";
 import type { Recipient } from "@/types/whatsapp";
+
+async function loadExistingRecipients(): Promise<Recipient[]> {
+  const recipients: Recipient[] = [];
+  let page = 1;
+  let hasNext = true;
+
+  while (hasNext) {
+    const response = await apiClient.get<ApiListResponse<Patient>>(
+      API_ENDPOINTS.PATIENTS.LIST,
+      { page, limit: 100, has_whatsapp: "true" }
+    );
+    recipients.push(
+      ...(response.data ?? []).flatMap((patient) =>
+        patient.whatsapp?.trim()
+          ? [{ to: patient.whatsapp, patient_name: patient.full_name }]
+          : []
+      )
+    );
+    hasNext = response.has_next ?? false;
+    page += 1;
+  }
+
+  return recipients;
+}
 
 export function BlastTab() {
   const { data: templates = [], isLoading: templatesLoading } = useWhatsAppTemplates();
   const { data: devices = [], isLoading: devicesLoading } = useWhatsAppDevices();
-  const patientsQuery = usePatients();
-  const patients = patientsQuery.data?.data ?? [];
+  const patientsQuery = usePatients(undefined, 1, 50, true);
+  const recipientTotal = patientsQuery.data?.total ?? 0;
   const blastMutation = useSendWhatsAppBlast();
 
   const connectedDevices = devices.filter(d => d.status === "connected");
@@ -28,7 +55,7 @@ export function BlastTab() {
 
   const [result, setResult] = useState<{attempted: number; success: number} | null>(null);
 
-  const handleBlast = () => {
+  const handleBlast = async () => {
     if (!templateId) {
       toast.error("Please select a template first.");
       return;
@@ -46,13 +73,13 @@ export function BlastTab() {
     }
 
     let recipients: Recipient[] = [];
-    if (includeExisting) {
-      // Filter patients with valid whatsapp numbers
-      const validPatients = patients.filter(p => p.whatsapp && p.whatsapp.trim() !== "");
-      recipients = validPatients.map(p => ({
-        to: p.whatsapp!,
-        patient_name: p.full_name
-      }));
+    try {
+      if (includeExisting) {
+        recipients = await loadExistingRecipients();
+      }
+    } catch (error) {
+      toast.error(`Failed to load recipients: ${(error as Error).message}`);
+      return;
     }
 
     setResult(null);
@@ -186,7 +213,7 @@ export function BlastTab() {
             <Label htmlFor="includeExisting" className="font-normal cursor-pointer">
               Include existing patients with WhatsApp numbers 
               <span className="text-muted-foreground ml-1">
-                ({patients.filter(p => p.whatsapp).length} found)
+                ({recipientTotal} found)
               </span>
             </Label>
           </div>

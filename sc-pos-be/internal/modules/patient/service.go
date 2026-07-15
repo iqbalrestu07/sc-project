@@ -16,7 +16,7 @@ var ErrSearchRequired = errors.New("search query required")
 // Service is the public interface for the patient module business logic.
 type Service interface {
 	ListAll(orgID string) ([]models.Patient, error)
-	List(orgID, search string, page, limit int) ([]models.Patient, bool, error)
+	List(orgID, search string, page, limit int, whatsappOnly bool) ([]models.Patient, bool, int, error)
 	Get(id, orgID string) (*models.Patient, error)
 	Create(req models.Patient, userID, orgID string) (*models.Patient, error)
 	Update(id string, req models.Patient, userID, orgID string) (*models.Patient, error)
@@ -37,9 +37,9 @@ func (s *service) ListAll(orgID string) ([]models.Patient, error) {
 	return s.repo.GetAll(orgID)
 }
 
-func (s *service) List(orgID, search string, page, limit int) ([]models.Patient, bool, error) {
+func (s *service) List(orgID, search string, page, limit int, whatsappOnly bool) ([]models.Patient, bool, int, error) {
 	search = strings.TrimSpace(search)
-	return s.repo.List(orgID, search, page, limit)
+	return s.repo.List(orgID, search, page, limit, whatsappOnly)
 }
 
 func (s *service) Get(id, orgID string) (*models.Patient, error) {

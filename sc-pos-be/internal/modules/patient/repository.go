@@ -39,36 +39,39 @@ func (r *Repository) GetAll(orgID string) ([]models.Patient, error) {
 	return scanPatients(rows)
 }
 
-func (r *Repository) List(orgID, search string, page, limit int) ([]models.Patient, bool, error) {
+func (r *Repository) List(orgID, search string, page, limit int, whatsappOnly bool) ([]models.Patient, bool, int, error) {
 	offset := (page - 1) * limit
 	fetchLimit := limit + 1
 
-	query := `SELECT` + selectColumns + `
-		FROM patients
+	where := `
 		WHERE is_active = true
 		  AND deleted_at IS NULL
 		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))`
-
 	args := []interface{}{orgID}
 
 	if search != "" {
-		query += ` AND (full_name ILIKE $2 OR phone ILIKE $2 OR patient_code ILIKE $2)`
+		where += fmt.Sprintf(` AND (full_name ILIKE $%d OR phone ILIKE $%d OR whatsapp ILIKE $%d OR patient_code ILIKE $%d)`, len(args)+1, len(args)+1, len(args)+1, len(args)+1)
 		args = append(args, "%"+search+"%")
 	}
+	if whatsappOnly {
+		where += ` AND NULLIF(BTRIM(whatsapp), '') IS NOT NULL`
+	}
 
-	argIdx := len(args) + 1
-	query += fmt.Sprintf(` ORDER BY full_name ASC LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
-	args = append(args, fetchLimit, offset)
+	queryArgs := append([]interface{}{}, args...)
+	argIdx := len(queryArgs) + 1
+	query := `SELECT` + selectColumns + ` FROM patients` + where +
+		fmt.Sprintf(` ORDER BY full_name ASC LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
+	queryArgs = append(queryArgs, fetchLimit, offset)
 
-	rows, err := r.db.Query(query, args...)
+	rows, err := r.db.Query(query, queryArgs...)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to query patients: %w", err)
+		return nil, false, 0, fmt.Errorf("failed to query patients: %w", err)
 	}
 	defer rows.Close()
 
 	patients, err := scanPatients(rows)
 	if err != nil {
-		return nil, false, err
+		return nil, false, 0, err
 	}
 
 	hasNext := len(patients) > limit
@@ -76,7 +79,15 @@ func (r *Repository) List(orgID, search string, page, limit int) ([]models.Patie
 		patients = patients[:limit]
 	}
 
-	return patients, hasNext, nil
+	if !whatsappOnly {
+		return patients, hasNext, 0, nil
+	}
+
+	var total int
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM patients`+where, args...).Scan(&total); err != nil {
+		return nil, false, 0, fmt.Errorf("failed to count WhatsApp patients: %w", err)
+	}
+	return patients, hasNext, total, nil
 }
 
 func (r *Repository) GetByID(id, orgID string) (*models.Patient, error) {

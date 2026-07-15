@@ -56,21 +56,10 @@ export function ImageUpload({
       formData.append("file", file);
       formData.append("folder", folder);
 
-      // Use axios directly for multipart upload since apiClient.post sets Content-Type: application/json
-      const token = apiClient.getAccessToken();
-      const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
-      const response = await fetch(`${baseURL}${API_ENDPOINTS.CMS.UPLOAD_IMAGE}`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error((errData as any)?.error || `Upload failed: ${response.status}`);
-      }
-
-      const result = await response.json();
+      const result = await apiClient.postForm<{ data?: { url?: string }; url?: string }>(
+        API_ENDPOINTS.CMS.UPLOAD_IMAGE,
+        formData
+      );
       const url = result?.data?.url || result?.url;
       if (!url) throw new Error("No URL returned from upload");
 
