@@ -146,7 +146,7 @@ export function HeroSection() {
   };
 
   return (
-    <section ref={ref} className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
+    <section ref={ref} className="relative min-h-[90vh] md:min-h-screen flex items-center justify-center overflow-hidden pt-24 md:pt-20">
       {/* Background with Parallax */}
       <motion.div style={{ y: backgroundY, opacity }} className="absolute inset-0">
         {hero?.background_image_url ? (
@@ -307,7 +307,7 @@ export function HeroSection() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.5, duration: 1 }}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce pointer-events-none"
+        className="hidden md:block absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce pointer-events-none"
       >
         <div
           className="w-6 h-10 rounded-full flex justify-center pt-2"

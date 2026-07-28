@@ -51,13 +51,11 @@ export function LandingHeader() {
     <header
       className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
       style={{
-        background: scrolled
-          ? `rgba(107, 15, 26, 0.97)`
-          : `rgba(107, 15, 26, 0.70)`,
-        backdropFilter: "blur(16px)",
+        background: scrolled ? `rgba(61, 6, 16, 0.58)` : "transparent",
+        backdropFilter: scrolled ? "blur(16px)" : "none",
         borderBottom: scrolled
           ? `1px solid rgba(201, 168, 76, 0.3)`
-          : `1px solid rgba(201, 168, 76, 0.1)`,
+          : "1px solid transparent",
         boxShadow: scrolled ? "0 4px 24px rgba(0,0,0,0.3)" : "none",
       }}
     >
@@ -141,10 +139,15 @@ export function LandingHeader() {
         {/* Mobile menu */}
         {isMenuOpen && (
           <div
-            className="md:hidden py-4"
-            style={{ borderTop: `1px solid rgba(201, 168, 76, 0.2)` }}
+            className="md:hidden fixed inset-x-0 top-16 z-40 max-h-[calc(100svh-4rem)] overflow-y-auto px-4 py-4"
+            style={{
+              background: "rgba(61, 6, 16, 0.55)",
+              borderTop: `1px solid rgba(201, 168, 76, 0.2)`,
+              backdropFilter: "blur(14px)",
+              WebkitBackdropFilter: "blur(14px)",
+            }}
           >
-            <nav className="flex flex-col gap-1">
+            <nav className="flex flex-col gap-1 max-w-7xl mx-auto">
               {navLinks.map((link) => (
                 <button
                   key={link.href}
