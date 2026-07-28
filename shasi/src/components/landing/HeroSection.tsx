@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import { MessageCircle, Calendar, Crown } from "lucide-react";
-import { useCmsHero } from "@/hooks/useCmsData";
+import { useCmsHero, useCmsContact } from "@/hooks/useCmsData";
+import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { motion, useScroll, useTransform } from "framer-motion";
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
@@ -124,7 +125,8 @@ function StarField() {
 // ─── HeroSection ──────────────────────────────────────────────────────────────
 export function HeroSection() {
   const { data: hero } = useCmsHero();
-  const whatsappUrl = hero?.whatsapp_url || "https://wa.me/6282123523139";
+  const { data: contact } = useCmsContact();
+  const whatsappUrl = hero?.whatsapp_url || buildWhatsAppUrl(contact?.whatsapp_number);
   const ref = useRef<HTMLDivElement>(null);
 
   // Parallax effects

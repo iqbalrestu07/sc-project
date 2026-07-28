@@ -1,5 +1,6 @@
 import { useCmsContact } from "@/hooks/useCmsData";
 import { usePublicClinicInfo } from "@/hooks/usePublicClinicInfo";
+import { resolveWhatsAppNumber } from "@/lib/whatsapp";
 import { MapPin, Phone, Mail, Instagram, Facebook } from "lucide-react";
 
 const MAROON = "#6B0F1A";
@@ -22,7 +23,7 @@ export function ContactSection() {
     return contact?.google_maps_embed ?? null;
   };
   const mapsSrc = resolveMapsSrc();
-  const whatsappNumber = contact?.whatsapp_number || "6282123523139";
+  const whatsappNumber = resolveWhatsAppNumber(contact?.whatsapp_number);
 
   const contactItem = (
     icon: React.ReactNode,

@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { usePublicClinicInfo } from "@/hooks/usePublicClinicInfo";
+import { useCmsContact } from "@/hooks/useCmsData";
+import { buildWhatsAppUrl } from "@/lib/whatsapp";
 
 // ─── Maroon & Gold Design Tokens ─────────────────────────────────────────────
 const COLORS = {
@@ -20,8 +22,10 @@ export function LandingHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { data: clinicInfo } = usePublicClinicInfo();
+  const { data: contact } = useCmsContact();
   const logoSrc = clinicInfo?.logo_url || "/logo.png";
   const brandName = clinicInfo?.clinic_name || "Shasi Beauty Care";
+  const whatsappUrl = buildWhatsAppUrl(contact?.whatsapp_number);
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 30);
@@ -106,7 +110,7 @@ export function LandingHeader() {
           {/* CTA */}
           <div className="flex items-center gap-4">
             <a
-              href="https://wa.me/6282123523139"
+              href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="hidden md:inline-flex items-center px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg"
@@ -152,7 +156,7 @@ export function LandingHeader() {
                 </button>
               ))}
               <a
-                href="https://wa.me/6282123523139"
+                href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-3 inline-flex items-center justify-center px-5 py-3 rounded-full text-sm font-semibold"

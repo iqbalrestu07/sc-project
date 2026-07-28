@@ -1,6 +1,7 @@
-import { useCmsPromotions } from "@/hooks/useCmsData";
+import { useCmsPromotions, useCmsContact } from "@/hooks/useCmsData";
 import { MessageCircle, Percent, Clock, Tag } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
+import { buildWhatsAppUrl } from "@/lib/whatsapp";
 
 const MAROON = "#6B0F1A";
 const MAROON_LIGHT = "#8B1A2A";
@@ -10,10 +11,11 @@ const GOLD_PALE = "#F5E6B5";
 
 export function PromotionsSection() {
   const { data: promotions } = useCmsPromotions();
+  const { data: contact } = useCmsContact();
 
   if (!promotions || promotions.length === 0) return null;
 
-  const whatsappUrl = "https://wa.me/6282123523139";
+  const whatsappUrl = buildWhatsAppUrl(contact?.whatsapp_number);
 
   return (
     <section

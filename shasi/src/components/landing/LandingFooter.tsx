@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
-import { Phone, MapPin, Clock, Instagram } from "lucide-react";
+import { Phone, MapPin, Clock, Instagram, Facebook } from "lucide-react";
 import { usePublicClinicInfo } from "@/hooks/usePublicClinicInfo";
+import { useCmsContact } from "@/hooks/useCmsData";
+import { buildWhatsAppUrl, resolveWhatsAppNumber } from "@/lib/whatsapp";
 
 const MAROON = "#6B0F1A";
 const MAROON_DARK = "#3D0610";
@@ -11,8 +13,11 @@ const GOLD_PALE = "#F5E6B5";
 export function LandingFooter() {
   const currentYear = new Date().getFullYear();
   const { data: clinicInfo } = usePublicClinicInfo();
+  const { data: contact } = useCmsContact();
   const logoSrc = clinicInfo?.logo_url || "/logo.png";
   const brandName = clinicInfo?.clinic_name || "Shasi Beauty Care";
+  const whatsappUrl = buildWhatsAppUrl(contact?.whatsapp_number);
+  const whatsappNumber = resolveWhatsAppNumber(contact?.whatsapp_number);
 
   return (
     <footer
@@ -66,10 +71,10 @@ export function LandingFooter() {
               Mitra terpercaya Anda untuk perawatan estetika premium. Rasakan seni
               kecantikan bersama tim ahli kami yang berpengalaman.
             </p>
-            {/* Social icon */}
+            {/* Social icons */}
             <div className="mt-4 flex gap-3">
               <a
-                href="https://wa.me/6282123523139"
+                href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
@@ -82,18 +87,56 @@ export function LandingFooter() {
               >
                 <Phone className="w-4 h-4" />
               </a>
-              <a
-                href="#"
-                className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
-                style={{
-                  background: "rgba(201,168,76,0.12)",
-                  border: "1px solid rgba(201,168,76,0.25)",
-                  color: GOLD_LIGHT,
-                }}
-                title="Instagram"
-              >
-                <Instagram className="w-4 h-4" />
-              </a>
+              {contact?.instagram_url && (
+                <a
+                  href={contact.instagram_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
+                  style={{
+                    background: "rgba(201,168,76,0.12)",
+                    border: "1px solid rgba(201,168,76,0.25)",
+                    color: GOLD_LIGHT,
+                  }}
+                  title="Instagram"
+                >
+                  <Instagram className="w-4 h-4" />
+                </a>
+              )}
+              {contact?.facebook_url && (
+                <a
+                  href={contact.facebook_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
+                  style={{
+                    background: "rgba(201,168,76,0.12)",
+                    border: "1px solid rgba(201,168,76,0.25)",
+                    color: GOLD_LIGHT,
+                  }}
+                  title="Facebook"
+                >
+                  <Facebook className="w-4 h-4" />
+                </a>
+              )}
+              {contact?.tiktok_url && (
+                <a
+                  href={contact.tiktok_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
+                  style={{
+                    background: "rgba(201,168,76,0.12)",
+                    border: "1px solid rgba(201,168,76,0.25)",
+                    color: GOLD_LIGHT,
+                  }}
+                  title="TikTok"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z" />
+                  </svg>
+                </a>
+              )}
             </div>
           </div>
 
@@ -146,7 +189,7 @@ export function LandingFooter() {
               <li className="flex items-start gap-3">
                 <Phone className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: GOLD }} />
                 <a
-                  href="https://wa.me/6282123523139"
+                  href={whatsappUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ color: "rgba(245,230,181,0.7)" }}
@@ -158,7 +201,7 @@ export function LandingFooter() {
                     "rgba(245,230,181,0.7)")
                   }
                 >
-                  +62 821 2352 3139
+                  +{whatsappNumber}
                 </a>
               </li>
               <li className="flex items-start gap-3">

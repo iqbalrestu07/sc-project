@@ -1,5 +1,6 @@
 import { MessageCircle, Calendar, Sparkles } from "lucide-react";
-import { useCmsCta } from "@/hooks/useCmsData";
+import { useCmsCta, useCmsContact } from "@/hooks/useCmsData";
+import { buildWhatsAppUrl } from "@/lib/whatsapp";
 
 const MAROON = "#6B0F1A";
 const MAROON_DARK = "#3D0610";
@@ -9,7 +10,8 @@ const GOLD_PALE = "#F5E6B5";
 
 export function CtaSection() {
   const { data: cta } = useCmsCta();
-  const whatsappUrl = cta?.whatsapp_url || "https://wa.me/6282123523139";
+  const { data: contact } = useCmsContact();
+  const whatsappUrl = cta?.whatsapp_url || buildWhatsAppUrl(contact?.whatsapp_number);
 
   return (
     <section className="py-24 relative overflow-hidden">

@@ -51,7 +51,7 @@ func defaultPageData(pageID string) interface{} {
 			"description":        "Experience premium aesthetic treatments.",
 			"cta_primary_text":   "Book Appointment",
 			"cta_secondary_text": "Chat via WhatsApp",
-			"whatsapp_url":       "https://wa.me/6282123523139",
+			"whatsapp_url":       "https://wa.me/6282123523139?text=Halo%20Shasi%20Beauty%20Care!%20Saya%20lihat%20informasi%20di%20website%20dan%20tertarik%untuk%20melakukan%20appointment.",
 			"is_active":          true,
 		}
 	case "cta":
@@ -60,7 +60,7 @@ func defaultPageData(pageID string) interface{} {
 			"subtext":            "Book your consultation today.",
 			"cta_primary_text":   "Book Appointment",
 			"cta_secondary_text": "Chat via WhatsApp",
-			"whatsapp_url":       "https://wa.me/6282123523139",
+			"whatsapp_url":       "https://wa.me/6282123523139?text=Halo%20Shasi%20Beauty%20Care!%20Saya%20lihat%20informasi%20di%20website%20dan%20tertarik%20dengan%20layanannya.",
 			"is_active":          true,
 		}
 	default:
