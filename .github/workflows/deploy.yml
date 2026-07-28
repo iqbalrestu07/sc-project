@@ -28,12 +28,11 @@ jobs:
             git pull origin main
 
             echo "Building and restarting containers..."
-            sudo docker compose --profile cloudflare down
             sudo docker compose --profile cloudflare up --build -d --remove-orphans
 
             echo "Waiting for backend to be healthy..."
             sleep 15
-            sudo docker compose ps
+            sudo docker compose --profile cloudflare ps
 
             echo "Cleanup unused images..."
             sudo docker image prune -af || true
