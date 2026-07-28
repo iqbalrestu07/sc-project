@@ -47,9 +47,10 @@ services:
       WHATSAPP_API_TOKEN: ${WHATSAPP_API_TOKEN:-}
     volumes:
       - backend_uploads:/app/uploads
-    # Expose ke semua interface agar bisa diakses dari LAN
+    # Hanya expose backend ke localhost host untuk debugging darurat.
+    # Akses publik dilewatkan melalui reverse proxy /api di frontend/nginx.
     ports:
-      - "0.0.0.0:${BACKEND_PORT_EXPOSE:-8080}:8080"
+      - "127.0.0.1:${BACKEND_PORT_EXPOSE:-8080}:8080"
 
   # ─────────────────────────── Frontend (React + Nginx) ──────────────────────
   frontend:
@@ -57,10 +58,11 @@ services:
       context: ./shasi
       dockerfile: Dockerfile
       args:
-        # PENTING: isi dengan IP LAN komputer ini atau domain Cloudflare kamu
-        # Contoh LAN  : http://192.168.1.100:8080/api
-        # Contoh CF   : https://api.namadomain.com/api
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api}
+        # Untuk deploy single-domain, gunakan path relatif /api agar nginx frontend
+        # yang meneruskan request ke backend internal.
+        # Contoh single-domain : /api
+        # Contoh multi-domain  : https://api.namadomain.com/api
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
     container_name: sc_frontend
     restart: unless-stopped
     depends_on:
@@ -78,9 +80,10 @@ services:
   #   2. Networks → Tunnels → Create a tunnel → pilih Cloudflared
   #   3. Beri nama tunnel (misal: sc-klinik)
   #   4. Copy token yang muncul, masukkan ke .env sebagai CLOUDFLARE_TUNNEL_TOKEN
-  #   5. Di halaman yang sama, tambahkan 2 public hostname:
-  #      - app.namadomain.com  → Service: HTTP  → URL: frontend:80
-  #      - api.namadomain.com  → Service: HTTP  → URL: backend:8080
+  #   5. Di halaman yang sama, tambahkan 1 public hostname (single-domain):
+  #      - namadomain.com (atau app.namadomain.com)
+  #        → Service: HTTP  → URL: frontend:80
+  #      Backend diakses via /api dan /uploads melalui nginx reverse proxy.
   #
   cloudflared:
     image: cloudflare/cloudflared:latest
