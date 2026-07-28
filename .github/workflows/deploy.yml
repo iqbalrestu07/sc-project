@@ -1,17 +1,59 @@
-name: Deploy to Server
+name: Build and Deploy
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/iqbalrestu07/sc-project-backend
+  FRONTEND_IMAGE: ghcr.io/iqbalrestu07/sc-project-frontend
+
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./sc-pos-be
+          push: true
+          tags: ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./shasi
+          push: true
+          tags: ${{ env.FRONTEND_IMAGE }}:latest
+          build-args: |
+            VITE_API_BASE_URL=/api
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
       - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -27,10 +69,16 @@ jobs:
             echo "Pulling latest code..."
             git pull origin main
 
-            echo "Building and restarting containers..."
-            sudo docker compose --profile cloudflare up --build -d --remove-orphans
+            echo "Logging in to ghcr.io..."
+            echo "${{ secrets.GHCR_PAT }}" | sudo docker login ghcr.io -u ${{ secrets.GHCR_USER }} --password-stdin
 
-            echo "Waiting for backend to be healthy..."
+            echo "Pulling latest images..."
+            sudo docker compose --profile cloudflare pull backend frontend
+
+            echo "Restarting containers..."
+            sudo docker compose --profile cloudflare up -d --remove-orphans
+
+            echo "Waiting for backend to start..."
             sleep 15
             sudo docker compose --profile cloudflare ps
 

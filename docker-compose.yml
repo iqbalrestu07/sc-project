@@ -22,6 +22,7 @@ services:
 
   # ─────────────────────────── Backend (Go) ──────────────────────────────────
   backend:
+    image: ghcr.io/iqbalrestu07/sc-project-backend:latest
     build:
       context: ./sc-pos-be
       dockerfile: Dockerfile
@@ -54,6 +55,7 @@ services:
 
   # ─────────────────────────── Frontend (React + Nginx) ──────────────────────
   frontend:
+    image: ghcr.io/iqbalrestu07/sc-project-frontend:latest
     build:
       context: ./shasi
       dockerfile: Dockerfile
