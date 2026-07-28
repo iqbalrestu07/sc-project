@@ -75,7 +75,7 @@ func (s *service) UpdateBrandAsset(orgID, field, url string) (*models.ClinicSett
 
 func defaultClinicSettings() *models.ClinicSettings {
 	now := time.Now()
-	clinicName := "Shasi Clinic"
+	clinicName := "Shasi Beauty Care"
 	taxRate := 0.0
 	taxInclusive := false
 	enabled := true
