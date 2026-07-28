@@ -3,16 +3,13 @@ FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
-# Install gcc for cgo (needed by lib/pq)
-RUN apk add --no-cache gcc musl-dev
-
 # Download dependencies first (cache layer)
 COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source and build
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server .
 
 # ─── Stage 2: Runtime ─────────────────────────────────────────────────────────
 FROM alpine:3.19

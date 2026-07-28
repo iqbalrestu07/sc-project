@@ -3,15 +3,15 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files and install deps
-COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
+# Copy package files and install deps (cached unless package.json changes)
+COPY package.json package-lock.json ./
 RUN npm ci --frozen-lockfile
 
 # Copy source
 COPY . .
 
 # Build — VITE_API_BASE_URL bisa di-inject via ARG saat build
-ARG VITE_API_BASE_URL=http://localhost:8080/api
+ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 RUN npm run build

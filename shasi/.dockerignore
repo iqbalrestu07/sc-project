@@ -1,0 +1,25 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Dependencies (will be installed inside container)
+node_modules
+
+# Build output
+dist
+
+# Docs
+README.md
+
+# Environment
+.env
+.env.*
