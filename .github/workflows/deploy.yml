@@ -28,14 +28,14 @@ jobs:
             git pull origin main
 
             echo "Building and restarting containers..."
-            docker compose down
-            docker compose up --build -d --remove-orphans
+            sudo docker compose down
+            sudo docker compose up --build -d --remove-orphans postgres backend frontend
 
             echo "Waiting for backend to be healthy..."
             sleep 15
-            docker compose ps
+            sudo docker compose ps
 
-            echo "Cleanup unused Docker resources..."
-            docker system prune -af --volumes || true
+            echo "Cleanup unused images..."
+            sudo docker image prune -af || true
 
             echo "Deployment complete."
