@@ -25,6 +25,17 @@ export function ContactSection() {
   const mapsSrc = resolveMapsSrc();
   const whatsappNumber = resolveWhatsAppNumber(contact?.whatsapp_number);
 
+  const getSocialAccountName = (url: string, platform: string) => {
+    try {
+      const pathname = new URL(url).pathname.replace(/\/+$/, "");
+      const account = decodeURIComponent(pathname.split("/").pop() || "");
+      if (!account) return url;
+      return platform === "Facebook" ? account : `@${account.replace(/^@/, "")}`;
+    } catch {
+      return url;
+    }
+  };
+
   const contactItem = (
     icon: React.ReactNode,
     title: string,
@@ -136,47 +147,31 @@ export function ContactSection() {
               )}
 
             {/* Social media */}
-            <div className="flex gap-3 pt-2">
-              {contact?.instagram_url && (
-                <a
-                  href={contact.instagram_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-110 hover:shadow-lg"
-                  style={{
-                    background: `linear-gradient(135deg, #E1306C 0%, #C13584 100%)`,
-                    color: "#fff",
-                  }}
-                  title="Instagram"
-                >
-                  <Instagram className="w-5 h-5" />
-                </a>
+            {contact?.instagram_url &&
+              contactItem(
+                <Instagram className="w-6 h-6" style={{ color: GOLD_LIGHT }} />,
+                "Instagram",
+                getSocialAccountName(contact.instagram_url, "Instagram"),
+                contact.instagram_url
               )}
-              {contact?.facebook_url && (
-                <a
-                  href={contact.facebook_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white hover:scale-110 hover:shadow-lg transition-all duration-200"
-                  title="Facebook"
-                >
-                  <Facebook className="w-5 h-5" />
-                </a>
+
+            {contact?.facebook_url &&
+              contactItem(
+                <Facebook className="w-6 h-6" style={{ color: GOLD_LIGHT }} />,
+                "Facebook",
+                getSocialAccountName(contact.facebook_url, "Facebook"),
+                contact.facebook_url
               )}
-              {contact?.tiktok_url && (
-                <a
-                  href={contact.tiktok_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-12 h-12 bg-black rounded-xl flex items-center justify-center text-white hover:scale-110 hover:shadow-lg transition-all duration-200"
-                  title="TikTok"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z" />
-                  </svg>
-                </a>
+
+            {contact?.tiktok_url &&
+              contactItem(
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill={GOLD_LIGHT}>
+                  <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z" />
+                </svg>,
+                "TikTok",
+                getSocialAccountName(contact.tiktok_url, "TikTok"),
+                contact.tiktok_url
               )}
-            </div>
           </div>
 
           {/* Map */}
