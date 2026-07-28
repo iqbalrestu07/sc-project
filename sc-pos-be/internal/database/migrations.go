@@ -16,6 +16,7 @@ func RunMigrations() error {
 		backfillCommissionOrgID,
 		addItemDiscountType,
 		addClinicSettingsMapsEmbed,
+		addClinicSettingsFavicon,
 		seedDefaultPermissions,
 		seedRolePermissions,
 		addConsumableFlag,
@@ -524,6 +525,14 @@ ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS discount_type VARCHAR(50)
 // embed iframe src URL that is displayed on the landing page contact section.
 const addClinicSettingsMapsEmbed = `
 ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS maps_embed_url TEXT;
+`
+
+// addClinicSettingsFavicon adds favicon_url column to clinic_settings so each
+// organization can override the browser tab icon. logo_url already exists in
+// the base schema but is included here for safety on legacy databases.
+const addClinicSettingsFavicon = `
+ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS logo_url TEXT;
+ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS favicon_url TEXT;
 `
 
 // addConsumableFlag marks products as consumable items and tracks their usage category.

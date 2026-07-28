@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { Sparkles, Phone, MapPin, Clock, Instagram } from "lucide-react";
+import { Phone, MapPin, Clock, Instagram } from "lucide-react";
+import { usePublicClinicInfo } from "@/hooks/usePublicClinicInfo";
 
 const MAROON = "#6B0F1A";
 const MAROON_DARK = "#3D0610";
@@ -9,6 +10,9 @@ const GOLD_PALE = "#F5E6B5";
 
 export function LandingFooter() {
   const currentYear = new Date().getFullYear();
+  const { data: clinicInfo } = usePublicClinicInfo();
+  const logoSrc = clinicInfo?.logo_url || "/logo.png";
+  const brandName = clinicInfo?.clinic_name || "Shasi Beauty Care";
 
   return (
     <footer
@@ -38,15 +42,14 @@ export function LandingFooter() {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center"
-                style={{
-                  background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD_LIGHT} 100%)`,
-                  boxShadow: `0 2px 12px rgba(201,168,76,0.4)`,
+              <img
+                src={logoSrc}
+                alt={`${brandName} logo`}
+                className="w-11 h-11 rounded-full object-cover"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = "/logo.png";
                 }}
-              >
-                <Sparkles className="w-5 h-5" style={{ color: MAROON }} />
-              </div>
+              />
               <span
                 className="font-bold text-lg tracking-wide"
                 style={{
@@ -56,7 +59,7 @@ export function LandingFooter() {
                   backgroundClip: "text",
                 }}
               >
-                Shasi Beauty Care
+                {brandName}
               </span>
             </div>
             <p className="text-sm leading-relaxed" style={{ color: "rgba(245,230,181,0.65)" }}>
@@ -167,7 +170,7 @@ export function LandingFooter() {
               <li className="flex items-start gap-3">
                 <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: GOLD }} />
                 <span style={{ color: "rgba(245,230,181,0.7)" }}>
-                  Klinik Kecantikan Shasi Beauty Care
+                  Klinik Kecantikan {brandName}
                 </span>
               </li>
             </ul>
@@ -183,7 +186,7 @@ export function LandingFooter() {
         {/* Bottom bar */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-xs" style={{ color: "rgba(245,230,181,0.45)" }}>
-            © {currentYear} Shasi Beauty Care. Hak cipta dilindungi.
+            © {currentYear} {brandName}. Hak cipta dilindungi.
           </p>
           <Link
             to="/admin/login"

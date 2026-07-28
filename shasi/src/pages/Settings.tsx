@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PageHeader } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,14 +18,19 @@ import {
   Loader2,
   FileText,
   MapPin,
+  Image as ImageIcon,
+  Upload,
+  RotateCcw,
 } from "lucide-react";
 import { useClinicSettings, ClinicSettings } from "@/hooks/useClinicSettings";
 
 export default function SettingsPage() {
-  const { settings, isLoading, updateSettings } = useClinicSettings();
+  const { settings, isLoading, updateSettings, uploadBrandAsset, clearBrandAsset } = useClinicSettings();
   const [formData, setFormData] = useState<Partial<ClinicSettings>>({});
   const [hasChanges, setHasChanges] = useState(false);
   const [clinicNameError, setClinicNameError] = useState("");
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const faviconInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (settings) {
@@ -71,6 +76,18 @@ export default function SettingsPage() {
     updateSettings.mutate(formData, {
       onSuccess: () => setHasChanges(false),
     });
+  };
+
+  const handleBrandUpload = (e: React.ChangeEvent<HTMLInputElement>, type: "logo" | "favicon") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    uploadBrandAsset.mutate({ file, type });
+    // Reset input so same file can be re-selected later
+    e.target.value = "";
+  };
+
+  const handleBrandReset = (type: "logo" | "favicon") => {
+    clearBrandAsset.mutate(type);
   };
 
   if (isLoading) {
@@ -156,6 +173,130 @@ export default function SettingsPage() {
                   onChange={(e) => handleChange("email", e.target.value)}
                 />
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Branding — Logo & Favicon */}
+        <Card className="shadow-clinic">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ImageIcon className="h-5 w-5 text-primary" />
+              Branding
+            </CardTitle>
+            <CardDescription>
+              Logo & favicon organization. Jika kosong, otomatis memakai default bawaan aplikasi.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Logo */}
+            <div className="space-y-3">
+              <Label>Logo</Label>
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full overflow-hidden border bg-muted flex items-center justify-center shrink-0">
+                  <img
+                    src={settings?.logo_url || "/logo.png"}
+                    alt="Logo"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = "/logo.png";
+                    }}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleBrandUpload(e, "logo")}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={uploadBrandAsset.isPending}
+                  >
+                    {uploadBrandAsset.isPending && uploadBrandAsset.variables?.type === "logo" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    Upload Logo
+                  </Button>
+                  {settings?.logo_url && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleBrandReset("logo")}
+                      disabled={clearBrandAsset.isPending}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Reset
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Disarankan PNG/SVG persegi, maks 5MB. Ditampilkan di Sidebar & landing page.
+              </p>
+            </div>
+
+            {/* Favicon */}
+            <div className="space-y-3">
+              <Label>Favicon (ikon tab browser)</Label>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full overflow-hidden border bg-muted flex items-center justify-center shrink-0">
+                  <img
+                    src={settings?.favicon_url || "/favicon.png"}
+                    alt="Favicon"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = "/favicon.png";
+                    }}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <input
+                    ref={faviconInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleBrandUpload(e, "favicon")}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => faviconInputRef.current?.click()}
+                    disabled={uploadBrandAsset.isPending}
+                  >
+                    {uploadBrandAsset.isPending && uploadBrandAsset.variables?.type === "favicon" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    Upload Favicon
+                  </Button>
+                  {settings?.favicon_url && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleBrandReset("favicon")}
+                      disabled={clearBrandAsset.isPending}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Reset
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Disarankan .ico atau .svg 32×32 / 64×64, maks 5MB.
+              </p>
             </div>
           </CardContent>
         </Card>

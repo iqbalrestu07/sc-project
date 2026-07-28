@@ -8,6 +8,8 @@ export interface PublicClinicInfo {
   phone: string | null;
   email: string | null;
   maps_embed_url: string | null;
+  logo_url: string | null;
+  favicon_url: string | null;
 }
 
 /**

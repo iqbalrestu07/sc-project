@@ -12,8 +12,13 @@ import {
   LandingHeader,
   LandingFooter,
 } from "@/components/landing";
+import { usePublicClinicInfo } from "@/hooks/usePublicClinicInfo";
+import { useDynamicFavicon } from "@/hooks/useDynamicFavicon";
 
 export default function LandingPage() {
+  const { data: clinicInfo } = usePublicClinicInfo();
+  useDynamicFavicon(clinicInfo?.favicon_url);
+
   useEffect(() => {
     const lenis = new Lenis({
       duration: 1.2,

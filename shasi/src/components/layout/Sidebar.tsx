@@ -9,6 +9,7 @@ import {
   FolderOpen, ClipboardList, FlaskConical, FileUp,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useClinicSettings } from "@/hooks/useClinicSettings";
 import { OrgSwitcher } from "./OrgSwitcher";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -231,6 +232,7 @@ export function Sidebar({ onSignOut }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { activeOrg } = useAuth();
+  const { settings } = useClinicSettings();
 
   const handleNavigate = () => setMobileOpen(false);
 
@@ -264,9 +266,14 @@ export function Sidebar({ onSignOut }: SidebarProps) {
         <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border">
           {!collapsed && (
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-clinic-gold">
-                <Sparkles className="h-4 w-4 text-primary-foreground" />
-              </div>
+              <img
+                src={settings?.logo_url || "/logo.png"}
+                alt="Logo"
+                className="w-8 h-8 rounded-full object-cover"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = "/logo.png";
+                }}
+              />
               <span className="font-semibold text-sidebar-foreground truncate">
                 {activeOrg?.name ?? "Shasi Beauty Care"}
               </span>

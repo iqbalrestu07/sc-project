@@ -113,6 +113,7 @@ export const API_ENDPOINTS = {
         CLINIC: "/settings/clinic",
         CLINIC_UPDATE: "/settings/clinic",
         CLINIC_LOGO: "/settings/clinic/logo",
+        CLINIC_FAVICON: "/settings/clinic/favicon",
         PUBLIC_CLINIC_INFO: "/public/clinic-info",
     },
 

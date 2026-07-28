@@ -7,7 +7,10 @@ func RegisterRoutes(router gin.IRouter, admin gin.HandlerFunc) {
 
 	router.GET("/settings/clinic", handler.GetClinic)
 	router.PUT("/settings/clinic", admin, handler.UpdateClinic)
+	// UploadLogo handles both logo and favicon via the `type` form field.
+	// Two routes are exposed for clarity; both call the same handler.
 	router.POST("/settings/clinic/logo", admin, handler.UploadLogo)
+	router.POST("/settings/clinic/favicon", admin, handler.UploadLogo)
 }
 
 // RegisterPublicRoutes mounts unauthenticated endpoints for public-facing pages.

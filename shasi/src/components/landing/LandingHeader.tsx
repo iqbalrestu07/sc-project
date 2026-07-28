@@ -1,7 +1,8 @@
 import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
+import { usePublicClinicInfo } from "@/hooks/usePublicClinicInfo";
 
 // ─── Maroon & Gold Design Tokens ─────────────────────────────────────────────
 const COLORS = {
@@ -18,6 +19,9 @@ export function LandingHeader() {
   const { orgSlug } = useParams<{ orgSlug?: string }>();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const { data: clinicInfo } = usePublicClinicInfo();
+  const logoSrc = clinicInfo?.logo_url || "/logo.png";
+  const brandName = clinicInfo?.clinic_name || "Shasi Beauty Care";
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 30);
@@ -57,15 +61,14 @@ export function LandingHeader() {
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
           <Link to={orgSlug ? `/${orgSlug}` : "/"} className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{
-                background: `linear-gradient(135deg, ${COLORS.gold} 0%, ${COLORS.goldLight} 100%)`,
-                boxShadow: `0 2px 12px rgba(201, 168, 76, 0.4)`,
+            <img
+              src={logoSrc}
+              alt={`${brandName} logo`}
+              className="w-10 h-10 rounded-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = "/logo.png";
               }}
-            >
-              <Sparkles className="w-5 h-5" style={{ color: COLORS.maroon }} />
-            </div>
+            />
             <span
               className="font-bold text-lg tracking-wide hidden sm:block"
               style={{
@@ -75,7 +78,7 @@ export function LandingHeader() {
                 backgroundClip: "text",
               }}
             >
-              Shasi Beauty Care
+              {brandName}
             </span>
           </Link>
 

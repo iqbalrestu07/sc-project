@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Sparkles, Mail, Lock, Loader2, User, Building2 } from "lucide-react";
+import { Mail, Lock, Loader2, User, Building2 } from "lucide-react";
 import { apiClient, API_ENDPOINTS } from "@/integrations/api";
 import { useAuth, OrgInfo } from "@/contexts/AuthContext";
 import { getDefaultRoute } from "@/lib/routes";
 import { useToast } from "@/hooks/use-toast";
+import { usePublicClinicInfo } from "@/hooks/usePublicClinicInfo";
+import { useDynamicFavicon } from "@/hooks/useDynamicFavicon";
 
 interface AuthResponse {
   success: boolean;
@@ -29,6 +31,10 @@ interface AuthResponse {
 
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
+  const { data: clinicInfo } = usePublicClinicInfo();
+  const logoSrc = clinicInfo?.logo_url || "/logo.png";
+  const brandName = clinicInfo?.clinic_name || "Shasi Beauty Care";
+  useDynamicFavicon(clinicInfo?.favicon_url);
 
   // Sign-in state
   const [email, setEmail] = useState("");
@@ -133,10 +139,15 @@ export default function Auth() {
       <div className="w-full max-w-md animate-fade-in">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary mb-4 shadow-clinic">
-            <Sparkles className="h-8 w-8 text-primary-foreground" />
-          </div>
-          <h1 className="text-2xl font-semibold text-foreground">AestheticPro</h1>
+          <img
+            src={logoSrc}
+            alt={`${brandName} logo`}
+            className="w-16 h-16 rounded-full object-cover mx-auto mb-4 shadow-clinic"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = "/logo.png";
+            }}
+          />
+          <h1 className="text-2xl font-semibold text-foreground">{brandName}</h1>
           <p className="text-muted-foreground mt-1">Clinic Management System</p>
         </div>
 

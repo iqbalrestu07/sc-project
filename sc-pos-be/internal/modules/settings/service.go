@@ -12,6 +12,7 @@ type Service interface {
 	GetClinic(orgID string) (*models.ClinicSettings, error)
 	GetClinicPublic(orgID string) (*models.ClinicSettings, error)
 	UpdateClinic(req models.ClinicSettings, orgID, userByID string) (*models.ClinicSettings, error)
+	UpdateBrandAsset(orgID, field, url string) (*models.ClinicSettings, error)
 }
 
 type service struct {
@@ -58,6 +59,20 @@ func (s *service) UpdateClinic(req models.ClinicSettings, orgID, userByID string
 	return s.GetClinic(orgID)
 }
 
+// UpdateBrandAsset persists only the logo_url or favicon_url field for the
+// active organization. field must be "logo_url" or "favicon_url". An empty url
+// clears the value so the frontend falls back to the bundled default asset.
+func (s *service) UpdateBrandAsset(orgID, field, url string) (*models.ClinicSettings, error) {
+	current, err := s.GetClinic(orgID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.UpdateBrandAsset(current.ID, field, url); err != nil {
+		return nil, err
+	}
+	return s.GetClinic(orgID)
+}
+
 func defaultClinicSettings() *models.ClinicSettings {
 	now := time.Now()
 	clinicName := "Shasi Clinic"
@@ -99,4 +114,6 @@ func mergeClinicSettings(current *models.ClinicSettings, req models.ClinicSettin
 	current.InvoiceHeaderDescription = req.InvoiceHeaderDescription
 	current.InvoiceFooterText = req.InvoiceFooterText
 	current.MapsEmbedUrl = req.MapsEmbedUrl
+	current.LogoURL = req.LogoURL
+	current.FaviconURL = req.FaviconURL
 }

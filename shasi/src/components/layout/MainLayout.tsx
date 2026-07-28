@@ -2,6 +2,8 @@ import { ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { useClinicSettings } from "@/hooks/useClinicSettings";
+import { useDynamicFavicon } from "@/hooks/useDynamicFavicon";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -9,6 +11,9 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({ children, onSignOut }: MainLayoutProps) {
+  const { settings } = useClinicSettings();
+  useDynamicFavicon(settings?.favicon_url);
+
   return (
     <div className="min-h-screen bg-background">
       <Sidebar onSignOut={onSignOut} />

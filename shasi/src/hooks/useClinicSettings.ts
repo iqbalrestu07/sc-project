@@ -24,6 +24,8 @@ export interface ClinicSettings {
   wa_invoice_header_description: string | null;
   wa_invoice_footer_text: string | null;
   maps_embed_url: string | null;
+  logo_url: string | null;
+  favicon_url: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -68,10 +70,57 @@ export function useClinicSettings() {
     },
   });
 
+  const uploadBrandAsset = useMutation({
+    mutationFn: async (vars: { file: File; type: "logo" | "favicon" }) => {
+      const form = new FormData();
+      form.append("file", vars.file);
+      form.append("type", vars.type);
+      const endpoint =
+        vars.type === "favicon"
+          ? API_ENDPOINTS.SETTINGS.CLINIC_FAVICON
+          : API_ENDPOINTS.SETTINGS.CLINIC_LOGO;
+      const data = await apiClient.postForm<{ data: { url: string; settings: ClinicSettings } }>(
+        endpoint,
+        form
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clinic-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["public-clinic-info"] });
+      toast.success("Brand asset updated");
+    },
+    onError: (error) => {
+      toast.error(`Failed to upload: ${(error as Error).message}`);
+    },
+  });
+
+  const clearBrandAsset = useMutation({
+    mutationFn: async (type: "logo" | "favicon") => {
+      const updates: Partial<ClinicSettings> =
+        type === "logo" ? { logo_url: "" } : { favicon_url: "" };
+      const data = await apiClient.put<{ data: ClinicSettings }>(
+        API_ENDPOINTS.SETTINGS.CLINIC_UPDATE,
+        updates
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clinic-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["public-clinic-info"] });
+      toast.success("Brand asset reset to default");
+    },
+    onError: (error) => {
+      toast.error(`Failed to reset: ${(error as Error).message}`);
+    },
+  });
+
   return {
     settings: settingsQuery.data,
     isLoading: settingsQuery.isLoading,
     error: settingsQuery.error,
     updateSettings,
+    uploadBrandAsset,
+    clearBrandAsset,
   };
 }
