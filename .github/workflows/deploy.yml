@@ -28,8 +28,8 @@ jobs:
             git pull origin main
 
             echo "Building and restarting containers..."
-            sudo docker compose down
-            sudo docker compose up --build -d --remove-orphans postgres backend frontend
+            sudo docker compose --profile cloudflare down
+            sudo docker compose --profile cloudflare up --build -d --remove-orphans
 
             echo "Waiting for backend to be healthy..."
             sleep 15
