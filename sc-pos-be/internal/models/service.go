@@ -16,18 +16,21 @@ type Service struct {
 	TherapistCommissionType  string  `json:"therapist_commission_type" db:"therapist_commission_type"`
 	TherapistCommissionValue float64 `json:"therapist_commission_value" db:"therapist_commission_value"`
 	// Offering commission: earned only when staff offers the service and patient agrees.
-	DoctorOfferingCommissionType     *string          `json:"doctor_offering_commission_type,omitempty" db:"doctor_offering_commission_type"`
-	DoctorOfferingCommissionValue    *float64         `json:"doctor_offering_commission_value,omitempty" db:"doctor_offering_commission_value"`
-	TherapistOfferingCommissionType  *string          `json:"therapist_offering_commission_type,omitempty" db:"therapist_offering_commission_type"`
-	TherapistOfferingCommissionValue *float64         `json:"therapist_offering_commission_value,omitempty" db:"therapist_offering_commission_value"`
-	RequiresDoctor                   bool             `json:"requires_doctor" db:"requires_doctor"`
-	IsActive                         bool             `json:"is_active" db:"is_active"`
-	CreatedBy                        *string          `json:"created_by,omitempty" db:"created_by"`
-	UpdatedBy                        *string          `json:"updated_by,omitempty" db:"updated_by"`
-	DeletedAt                        *time.Time       `json:"deleted_at,omitempty" db:"deleted_at"`
-	CreatedAt                        time.Time        `json:"created_at" db:"created_at"`
-	UpdatedAt                        time.Time        `json:"updated_at" db:"updated_at"`
-	Category                         *ServiceCategory `json:"category,omitempty" db:"-"`
+	DoctorOfferingCommissionType     *string  `json:"doctor_offering_commission_type,omitempty" db:"doctor_offering_commission_type"`
+	DoctorOfferingCommissionValue    *float64 `json:"doctor_offering_commission_value,omitempty" db:"doctor_offering_commission_value"`
+	TherapistOfferingCommissionType  *string  `json:"therapist_offering_commission_type,omitempty" db:"therapist_offering_commission_type"`
+	TherapistOfferingCommissionValue *float64 `json:"therapist_offering_commission_value,omitempty" db:"therapist_offering_commission_value"`
+	// OfferingPrice: harga situasional saat pasien menerima penawaran offering dari terapis.
+	// Jika NULL, harga offering = base_price (tidak ada harga khusus offering).
+	OfferingPrice  *float64         `json:"offering_price,omitempty" db:"offering_price"`
+	RequiresDoctor bool             `json:"requires_doctor" db:"requires_doctor"`
+	IsActive       bool             `json:"is_active" db:"is_active"`
+	CreatedBy      *string          `json:"created_by,omitempty" db:"created_by"`
+	UpdatedBy      *string          `json:"updated_by,omitempty" db:"updated_by"`
+	DeletedAt      *time.Time       `json:"deleted_at,omitempty" db:"deleted_at"`
+	CreatedAt      time.Time        `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time        `json:"updated_at" db:"updated_at"`
+	Category       *ServiceCategory `json:"category,omitempty" db:"-"`
 }
 
 // ServiceCategory represents service categories

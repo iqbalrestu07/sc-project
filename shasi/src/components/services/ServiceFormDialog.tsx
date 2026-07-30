@@ -51,6 +51,8 @@ const serviceSchema = z.object({
   doctor_offering_commission_value: z.coerce.number().min(0).optional().nullable(),
   therapist_offering_commission_type: commissionTypeEnum.optional().nullable(),
   therapist_offering_commission_value: z.coerce.number().min(0).optional().nullable(),
+  // Offering price: harga situasional saat pasien menerima penawaran offering (opsional)
+  offering_price: z.coerce.number().min(0).optional().nullable(),
   requires_doctor: z.boolean().optional(),
 });
 
@@ -86,6 +88,7 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
       doctor_offering_commission_value: null,
       therapist_offering_commission_type: null,
       therapist_offering_commission_value: null,
+      offering_price: null,
       requires_doctor: false,
     },
   });
@@ -115,6 +118,7 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
         doctor_offering_commission_value: service.doctor_offering_commission_value ?? null,
         therapist_offering_commission_type: service.therapist_offering_commission_type ?? null,
         therapist_offering_commission_value: service.therapist_offering_commission_value ?? null,
+        offering_price: service.offering_price ?? null,
         requires_doctor: service.requires_doctor,
       });
     } else {
@@ -132,6 +136,7 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
         doctor_offering_commission_value: null,
         therapist_offering_commission_type: null,
         therapist_offering_commission_value: null,
+        offering_price: null,
         requires_doctor: false,
       });
     }
@@ -261,6 +266,30 @@ export function ServiceFormDialog({ open, onOpenChange, service }: ServiceFormDi
                     <FormControl>
                       <Input type="number" min={0} placeholder="0" {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="offering_price"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Harga Offering (IDR)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="Kosongkan jika sama dengan base price"
+                        value={field.value ?? ""}
+                        onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">
+                      Harga situasional saat pasien ditawari oleh terapis dan menerima.
+                      Jika kosong, harga offering = base price.
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}

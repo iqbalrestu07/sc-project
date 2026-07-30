@@ -28,6 +28,7 @@ func (r *Repository) List(search, orgID string, page, limit int) ([]models.Servi
 		       COALESCE(s.therapist_commission_value, 0),
 		       s.doctor_offering_commission_type, s.doctor_offering_commission_value,
 		       s.therapist_offering_commission_type, s.therapist_offering_commission_value,
+		       s.offering_price,
 		       COALESCE(s.requires_doctor, false), COALESCE(s.is_active, true),
 		       s.created_at, s.updated_at,
 		       c.id, c.name, c.description, COALESCE(c.is_active, true), c.created_at, c.updated_at
@@ -76,6 +77,7 @@ func (r *Repository) Get(id, orgID string) (*models.Service, error) {
 		       COALESCE(s.therapist_commission_type, 'fixed'), COALESCE(s.therapist_commission_value, 0),
 		       s.doctor_offering_commission_type, s.doctor_offering_commission_value,
 		       s.therapist_offering_commission_type, s.therapist_offering_commission_value,
+		       s.offering_price,
 		       COALESCE(s.requires_doctor, false), COALESCE(s.is_active, true), s.created_at, s.updated_at,
 		       c.id, c.name, c.description, COALESCE(c.is_active, true), c.created_at, c.updated_at
 		FROM services s
@@ -102,6 +104,7 @@ func (r *Repository) GetByName(name, orgID string) (*models.Service, error) {
 		       COALESCE(s.therapist_commission_type, 'fixed'), COALESCE(s.therapist_commission_value, 0),
 		       s.doctor_offering_commission_type, s.doctor_offering_commission_value,
 		       s.therapist_offering_commission_type, s.therapist_offering_commission_value,
+		       s.offering_price,
 		       COALESCE(s.requires_doctor, false), COALESCE(s.is_active, true), s.created_at, s.updated_at,
 		       c.id, c.name, c.description, COALESCE(c.is_active, true), c.created_at, c.updated_at
 		FROM services s
@@ -134,10 +137,11 @@ func (r *Repository) Create(service *models.Service, orgID string) error {
 			therapist_commission_type, therapist_commission_value,
 			doctor_offering_commission_type, doctor_offering_commission_value,
 			therapist_offering_commission_type, therapist_offering_commission_value,
+			offering_price,
 			requires_doctor, is_active, created_at, updated_at,
 			organization_id, created_by
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
 	`
 	if _, err := r.db.Exec(query, service.ID, service.Name, service.CategoryID, service.Description,
 		service.DurationMinutes, service.BasePrice,
@@ -145,6 +149,7 @@ func (r *Repository) Create(service *models.Service, orgID string) error {
 		service.TherapistCommissionType, service.TherapistCommissionValue,
 		service.DoctorOfferingCommissionType, service.DoctorOfferingCommissionValue,
 		service.TherapistOfferingCommissionType, service.TherapistOfferingCommissionValue,
+		service.OfferingPrice,
 		service.RequiresDoctor, service.IsActive,
 		service.CreatedAt, service.UpdatedAt, nullableString(orgID), createdByVal); err != nil {
 		return fmt.Errorf("failed to create service: %w", err)
@@ -164,9 +169,10 @@ func (r *Repository) Update(id string, service *models.Service, orgID string) er
 		    therapist_commission_type = $8, therapist_commission_value = $9,
 		    doctor_offering_commission_type = $10, doctor_offering_commission_value = $11,
 		    therapist_offering_commission_type = $12, therapist_offering_commission_value = $13,
-		    requires_doctor = $14, updated_by = $15, updated_at = NOW()
-		WHERE id = $16 AND COALESCE(is_active, true) = true
-		  AND (organization_id = $17 OR ($17::text = '' AND organization_id IS NULL))
+		    offering_price = $14,
+		    requires_doctor = $15, updated_by = $16, updated_at = NOW()
+		WHERE id = $17 AND COALESCE(is_active, true) = true
+		  AND (organization_id = $18 OR ($18::text = '' AND organization_id IS NULL))
 		  AND deleted_at IS NULL`,
 		service.Name, service.CategoryID, service.Description,
 		service.DurationMinutes, service.BasePrice,
@@ -174,6 +180,7 @@ func (r *Repository) Update(id string, service *models.Service, orgID string) er
 		service.TherapistCommissionType, service.TherapistCommissionValue,
 		service.DoctorOfferingCommissionType, service.DoctorOfferingCommissionValue,
 		service.TherapistOfferingCommissionType, service.TherapistOfferingCommissionValue,
+		service.OfferingPrice,
 		service.RequiresDoctor, updatedByVal, id, orgID)
 	if err != nil {
 		return fmt.Errorf("failed to update service: %w", err)
@@ -292,15 +299,17 @@ func scanService(scanner serviceScanner) (models.Service, error) {
 	var categoryDescription sql.NullString
 	var categoryIsActive sql.NullBool
 	var categoryCreatedAt, categoryUpdatedAt sql.NullTime
-	// Nullable offering commission fields
+	// Nullable offering commission fields + offering_price
 	var docOffType, therapistOffType sql.NullString
 	var docOffValue, therapistOffValue sql.NullFloat64
+	var offeringPrice sql.NullFloat64
 	err := scanner.Scan(
 		&service.ID, &service.Name, &service.CategoryID, &service.Description,
 		&service.DurationMinutes, &service.BasePrice,
 		&service.DoctorCommissionType, &service.DoctorCommissionValue,
 		&service.TherapistCommissionType, &service.TherapistCommissionValue,
 		&docOffType, &docOffValue, &therapistOffType, &therapistOffValue,
+		&offeringPrice,
 		&service.RequiresDoctor, &service.IsActive,
 		&service.CreatedAt, &service.UpdatedAt,
 		&categoryID, &categoryName,
@@ -320,6 +329,9 @@ func scanService(scanner serviceScanner) (models.Service, error) {
 	}
 	if therapistOffValue.Valid {
 		service.TherapistOfferingCommissionValue = &therapistOffValue.Float64
+	}
+	if offeringPrice.Valid {
+		service.OfferingPrice = &offeringPrice.Float64
 	}
 	if categoryID.Valid {
 		category.ID = categoryID.String

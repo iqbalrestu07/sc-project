@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Upload,
   FileSpreadsheet,
@@ -36,7 +36,9 @@ async function importExcel(params: { file: File; type: string }): Promise<{ succ
   const formData = new FormData();
   formData.append("file", params.file);
   formData.append("type", params.type);
-  return apiClient.postForm(API_ENDPOINTS.MIGRATION.IMPORT_EXCEL, formData);
+  // Import can take a long time for large files via SSH tunnel (each row = 2 DB queries).
+  // Use 5-minute timeout instead of the default 30s.
+  return apiClient.postForm(API_ENDPOINTS.MIGRATION.IMPORT_EXCEL, formData, 300000);
 }
 
 // ─── Template Download Helper ─────────────────────────────────────────────────
@@ -51,13 +53,14 @@ function downloadTemplate(type: "catalog" | "patient") {
       ["aurora perum AL", "628988954816", "perumah AL"],
     ];
   } else {
-    headers = ["nama", "jenis", "harga", "komisi", "modal"];
+    headers = ["nama", "jenis", "harga", "komisi", "modal", "harga tambahan", "komisi tambahan"];
     examples = [
-      ["Facial Brightening", "tindakan", "150000", "15000", ""],
-      ["Serum Vitamin C", "product", "120000", "", "65000"],
-      ["Handuk Kecil", "barang habis pakai", "25000", "", "12000"],
-      ["Peeling Acne", "tindakan", "200000", "20000", ""],
-      ["Masker Kolagen", "product", "85000", "", "40000"],
+      ["Facial Brightening", "tindakan", "100000", "", "", "", ""],
+      ["Facial Omegalight", "tindakan", "135000", "", "", "50000", "5000"],
+      ["Serum Vitamin C", "product", "120000", "", "65000", "", ""],
+      ["Handuk Kecil", "barang habis pakai", "25000", "", "12000", "", ""],
+      ["Peeling Acne", "tindakan", "400000", "10000", "", "", ""],
+      ["Masker Kolagen", "product", "85000", "", "40000", "", ""],
     ];
   }
 
@@ -97,6 +100,7 @@ const JENIS_INFO = [
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ImportExcel() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"catalog" | "patient">("catalog");
   const [dragOver, setDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -107,6 +111,17 @@ export default function ImportExcel() {
     mutationFn: importExcel,
     onSuccess: (res) => {
       setResult(res.data);
+
+      // Invalidate relevant query caches so lists refresh automatically.
+      // Without this, Products/Services/Patients pages show stale data
+      // because refetchOnWindowFocus is disabled in the QueryClient config.
+      if (activeTab === "catalog") {
+        queryClient.invalidateQueries({ queryKey: ["products"] });
+        queryClient.invalidateQueries({ queryKey: ["services"] });
+      } else if (activeTab === "patient") {
+        queryClient.invalidateQueries({ queryKey: ["patients"] });
+      }
+
       if (res.data.failed === 0) {
         toast.success("Import berhasil!", {
           description: `${res.data.created} data ditambahkan, ${res.data.updated} diperbarui.`,
@@ -199,6 +214,8 @@ export default function ImportExcel() {
                       { col: "harga", req: true, desc: "Harga jual (angka/Rp)" },
                       { col: "komisi", req: false, desc: "Komisi tindakan" },
                       { col: "modal", req: false, desc: "Harga beli / HPP" },
+                      { col: "harga tambahan", req: false, desc: "Harga offering (tindakan)" },
+                      { col: "komisi tambahan", req: false, desc: "Komisi offering (tindakan)" },
                     ].map((col) => (
                       <div key={col.col} className="flex items-center gap-2">
                         <code className="text-xs bg-white border border-blue-200 px-1.5 py-0.5 rounded font-mono text-blue-700 min-w-[60px]">
@@ -343,7 +360,7 @@ export default function ImportExcel() {
               <Progress value={undefined} className="h-1.5 animate-pulse" />
               <p className="text-sm text-center text-muted-foreground flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Sedang memproses file...
+                Sedang memproses file... (mohon tunggu, import besar bisa beberapa menit)
               </p>
             </div>
           )}

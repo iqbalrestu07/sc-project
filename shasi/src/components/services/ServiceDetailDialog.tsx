@@ -153,6 +153,18 @@ export function ServiceDetailDialog({
               </div>
             </div>
 
+            {/* ── Offering price (jika ada) ──────────────────────────────────── */}
+            {service.offering_price != null && service.offering_price > 0 && (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm">
+                <Banknote className="h-5 w-5 text-amber-600 shrink-0" />
+                <div>
+                  <p className="text-xs text-amber-700">Harga Offering</p>
+                  <p className="font-semibold text-base text-amber-900">{fmt(service.offering_price)}</p>
+                  <p className="text-xs text-amber-600">Harga saat pasien menerima penawaran offering</p>
+                </div>
+              </div>
+            )}
+
             {/* ── Deskripsi ──────────────────────────────────────────────────── */}
             {service.description && (
               <div className="rounded-lg bg-muted/30 p-3">

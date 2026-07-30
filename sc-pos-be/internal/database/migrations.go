@@ -75,6 +75,9 @@ func RunMigrations() error {
 		ALTER TABLE services ADD COLUMN IF NOT EXISTS doctor_offering_commission_value  DECIMAL(10, 2);
 		ALTER TABLE services ADD COLUMN IF NOT EXISTS therapist_offering_commission_type  VARCHAR(20);
 		ALTER TABLE services ADD COLUMN IF NOT EXISTS therapist_offering_commission_value DECIMAL(10, 2);
+		-- offering_price: harga situasional saat pasien menerima penawaran offering dari terapis.
+		-- Jika NULL, harga offering = base_price (tidak ada harga khusus offering).
+		ALTER TABLE services ADD COLUMN IF NOT EXISTS offering_price DECIMAL(10, 2);
 	`); err != nil {
 		return fmt.Errorf("failed to add offering commission columns to services: %w", err)
 	}

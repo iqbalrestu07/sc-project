@@ -29,6 +29,9 @@ export interface Service {
   doctor_offering_commission_value?: number | null;
   therapist_offering_commission_type?: CommissionType | null;
   therapist_offering_commission_value?: number | null;
+  // Offering price: harga situasional saat pasien menerima penawaran offering.
+  // Jika null, harga offering = base_price.
+  offering_price?: number | null;
   is_active: boolean;
   requires_doctor: boolean;
   created_at: string;
@@ -53,6 +56,8 @@ export interface ServiceFormData {
   doctor_offering_commission_value?: number | null;
   therapist_offering_commission_type?: CommissionType | null;
   therapist_offering_commission_value?: number | null;
+  // Offering price
+  offering_price?: number | null;
   requires_doctor?: boolean;
 }
 

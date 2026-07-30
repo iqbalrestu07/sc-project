@@ -230,8 +230,10 @@ class ApiClient {
         return response.data;
     }
 
-    public async postForm<T = unknown>(url: string, formData: FormData) {
-        const response = await this.client.postForm<T>(url, formData);
+    public async postForm<T = unknown>(url: string, formData: FormData, timeout?: number) {
+        const response = await this.client.postForm<T>(url, formData, {
+            timeout: timeout ?? this.client.defaults.timeout,
+        });
         return response.data;
     }
 }
