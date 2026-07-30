@@ -6,9 +6,12 @@ import { componentTagger } from "lovable-tagger";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const frontendPort = Number(env.VITE_FRONTEND_PORT || env.PORT || 8080);
+  const rootEnv = loadEnv(mode, path.resolve(__dirname, ".."), "");
+  const mergedEnv = { ...rootEnv, ...env };
+  const frontendPort = Number(mergedEnv.VITE_FRONTEND_PORT || mergedEnv.PORT || 8080);
 
   return {
+    envDir: path.resolve(__dirname, ".."),
     server: {
       host: "::",
       port: frontendPort,
