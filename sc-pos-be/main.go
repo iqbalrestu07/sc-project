@@ -15,9 +15,8 @@ import (
 )
 
 func main() {
-	// Load environment variables (try current dir, then parent dir for monorepo)
+	// Load environment variables
 	_ = godotenv.Load()
-	_ = godotenv.Load("../")
 
 	// Load config
 	cfg := config.Load()
