@@ -17,6 +17,7 @@ type Service interface {
 	List(orgID, search string, page, limit int) ([]models.Product, bool, error)
 	Get(id, orgID string) (*models.Product, error)
 	GetByName(name, orgID string) (*models.Product, error)
+	GetByNames(names []string, orgID string) (map[string]*models.Product, error)
 	Create(req models.Product, orgID, userID string) (*models.Product, error)
 	Update(id string, req models.Product, orgID, userID string) (*models.Product, error)
 	UpsertByName(req models.Product, orgID, userID string) (*models.Product, error)
@@ -55,6 +56,10 @@ func (s *service) Get(id, orgID string) (*models.Product, error) {
 
 func (s *service) GetByName(name, orgID string) (*models.Product, error) {
 	return s.repo.GetByName(name, orgID)
+}
+
+func (s *service) GetByNames(names []string, orgID string) (map[string]*models.Product, error) {
+	return s.repo.GetByNames(names, orgID)
 }
 
 func (s *service) Create(req models.Product, orgID, userID string) (*models.Product, error) {

@@ -179,9 +179,105 @@ func (s *service) ImportCatalogExcel(file io.Reader, filename, orgID, userID str
 		return nil, err
 	}
 
+	// ── Chunked parse + upsert ───────────────────────────────────────────
+	// To keep memory low on a 1GB RAM server, we process rows in chunks of
+	// batchSize (50). Each chunk: parse → pre-fetch existing → upsert → GC.
+	// This avoids loading the entire file into memory at once while still
+	// benefiting from batched DB lookups (1 GetByNames query per chunk
+	// instead of 1 GetByName per row).
+	type parsedRow struct {
+		lineNum    int
+		name       string
+		jenis      string
+		price      float64
+		commission float64
+		modal      float64
+		hargaTamb  float64
+		komisiTamb float64
+		parseErr   error
+	}
+
 	result := &ImportResult{}
-	rowNum := 1 // header is row 1
-	processedInBatch := 0
+	rowNum := 1
+	var chunk []parsedRow
+
+	// flushChunk processes a chunk of parsed rows: pre-fetch existing records
+	// in 1 query per type, then upsert each row using the cache.
+	flushChunk := func() error {
+		if len(chunk) == 0 {
+			return nil
+		}
+
+		// Collect unique names per type for batch lookup
+		productNames := make(map[string]bool)
+		serviceNames := make(map[string]bool)
+		for _, pr := range chunk {
+			if pr.parseErr != nil || pr.name == "" {
+				continue
+			}
+			switch pr.jenis {
+			case "product", "barang habis pakai":
+				productNames[strings.ToLower(pr.name)] = true
+			case "tindakan":
+				serviceNames[strings.ToLower(pr.name)] = true
+			}
+		}
+
+		// Pre-fetch existing records (1 query per type)
+		existingProducts := map[string]*models.Product{}
+		if len(productNames) > 0 {
+			names := make([]string, 0, len(productNames))
+			for n := range productNames {
+				names = append(names, n)
+			}
+			var pErr error
+			existingProducts, pErr = s.productSvc.GetByNames(names, orgID)
+			if pErr != nil {
+				return fmt.Errorf("failed to fetch existing products: %w", pErr)
+			}
+		}
+		existingServices := map[string]*models.Service{}
+		if len(serviceNames) > 0 {
+			names := make([]string, 0, len(serviceNames))
+			for n := range serviceNames {
+				names = append(names, n)
+			}
+			var sErr error
+			existingServices, sErr = s.serviceSvc.GetByNames(names, orgID)
+			if sErr != nil {
+				return fmt.Errorf("failed to fetch existing services: %w", sErr)
+			}
+		}
+
+		// Upsert each row in chunk using cache (no per-row GetByName)
+		for _, pr := range chunk {
+			if pr.parseErr != nil {
+				result.Failed++
+				result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", pr.lineNum, pr.parseErr))
+				continue
+			}
+
+			var created bool
+			var upsertErr error
+			switch pr.jenis {
+			case "product":
+				created, upsertErr = s.upsertProductCached(pr.name, pr.price, pr.modal, false, orgID, userID, existingProducts)
+			case "tindakan":
+				created, upsertErr = s.upsertServiceCached(pr.name, pr.price, pr.commission, pr.hargaTamb, pr.komisiTamb, orgID, userID, existingServices)
+			case "barang habis pakai":
+				created, upsertErr = s.upsertProductCached(pr.name, pr.price, pr.modal, true, orgID, userID, existingProducts)
+			default:
+				upsertErr = ErrInvalidRowType
+			}
+
+			result.track(created, upsertErr, fmt.Sprintf("row %d (%s)", pr.lineNum, pr.name))
+		}
+
+		// Release chunk memory before processing next chunk
+		chunk = chunk[:0]
+		runtime.GC()
+		return nil
+	}
 
 	for {
 		row, err := reader.Read()
@@ -195,54 +291,50 @@ func (s *service) ImportCatalogExcel(file io.Reader, filename, orgID, userID str
 			continue
 		}
 		rowNum++
-
 		if len(row) == 0 || allEmpty(row) {
 			continue
 		}
 
-		name := strings.TrimSpace(getCell(row, idx.name))
-		if name == "" {
-			result.Failed++
-			result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, ErrMissingName))
+		pr := parsedRow{lineNum: rowNum}
+		pr.name = strings.TrimSpace(getCell(row, idx.name))
+		if pr.name == "" {
+			pr.parseErr = ErrMissingName
+			chunk = append(chunk, pr)
+			if len(chunk) >= batchSize {
+				if e := flushChunk(); e != nil {
+					return nil, e
+				}
+			}
 			continue
 		}
-
-		jenis := strings.TrimSpace(strings.ToLower(getCell(row, idx.jenis)))
-		price, err := parsePrice(getCell(row, idx.harga))
+		pr.jenis = strings.TrimSpace(strings.ToLower(getCell(row, idx.jenis)))
+		pr.price, err = parsePrice(getCell(row, idx.harga))
 		if err != nil {
-			result.Failed++
-			result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, err))
+			pr.parseErr = err
+			chunk = append(chunk, pr)
+			if len(chunk) >= batchSize {
+				if e := flushChunk(); e != nil {
+					return nil, e
+				}
+			}
 			continue
 		}
+		pr.commission, _ = parsePrice(getCell(row, idx.komisi))
+		pr.modal, _ = parsePrice(getCell(row, idx.modal))
+		pr.hargaTamb, _ = parsePrice(getCell(row, idx.hargaTambahan))
+		pr.komisiTamb, _ = parsePrice(getCell(row, idx.komisiTambahan))
 
-		commission, _ := parsePrice(getCell(row, idx.komisi))
-		modal, _ := parsePrice(getCell(row, idx.modal))
-		hargaTambahan, _ := parsePrice(getCell(row, idx.hargaTambahan))
-		komisiTambahan, _ := parsePrice(getCell(row, idx.komisiTambahan))
-
-		var created bool
-		var upsertErr error
-		switch jenis {
-		case "product":
-			created, upsertErr = s.upsertProduct(name, price, modal, false, orgID, userID)
-		case "tindakan":
-			created, upsertErr = s.upsertService(name, price, commission, hargaTambahan, komisiTambahan, orgID, userID)
-		case "barang habis pakai":
-			created, upsertErr = s.upsertProduct(name, price, modal, true, orgID, userID)
-		default:
-			upsertErr = ErrInvalidRowType
+		chunk = append(chunk, pr)
+		if len(chunk) >= batchSize {
+			if e := flushChunk(); e != nil {
+				return nil, e
+			}
 		}
+	}
 
-		result.track(created, upsertErr, fmt.Sprintf("row %d (%s)", rowNum, name))
-
-		// Batch boundary: hint GC to release intermediate memory.
-		// On a 1GB server this prevents memory from accumulating across
-		// thousands of rows (each upsert allocates DB query buffers, etc).
-		processedInBatch++
-		if processedInBatch >= batchSize {
-			runtime.GC()
-			processedInBatch = 0
-		}
+	// Flush remaining rows in the last chunk
+	if e := flushChunk(); e != nil {
+		return nil, e
 	}
 
 	return result, nil
@@ -312,6 +404,65 @@ func (s *service) upsertService(name string, price, commission, hargaTambahan, k
 		return false, err
 	}
 	_, err = s.serviceSvc.Create(req, orgID, userID)
+	return err == nil, err
+}
+
+// ─── Cached upsert variants (use pre-fetched map, no GetByName round-trip) ───
+
+func (s *service) upsertProductCached(name string, price, purchasePrice float64, isConsumable bool, orgID, userID string, cache map[string]*models.Product) (bool, error) {
+	req := models.Product{
+		Name:         name,
+		SellingPrice: &price,
+		IsConsumable: isConsumable,
+		IsActive:     true,
+	}
+	if purchasePrice > 0 {
+		req.PurchasePrice = &purchasePrice
+	}
+	existing := cache[strings.ToLower(name)]
+	if existing != nil {
+		req.ID = existing.ID
+		req.CreatedAt = existing.CreatedAt
+		req.Sku = existing.Sku
+		req.Unit = existing.Unit
+		req.CurrentStock = existing.CurrentStock
+		req.MinimumStock = existing.MinimumStock
+		_, err := s.productSvc.Update(existing.ID, req, orgID, userID)
+		return false, err
+	}
+	_, err := s.productSvc.Create(req, orgID, userID)
+	return err == nil, err
+}
+
+func (s *service) upsertServiceCached(name string, price, commission, hargaTambahan, komisiTambahan float64, orgID, userID string, cache map[string]*models.Service) (bool, error) {
+	req := models.Service{
+		Name:                     name,
+		BasePrice:                price,
+		DoctorCommissionType:     "fixed",
+		DoctorCommissionValue:    commission,
+		TherapistCommissionType:  "fixed",
+		TherapistCommissionValue: commission,
+		DurationMinutes:          30,
+		IsActive:                 true,
+	}
+	if hargaTambahan > 0 {
+		req.OfferingPrice = &hargaTambahan
+	}
+	if komisiTambahan > 0 {
+		offType := "fixed"
+		req.DoctorOfferingCommissionType = &offType
+		req.DoctorOfferingCommissionValue = &komisiTambahan
+		req.TherapistOfferingCommissionType = &offType
+		req.TherapistOfferingCommissionValue = &komisiTambahan
+	}
+	existing := cache[strings.ToLower(name)]
+	if existing != nil {
+		req.ID = existing.ID
+		req.CreatedAt = existing.CreatedAt
+		_, err := s.serviceSvc.Update(existing.ID, req, orgID, userID)
+		return false, err
+	}
+	_, err := s.serviceSvc.Create(req, orgID, userID)
 	return err == nil, err
 }
 

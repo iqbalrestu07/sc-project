@@ -3,6 +3,7 @@ package service
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
@@ -123,6 +124,60 @@ func (r *Repository) GetByName(name, orgID string) (*models.Service, error) {
 		return nil, err
 	}
 	return &service, nil
+}
+
+// GetByNames fetches multiple services by name in a single query.
+// Returns a map of lower(name) → *models.Service for fast lookup.
+// This avoids N separate GetByName round-trips during bulk import.
+func (r *Repository) GetByNames(names []string, orgID string) (map[string]*models.Service, error) {
+	if len(names) == 0 {
+		return map[string]*models.Service{}, nil
+	}
+	args := make([]interface{}, 0, len(names)+1)
+	for _, n := range names {
+		args = append(args, strings.ToLower(n))
+	}
+	args = append(args, orgID)
+	placeholders := ""
+	for i := range names {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += fmt.Sprintf("$%d", i+1)
+	}
+	orgParamIdx := len(names) + 1
+
+	query := fmt.Sprintf(`
+		SELECT s.id, s.name, s.category_id, s.description, s.duration_minutes, s.base_price,
+		       COALESCE(s.doctor_commission_type, 'fixed'), COALESCE(s.doctor_commission_value, 0),
+		       COALESCE(s.therapist_commission_type, 'fixed'), COALESCE(s.therapist_commission_value, 0),
+		       s.doctor_offering_commission_type, s.doctor_offering_commission_value,
+		       s.therapist_offering_commission_type, s.therapist_offering_commission_value,
+		       s.offering_price,
+		       COALESCE(s.requires_doctor, false), COALESCE(s.is_active, true), s.created_at, s.updated_at,
+		       c.id, c.name, c.description, COALESCE(c.is_active, true), c.created_at, c.updated_at
+		FROM services s
+		LEFT JOIN service_categories c ON c.id = s.category_id
+		WHERE LOWER(s.name) IN (%s) AND COALESCE(s.is_active, true) = true
+		  AND (s.organization_id = $%d OR ($%d::text = '' AND s.organization_id IS NULL))
+		  AND s.deleted_at IS NULL
+	`, placeholders, orgParamIdx, orgParamIdx)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query services by names: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]*models.Service, len(names))
+	for rows.Next() {
+		svc, err := scanService(rows)
+		if err != nil {
+			return nil, err
+		}
+		result[strings.ToLower(svc.Name)] = &svc
+	}
+	return result, rows.Err()
 }
 
 func (r *Repository) Create(service *models.Service, orgID string) error {

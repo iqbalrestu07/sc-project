@@ -3,6 +3,7 @@ package product
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
@@ -34,14 +35,14 @@ func (r *Repository) List(orgID, search string, page, limit int) ([]models.Produ
 		WHERE COALESCE(is_active, true) = true
 		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
 		  AND deleted_at IS NULL`
-	
+
 	args := []interface{}{orgID}
-	
+
 	if search != "" {
 		query += ` AND (name ILIKE $2 OR sku ILIKE $2)`
 		args = append(args, "%"+search+"%")
 	}
-	
+
 	argIdx := len(args) + 1
 	query += fmt.Sprintf(` ORDER BY name ASC LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
 	args = append(args, fetchLimit, offset)
@@ -126,6 +127,61 @@ func (r *Repository) GetByName(name, orgID string) (*models.Product, error) {
 		return nil, err
 	}
 	return &product, nil
+}
+
+// GetByNames fetches multiple products by name in a single query.
+// Returns a map of lower(name) → *models.Product for fast lookup.
+// This avoids N separate GetByName round-trips during bulk import.
+func (r *Repository) GetByNames(names []string, orgID string) (map[string]*models.Product, error) {
+	if len(names) == 0 {
+		return map[string]*models.Product{}, nil
+	}
+	// Build placeholders: $1, $2, $3, ...
+	args := make([]interface{}, 0, len(names)+1)
+	for _, n := range names {
+		args = append(args, strings.ToLower(n))
+	}
+	args = append(args, orgID)
+	placeholders := ""
+	for i := range names {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += fmt.Sprintf("$%d", i+1)
+	}
+	orgParamIdx := len(names) + 1
+
+	query := fmt.Sprintf(`
+		SELECT id, name, category, sku, supplier, purchase_price, selling_price,
+		       COALESCE(current_stock, 0), COALESCE(minimum_stock, 5), unit,
+		       expiry_date, COALESCE(is_active, true),
+		       COALESCE(is_consumable, false), consumable_category,
+		       doctor_commission_type, doctor_commission_value,
+		       therapist_commission_type, therapist_commission_value,
+		       doctor_offering_commission_type, doctor_offering_commission_value,
+		       therapist_offering_commission_type, therapist_offering_commission_value,
+		       created_at, updated_at
+		FROM products
+		WHERE LOWER(name) IN (%s) AND COALESCE(is_active, true) = true
+		  AND (organization_id = $%d OR ($%d::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL
+	`, placeholders, orgParamIdx, orgParamIdx)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query products by names: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]*models.Product, len(names))
+	for rows.Next() {
+		product, err := scanProduct(rows)
+		if err != nil {
+			return nil, err
+		}
+		result[strings.ToLower(product.Name)] = &product
+	}
+	return result, rows.Err()
 }
 
 func (r *Repository) Create(product *models.Product, orgID string) error {

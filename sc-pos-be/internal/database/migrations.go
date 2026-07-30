@@ -114,6 +114,98 @@ func RunMigrations() error {
 		return fmt.Errorf("failed to add commission columns to products: %w", err)
 	}
 
+	// ---------------------------------------------------------------------------
+	// 11) Performance indexes for hot query paths.
+	//     These cover the most frequent queries that were doing sequential scans:
+	//       - GetByName / GetByNames (import, duplicate check) → LOWER(name) index
+	//       - Patient search by name/phone → trigram or plain ILIKE support
+	//       - Commission lookup by transaction_item_id → join during payment
+	//       - Transaction items by service_id / product_id → reporting queries
+	//     All use IF NOT EXISTS so they are safe to run repeatedly.
+	// ---------------------------------------------------------------------------
+	if _, err := DB.Exec(`
+		-- Name lookup indexes (used by import + duplicate detection)
+		-- Functional index on LOWER(name) speeds up WHERE LOWER(name) = LOWER($1) and IN (...)
+		CREATE INDEX IF NOT EXISTS idx_products_name_lower
+			ON products (LOWER(name))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true;
+
+		CREATE INDEX IF NOT EXISTS idx_services_name_lower
+			ON services (LOWER(name))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true;
+
+		-- Patient search: full_name + phone are the most common search fields.
+		-- trigram (pg_trgm) would be ideal for ILIKE '%query%', but it requires
+		-- the extension. We add plain indexes for exact/phone lookups instead,
+		-- which cover the import duplicate-check path and phone-based search.
+		CREATE INDEX IF NOT EXISTS idx_patients_name_lower
+			ON patients (LOWER(full_name))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true;
+
+		CREATE INDEX IF NOT EXISTS idx_patients_phone
+			ON patients (phone)
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true AND phone IS NOT NULL;
+
+		CREATE INDEX IF NOT EXISTS idx_patients_whatsapp
+			ON patients (whatsapp)
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true AND whatsapp IS NOT NULL;
+
+		-- Staff search by name/email/phone
+		CREATE INDEX IF NOT EXISTS idx_staff_name_lower
+			ON staff (LOWER(full_name))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true;
+
+		CREATE INDEX IF NOT EXISTS idx_staff_email
+			ON staff (LOWER(email))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true AND email IS NOT NULL;
+
+		-- Commission lookup during payment processing
+		-- WHERE staff_id = $1 AND transaction_item_id = $2 AND commission_reason = $3
+		CREATE INDEX IF NOT EXISTS idx_commissions_item_reason
+			ON commissions (transaction_item_id, commission_reason)
+			WHERE deleted_at IS NULL;
+
+		CREATE INDEX IF NOT EXISTS idx_commissions_staff_status
+			ON commissions (staff_id, status)
+			WHERE deleted_at IS NULL;
+
+		-- Transaction items: filter by service_id / product_id (reporting, consumable lookup)
+		CREATE INDEX IF NOT EXISTS idx_transaction_items_service
+			ON transaction_items (service_id)
+			WHERE service_id IS NOT NULL AND deleted_at IS NULL;
+
+		CREATE INDEX IF NOT EXISTS idx_transaction_items_product
+			ON transaction_items (product_id)
+			WHERE product_id IS NOT NULL AND deleted_at IS NULL;
+
+		-- Transaction items: filter by doctor_id / therapist_id (commission assignment)
+		CREATE INDEX IF NOT EXISTS idx_transaction_items_doctor
+			ON transaction_items (doctor_id)
+			WHERE doctor_id IS NOT NULL AND deleted_at IS NULL;
+
+		CREATE INDEX IF NOT EXISTS idx_transaction_items_therapist
+			ON transaction_items (therapist_id)
+			WHERE therapist_id IS NOT NULL AND deleted_at IS NULL;
+
+		-- Products SKU lookup (used in product search + POS)
+		CREATE INDEX IF NOT EXISTS idx_products_sku
+			ON products (sku)
+			WHERE deleted_at IS NULL AND sku IS NOT NULL;
+
+		-- Transactions by date range (dashboard revenue reports)
+		-- created_at is used as the transaction date in most dashboard queries
+		CREATE INDEX IF NOT EXISTS idx_transactions_created_at
+			ON transactions (created_at)
+			WHERE deleted_at IS NULL;
+
+		-- Commissions by transaction_id (cascade lookup when fetching transaction items)
+		CREATE INDEX IF NOT EXISTS idx_commissions_transaction
+			ON commissions (transaction_id)
+			WHERE deleted_at IS NULL;
+	`); err != nil {
+		return fmt.Errorf("failed to add performance indexes: %w", err)
+	}
+
 	return nil
 }
 
