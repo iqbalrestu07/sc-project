@@ -1,6 +1,7 @@
 import { useCmsServicesOverview } from "@/hooks/useCmsData";
 import { Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
+import { TiltCard } from "./TiltCard";
 
 const MAROON = "#6B0F1A";
 const MAROON_LIGHT = "#8B1A2A";
@@ -118,15 +119,19 @@ export function ServicesSection() {
           {displayServices.map((service, index) => (
             <motion.div
               variants={itemVariants}
-              whileHover={{ y: -8, boxShadow: `0 20px 40px rgba(107,15,26,0.12)` }}
               key={service.id}
-              className="group overflow-hidden rounded-2xl transition-all duration-300"
-              style={{
-                background: "#fff",
-                border: `1px solid rgba(201, 168, 76, 0.2)`,
-                boxShadow: `0 4px 20px rgba(107,15,26,0.08)`,
-              }}
+              style={{ perspective: 1000 }}
             >
+              <TiltCard
+                maxTilt={10}
+                hoverScale={1.03}
+                className="group overflow-hidden rounded-2xl transition-shadow duration-300 h-full"
+                style={{
+                  background: "#fff",
+                  border: `1px solid rgba(201, 168, 76, 0.2)`,
+                  boxShadow: `0 4px 20px rgba(107,15,26,0.08)`,
+                }}
+              >
               {/* Image / placeholder */}
               <div
                 className="h-48 flex items-center justify-center relative overflow-hidden"
@@ -177,6 +182,7 @@ export function ServicesSection() {
                   {service.short_description}
                 </p>
               </div>
+            </TiltCard>
             </motion.div>
           ))}
         </motion.div>

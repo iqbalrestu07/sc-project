@@ -1,6 +1,7 @@
 import { useCmsGallery } from "@/hooks/useCmsData";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
+import { TiltCard } from "./TiltCard";
 
 const MAROON = "#6B0F1A";
 const MAROON_LIGHT = "#8B1A2A";
@@ -68,14 +69,18 @@ export function GallerySection() {
           {gallery.map((item) => (
             <motion.div 
               variants={itemVariants}
-              whileHover={{ y: -8, boxShadow: `0 20px 40px rgba(107, 15, 26, 0.12)` }}
-              key={item.id} 
-              className="group overflow-hidden rounded-2xl transition-all duration-300 bg-white"
-              style={{
-                border: `1px solid rgba(201, 168, 76, 0.2)`,
-                boxShadow: `0 4px 24px rgba(107, 15, 26, 0.08)`,
-              }}
+              key={item.id}
+              style={{ perspective: 1000 }}
             >
+              <TiltCard
+                maxTilt={8}
+                hoverScale={1.02}
+                className="group overflow-hidden rounded-2xl transition-shadow duration-300 bg-white h-full"
+                style={{
+                  border: `1px solid rgba(201, 168, 76, 0.2)`,
+                  boxShadow: `0 4px 24px rgba(107, 15, 26, 0.08)`,
+                }}
+              >
               <div className="relative">
                 {/* Before/After images */}
                 <div className="flex h-56 relative overflow-hidden">
@@ -134,6 +139,7 @@ export function GallerySection() {
                   </p>
                 </div>
               )}
+            </TiltCard>
             </motion.div>
           ))}
         </motion.div>

@@ -2,6 +2,7 @@ import { useCmsPromotions, useCmsContact } from "@/hooks/useCmsData";
 import { MessageCircle, Percent, Clock, Tag } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
+import { TiltCard } from "./TiltCard";
 
 const MAROON = "#6B0F1A";
 const MAROON_LIGHT = "#8B1A2A";
@@ -78,14 +79,16 @@ export function PromotionsSection() {
             const isUrgent = daysLeft <= 7;
 
             return (
-              <div
-                key={promo.id}
-                className="rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl group"
-                style={{
-                  background: "#FDF8F0",
-                  boxShadow: `0 4px 24px rgba(0,0,0,0.3)`,
-                }}
-              >
+              <div key={promo.id} style={{ perspective: 1000 }}>
+                <TiltCard
+                  maxTilt={10}
+                  hoverScale={1.02}
+                  className="rounded-2xl overflow-hidden transition-shadow duration-300 group h-full"
+                  style={{
+                    background: "#FDF8F0",
+                    boxShadow: `0 4px 24px rgba(0,0,0,0.3)`,
+                  }}
+                >
                 {/* Banner / placeholder */}
                 <div
                   className="relative h-48 flex items-center justify-center overflow-hidden"
@@ -203,6 +206,7 @@ export function PromotionsSection() {
                     Klaim Penawaran
                   </a>
                 </div>
+                </TiltCard>
               </div>
             );
           })}

@@ -10,14 +10,15 @@
 > File-file berikut di `docs/` berisi dokumentasi lebih lengkap dan terstruktur.
 > Baca dokumen yang relevan sesuai task yang dikerjakan.
 
-| Dokumen                                                        | Kapan Dibaca                                |
-| -------------------------------------------------------------- | ------------------------------------------- |
-| [`docs/BACKEND_STRUCTURE.md`](docs/BACKEND_STRUCTURE.md)       | Sebelum membuat/edit kode backend           |
-| [`docs/FRONTEND_STRUCTURE.md`](docs/FRONTEND_STRUCTURE.md)     | Sebelum membuat/edit kode frontend          |
-| [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md)       | Debugging integrasi, auth, org context      |
-| [`docs/CREATING_NEW_FEATURE.md`](docs/CREATING_NEW_FEATURE.md) | Step-by-step membuat fitur baru             |
-| [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md)           | Referensi schema tabel, tipe data, index    |
-| [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)               | Referensi semua endpoint + request/response |
+| Dokumen                                                        | Kapan Dibaca                                                        |
+| -------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [`docs/BACKEND_STRUCTURE.md`](docs/BACKEND_STRUCTURE.md)       | Sebelum membuat/edit kode backend                                   |
+| [`docs/FRONTEND_STRUCTURE.md`](docs/FRONTEND_STRUCTURE.md)     | Sebelum membuat/edit kode frontend                                  |
+| [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md)       | Debugging integrasi, auth, org context                              |
+| [`docs/CREATING_NEW_FEATURE.md`](docs/CREATING_NEW_FEATURE.md) | Step-by-step membuat fitur baru                                     |
+| [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md)           | Referensi schema tabel, tipe data, index                            |
+| [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)               | Referensi semua endpoint + request/response                         |
+| [`docs/3D_LANDING_PAGE.md`](docs/3D_LANDING_PAGE.md)           | Sebelum edit 3D scene, ganti model, atau tuning visual landing page |
 
 ---
 

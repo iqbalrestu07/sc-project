@@ -1,8 +1,13 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, Suspense, lazy } from "react";
 import { MessageCircle, Calendar, Crown } from "lucide-react";
 import { useCmsHero, useCmsContact } from "@/hooks/useCmsData";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
+import { useDeviceCapability } from "@/hooks/useDeviceCapability";
+import { getLandingMode } from "@/config/landingMode";
 import { motion, useScroll, useTransform } from "framer-motion";
+
+// Lazy-load 3D scene only when needed (code splitting)
+const Hero3DScene = lazy(() => import("./Hero3DScene"));
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const MAROON = "#6B0F1A";
@@ -128,12 +133,29 @@ export function HeroSection() {
   const { data: contact } = useCmsContact();
   const whatsappUrl = hero?.whatsapp_url || buildWhatsAppUrl(contact?.whatsapp_number);
   const ref = useRef<HTMLDivElement>(null);
+  const { supports3D } = useDeviceCapability();
+
+  // 3D mode logic:
+  // - full3d  → skip internal 3D (Full3DScene handles background globally)
+  // - hero3d  → full Hero3DScene (crystal + orbit + particles)
+  // - 2d      → orbit-only Hero3DScene (orbit + particles, NO crystal model)
+  //   *but* only if device supports 3D (WebGL). If device is weak/no WebGL,
+  //   skip 3D entirely and use parallax CSS fallback.
+  const configMode = getLandingMode();
+  const showInternal3D = supports3D && configMode !== "full3d";
+  const showCrystal = configMode === "hero3d";
 
   // Parallax effects
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const backgroundY = useTransform(scrollYProgress, [0, 1], ["0%", "50%"]);
   const opacity = useTransform(scrollYProgress, [0, 1], [1, 0.2]);
   const textY = useTransform(scrollYProgress, [0, 1], ["0%", "80%"]);
+
+  // Scroll progress getter for 3D camera (avoids re-render on every frame)
+  const scrollProgressRef = useRef<() => number>(() => 0);
+  scrollProgressRef.current = () => {
+    return scrollYProgress.get();
+  };
 
   // Staggered Text Reveal
   const containerVariants: any = {
@@ -171,6 +193,22 @@ export function HeroSection() {
           </>
         )}
       </motion.div>
+
+      {/* 3D Scene — lazy loaded when device supports 3D.
+          - hero3d mode: full scene (crystal + orbit + particles)
+          - 2d mode: orbit-only (orbit + particles, no crystal model)
+          - full3d mode: skip (Full3DScene handles background globally)
+          - device weak/no WebGL: skip entirely, use parallax CSS */}
+      {showInternal3D && (
+        <div className="absolute inset-0 z-[1]">
+          <Suspense fallback={null}>
+            <Hero3DScene
+              scrollProgress={scrollProgressRef.current}
+              showCrystal={showCrystal}
+            />
+          </Suspense>
+        </div>
+      )}
 
       <StarField />
 
