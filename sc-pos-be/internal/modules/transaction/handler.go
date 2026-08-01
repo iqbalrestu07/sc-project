@@ -100,6 +100,26 @@ func (h *Handler) Items(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, items)
 }
 
+// GetByAppointment handles GET /transactions/by-appointment?ids=id1,id2,...
+// Returns a lightweight map of appointment_id → {id, payment_status} for the
+// queue page to check which appointments already have paid transactions.
+// This avoids fetching 100 full transactions just to check payment status.
+func (h *Handler) GetByAppointment(c *gin.Context) {
+	orgID := c.GetString("org_id")
+	ids := c.Query("ids")
+	if ids == "" {
+		utils.SuccessResponse(c, http.StatusOK, map[string]any{})
+		return
+	}
+
+	statuses, err := h.service.GetByAppointmentIDs(orgID, ids)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, statuses)
+}
+
 // AddItem handles POST /transactions/:id/items
 // Adds a single item to an existing transaction and recalculates totals.
 func (h *Handler) AddItem(c *gin.Context) {

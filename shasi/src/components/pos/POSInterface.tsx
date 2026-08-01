@@ -139,10 +139,12 @@ export function POSInterface({ initialTransactionId, initialPatientId }: POSInte
   // Pre-fill cart from transaction draft (walk-in flow).
   // Loads transaction + items by ID and populates the cart + patient selection.
   const [draftTransactionId, setDraftTransactionId] = useState<string | null>(null);
+  const [draftLoading, setDraftLoading] = useState(false);
 
   useEffect(() => {
     if (initialTransactionId) {
       setDraftTransactionId(initialTransactionId);
+      setDraftLoading(true);
     }
     if (initialPatientId) {
       setSelectedPatientId(initialPatientId);
@@ -152,6 +154,7 @@ export function POSInterface({ initialTransactionId, initialPatientId }: POSInte
   useEffect(() => {
     if (!draftTransactionId || !fetchTransactionDetail) return;
     let cancelled = false;
+    setDraftLoading(true);
     (async () => {
       try {
         const tx = await fetchTransactionDetail(draftTransactionId);
@@ -184,6 +187,8 @@ export function POSInterface({ initialTransactionId, initialPatientId }: POSInte
         toast.info("Cart pre-filled dari walk-in draft. Tambah produk jika perlu, lalu bayar.");
       } catch (e) {
         console.error("Failed to load transaction draft:", e);
+      } finally {
+        if (!cancelled) setDraftLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -499,7 +504,18 @@ export function POSInterface({ initialTransactionId, initialPatientId }: POSInte
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-180px)]">
+    <div className="relative grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-180px)]">
+      {/* Loading overlay when pre-filling cart from walk-in draft */}
+      {draftLoading && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg">
+          <div className="flex flex-col items-center gap-3">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+            <p className="text-sm font-medium text-muted-foreground">
+              Memuat data transaksi...
+            </p>
+          </div>
+        </div>
+      )}
       {/* Left: Item Selection */}
       <div className="lg:col-span-2 space-y-4">
         {/* Search and Tabs */}

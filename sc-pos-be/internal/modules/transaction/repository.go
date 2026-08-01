@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
 	"github.com/sc-pos/backend/internal/modules/whatsapp"
@@ -265,6 +266,46 @@ func (r *Repository) AddItem(transactionID, orgID string, item models.Transactio
 		return nil, fmt.Errorf("failed to commit: %w", err)
 	}
 	return r.Get(transactionID, orgID)
+}
+
+// GetByAppointmentIDs returns a lightweight map of appointment_id → {id, payment_status}
+// for the given comma-separated appointment IDs. Only includes transactions
+// that have a non-null appointment_id. Used by the queue page.
+func (r *Repository) GetByAppointmentIDs(orgID, csvIDs string) (map[string]map[string]string, error) {
+	ids := strings.Split(csvIDs, ",")
+	if len(ids) == 0 {
+		return map[string]map[string]string{}, nil
+	}
+
+	// Build query with ANY() array
+	query := `
+		SELECT appointment_id, id, payment_status
+		FROM transactions
+		WHERE appointment_id = ANY($2::uuid[])
+		  AND (organization_id = $1 OR ($1::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL
+		  AND appointment_id IS NOT NULL
+	`
+	rows, err := r.db.Query(query, orgID, pq.Array(ids))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query transactions by appointment: %w", err)
+	}
+	defer rows.Close()
+
+	result := map[string]map[string]string{}
+	for rows.Next() {
+		var apptID, txID, status sql.NullString
+		if err := rows.Scan(&apptID, &txID, &status); err != nil {
+			return nil, err
+		}
+		if apptID.Valid {
+			result[apptID.String] = map[string]string{
+				"id":             txID.String,
+				"payment_status": status.String,
+			}
+		}
+	}
+	return result, nil
 }
 
 func (r *Repository) Delete(id, orgID, userByID string) error {

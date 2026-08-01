@@ -21,6 +21,7 @@ type Service interface {
 	Delete(id, orgID, userID string) error
 	Items(id string) ([]TransactionItemWithRelations, error)
 	AddItem(transactionID string, item models.TransactionItem, userID *string, orgID string) (*TransactionWithRelations, error)
+	GetByAppointmentIDs(orgID, csvIDs string) (map[string]map[string]string, error)
 }
 
 type service struct {
@@ -249,6 +250,14 @@ func (s *service) AddItem(transactionID string, item models.TransactionItem, use
 	}
 
 	return updated, nil
+}
+
+// GetByAppointmentIDs returns a map of appointment_id → {id, payment_status}
+// for the given comma-separated appointment IDs. Used by the queue page
+// to check which appointments have paid transactions without fetching
+// full transaction data.
+func (s *service) GetByAppointmentIDs(orgID, csvIDs string) (map[string]map[string]string, error) {
+	return s.repo.GetByAppointmentIDs(orgID, csvIDs)
 }
 
 func (s *service) sendWhatsappInvoice(tx *TransactionWithRelations, orgID string) {

@@ -23,24 +23,34 @@ export default function QueuePage() {
   const [loadingTxFor, setLoadingTxFor] = useState<string | null>(null);
   // Map of appointment_id → transaction payment status
   const [paidAppointments, setPaidAppointments] = useState<Set<string>>(new Set());
+  const [txByAppointment, setTxByAppointment] = useState<Record<string, string>>({});
 
   const waiting = queue?.waiting ?? [];
   const inProgress = queue?.in_progress ?? [];
   const completed = queue?.completed ?? [];
 
-  // Fetch today's transactions to check which appointments are already paid
+  // Fetch payment status for completed appointments (lightweight endpoint)
   useEffect(() => {
-    if (completed.length === 0) return;
+    if (completed.length === 0) {
+      setPaidAppointments(new Set());
+      return;
+    }
+    const ids = completed.map((a: any) => a.id).join(",");
     (async () => {
       try {
-        const data = await apiClient.get<{ data: any[] }>(`/transactions?limit=100`);
+        const data = await apiClient.get<{ data: Record<string, { id: string; payment_status: string }> }>(
+          `/transactions/by-appointment?ids=${ids}`
+        );
         const paid = new Set<string>();
-        for (const tx of data.data || []) {
-          if (tx.payment_status === "paid" && tx.appointment_id) {
-            paid.add(tx.appointment_id);
+        const txMap: Record<string, string> = {};
+        for (const [apptId, info] of Object.entries(data.data || {})) {
+          if (info.payment_status === "paid") {
+            paid.add(apptId);
           }
+          txMap[apptId] = info.id;
         }
         setPaidAppointments(paid);
+        setTxByAppointment(txMap);
       } catch (e) {
         console.error("Failed to fetch transaction status:", e);
       }
@@ -52,23 +62,13 @@ export default function QueuePage() {
   };
 
   // Find pending transaction for an appointment and navigate to POS with it
-  const handleCheckout = async (appointmentId: string, patientId: string) => {
+  const handleCheckout = (appointmentId: string, patientId: string) => {
     setLoadingTxFor(appointmentId);
-    try {
-      // Fetch all today's transactions and find by appointment_id
-      const data = await apiClient.get<{ data: any[] }>(`/transactions?limit=100`);
-      const tx = data.data?.find((t: any) => t.appointment_id === appointmentId);
-      if (tx) {
-        navigate("/pos", { state: { transactionId: tx.id, patientId } });
-      } else {
-        // No draft transaction, go to POS with just patientId
-        navigate("/pos", { state: { patientId } });
-      }
-    } catch (e) {
-      console.error("Failed to find transaction:", e);
+    const txId = txByAppointment[appointmentId];
+    if (txId) {
+      navigate("/pos", { state: { transactionId: txId, patientId } });
+    } else {
       navigate("/pos", { state: { patientId } });
-    } finally {
-      setLoadingTxFor(null);
     }
   };
 
