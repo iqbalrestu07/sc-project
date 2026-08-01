@@ -1,1246 +1,385 @@
 # SC Project — Panduan Konteks untuk AI Agent
 
-> File ini dibuat untuk membantu AI agent (Devin, Claude, dsb.) memahami project ini secara end-to-end
-> tanpa perlu eksplorasi berulang dari nol. Update file ini setiap kali ada perubahan arsitektur besar.
+> File ini adalah **quick reference** untuk AI agent. Detail lengkap ada di `docs/`.
+> Baca hanya doc yang relevan dengan task — jangan baca semua docs sekaligus (hemat token).
 
 ---
 
 ## ⚠️ Aturan Dokumentasi untuk AI Agent
 
-> **WAJIB BACA sebelum mulai dan sebelum selesai task.**
-
 ### Kapan WAJIB update dokumentasi
 
-Update `AGENTS.md` dan file relevan di `docs/` setelah melakukan perubahan **vital** berikut:
+| Jenis Perubahan                              | File yang Harus Diupdate                                   |
+| -------------------------------------------- | ---------------------------------------------------------- |
+| Tambah/hapus **endpoint API**                | `AGENTS.md` (route table) + `docs/API_REFERENCE.md`        |
+| Tambah/hapus **tabel/kolom DB**              | `AGENTS.md` (schema section) + `docs/DATABASE_SCHEMA.md`   |
+| Tambah/hapus **module backend**              | `AGENTS.md` (module list) + `docs/BACKEND_STRUCTURE.md`    |
+| Tambah/hapus **page/komponen/hook frontend** | `AGENTS.md` (frontend list) + `docs/FRONTEND_STRUCTURE.md` |
+| Ubah **business workflow**                   | `docs/FEATURES_AND_PROCESSES.md`                           |
+| Ubah **auth/middleware/RBAC**                | `AGENTS.md` + `docs/INTEGRATION_GUIDE.md`                  |
+| Migrasi **tipe data**                        | `AGENTS.md` + `docs/DATABASE_SCHEMA.md`                    |
+| Tambah **index DB**                          | `docs/DATABASE_SCHEMA.md`                                  |
 
-| Jenis Perubahan                                        | File yang Harus Diupdate                                        |
-| ------------------------------------------------------ | --------------------------------------------------------------- |
-| Tambah/hapus **endpoint API** baru                     | `AGENTS.md` (route table) + `docs/API_REFERENCE.md`             |
-| Tambah/hapus **tabel database** atau **kolom penting** | `AGENTS.md` (schema section) + `docs/DATABASE_SCHEMA.md`        |
-| Tambah/hapus **module backend**                        | `AGENTS.md` (struktur direktori) + `docs/BACKEND_STRUCTURE.md`  |
-| Tambah/hapus **page/komponen/hook frontend** utama     | `AGENTS.md` (struktur direktori) + `docs/FRONTEND_STRUCTURE.md` |
-| Ubah **business workflow** (alur proses bisnis)        | `docs/FEATURES_AND_PROCESSES.md`                                |
-| Ubah **auth/middleware/RBAC**                          | `AGENTS.md` + `docs/INTEGRATION_GUIDE.md`                       |
-| Migrasi **tipe data** (mis. VARCHAR→UUID)              | `AGENTS.md` + `docs/DATABASE_SCHEMA.md`                         |
-| Tambah **index database** baru                         | `docs/DATABASE_SCHEMA.md`                                       |
+### Kapan TIDAK perlu update
 
-### Kapan TIDAK perlu update dokumentasi
-
-- Bug fix kecil yang tidak mengubah API/schema/workflow
-- Refactor internal yang tidak mengubah interface publik
-- Perubahan styling/CSS/UI minor
-- Perubahan konfigurasi lokal (`.env` values, dll)
-- Penambahan komentar kode
+Bug fix kecil, refactor internal tanpa ubah interface, styling/CSS, konfigurasi lokal, komentar kode.
 
 ### Cara update
 
-1. Update bagian **relevan saja** — jangan rewrite seluruh file
-2. Ubah tanggal `_Last updated_` di file yang diupdate ke tanggal hari ini
-3. Jika menambah fitur baru yang punya business workflow, update `docs/FEATURES_AND_PROCESSES.md`
-4. Jika ragu apakah perubahan "vital" atau tidak, **update saja** — lebih aman daripada dokumentasi stale
+Update bagian relevan saja (jangan rewrite file). Ubah `_Last updated_` ke hari ini. Jika ragu vital atau tidak → update saja.
 
 ---
 
-## 📚 Dokumen Referensi Detail
+## 📚 Dokumen Referensi (baca hanya yang relevan)
 
-> File-file berikut di `docs/` berisi dokumentasi lebih lengkap dan terstruktur.
-> Baca dokumen yang relevan sesuai task yang dikerjakan.
-
-| Dokumen                                                            | Kapan Dibaca                                                         |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| [`docs/BACKEND_STRUCTURE.md`](docs/BACKEND_STRUCTURE.md)           | Sebelum membuat/edit kode backend                                    |
-| [`docs/FRONTEND_STRUCTURE.md`](docs/FRONTEND_STRUCTURE.md)         | Sebelum membuat/edit kode frontend                                   |
-| [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md)           | Debugging integrasi, auth, org context                               |
-| [`docs/CREATING_NEW_FEATURE.md`](docs/CREATING_NEW_FEATURE.md)     | Step-by-step membuat fitur baru                                      |
-| [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md)               | Referensi schema tabel, tipe data, index                             |
-| [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)                   | Referensi semua endpoint + request/response                          |
-| [`docs/FEATURES_AND_PROCESSES.md`](docs/FEATURES_AND_PROCESSES.md) | Memahami business workflow: walk-in, queue, POS, cancel, visit notes |
-| [`docs/3D_LANDING_PAGE.md`](docs/3D_LANDING_PAGE.md)               | Sebelum edit 3D scene, ganti model, atau tuning visual landing page  |
+| Dokumen                          | Kapan Dibaca                                                |
+| -------------------------------- | ----------------------------------------------------------- |
+| `docs/BACKEND_STRUCTURE.md`      | Edit kode backend                                           |
+| `docs/FRONTEND_STRUCTURE.md`     | Edit kode frontend                                          |
+| `docs/INTEGRATION_GUIDE.md`      | Debug auth, org context, RBAC                               |
+| `docs/CREATING_NEW_FEATURE.md`   | Buat fitur baru (step-by-step)                              |
+| `docs/DATABASE_SCHEMA.md`        | Referensi tabel, kolom, index                               |
+| `docs/API_REFERENCE.md`          | Referensi endpoint + request/response                       |
+| `docs/FEATURES_AND_PROCESSES.md` | Pahami business workflow (walk-in, queue, POS, cancel, dll) |
+| `docs/3D_LANDING_PAGE.md`        | Edit 3D scene / visual landing page                         |
 
 ---
 
-## 1. Gambaran Umum Project
+## 1. Project Overview
 
-**SC Project** adalah sistem manajemen klinik kecantikan (aesthetic clinic / salon) dengan arsitektur **multi-tenant SaaS** dan **RBAC granular**.
-Terdiri dari dua sub-project dalam satu monorepo:
+**SC Project** — sistem manajemen klinik kecantikan, **multi-tenant SaaS** + **RBAC granular**.
 
-| Sub-project | Lokasi       | Stack                     | Fungsi                        |
-| ----------- | ------------ | ------------------------- | ----------------------------- |
-| `sc-pos-be` | `sc-pos-be/` | Go + PostgreSQL + Gin     | REST API backend              |
-| `shasi`     | `shasi/`     | React + TypeScript + Vite | Frontend admin + landing page |
+| Sub-project | Lokasi       | Stack                                         | Port |
+| ----------- | ------------ | --------------------------------------------- | ---- |
+| `sc-pos-be` | `sc-pos-be/` | Go + Gin + PostgreSQL (raw SQL, no ORM)       | 8080 |
+| `shasi`     | `shasi/`     | React 18 + TypeScript + Vite + TanStack Query | 5173 |
 
-**Root project:** `/Users/macbookpro/pjc/personal/sc-project/`
+**Root:** `/Users/macbookpro/pjc/personal/sc-project/`
 
 ---
 
-## 2. Backend — `sc-pos-be`
+## 2. Backend Quick Reference
 
-### 2.1 Tech Stack
+### Tech Stack
 
-- **Language:** Go (module: `github.com/sc-pos/backend`)
-- **Framework:** Gin (`github.com/gin-gonic/gin`)
-- **Database:** PostgreSQL (driver: `lib/pq`, raw `database/sql` — **bukan ORM**)
-- **Auth:** JWT (`github.com/golang-jwt/jwt/v5`)
-- **UUID:** `github.com/google/uuid` — generate via `utils.NewUUID()` (UUIDv7, time-sortable)
-- **Config:** `.env` via `github.com/joho/godotenv`
+Go (module: `github.com/sc-pos/backend`), Gin, PostgreSQL (`lib/pq`, raw `database/sql`), JWT (`golang-jwt/v5`), UUIDv7 (`utils.NewUUID()`), godotenv.
 
-### 2.2 Struktur Direktori
+### Module List (`internal/modules/`)
 
-```
-sc-pos-be/
-├── main.go                         # Entry point
-├── config/
-│   └── config.go                    # Load env vars
-├── internal/
-│   ├── auth/jwt.go                 # JWT sign/verify + bcrypt
-│   ├── database/
-│   │   ├── connection.go           # DB connect, pool setup
-│   │   └── migrations.go          # DDL — CREATE TABLE IF NOT EXISTS (idempotent)
-│   ├── middleware/
-│   │   └── auth.go                # AuthMiddleware, RequireRole, CORSMiddleware
-│   ├── models/                     # Plain Go structs (no ORM tags, menggunakan `db:` tag)
-│   │   ├── user.go
-│   │   ├── patient.go
-│   │   ├── service.go
-│   │   ├── product.go
-│   │   ├── staff.go
-│   │   ├── appointment.go
-│   │   ├── transaction.go
-│   │   ├── commission.go
-│   │   ├── clinic_settings.go
-│   │   ├── stock_movement.go
-│   │   ├── service_consumable.go
-│   │   ├── organization.go          # Organization, OrganizationMember, Permission, RolePermission, UserPermission
-│   │   ├── visit_note.go            # VisitNote — rekam medis per kunjungan
-│   │   └── nullable_time.go         # NullableTime — wrapper time.Time untuk JSON/SQL NULL + empty string
-│   ├── modules/                    # Feature modules (handler + service + repository + routes)
-│   │   ├── auth/
-│   │   ├── patient/
-│   │   ├── service/
-│   │   ├── product/
-│   │   ├── staff/
-│   │   ├── appointment/             # CRUD + calendar + today queue + cancel + reminder cron
-│   │   ├── transaction/             # CRUD + items + by-appointment lookup + add-item
-│   │   ├── commission/
-│   │   ├── dashboard/
-│   │   ├── settings/
-│   │   ├── cms/
-│   │   ├── whatsapp/               # WhatsApp multi-device + templates
-│   │   ├── omnichannel/            # Chat omnichannel via WebSocket
-│   │   ├── organization/            # Organization CRUD + member management
-│   │   ├── rbac/                    # Permission management
-│   │   ├── stock/                   # stock_movements
-│   │   ├── consumable/              # legacy service_consumables
-│   │   ├── service_package/         # consumable groups + alternatif produk service
-│   │   ├── consumable_item/         # Produk habis pakai + usage logs
-│   │   ├── visit_note/              # Rekam medis per kunjungan (pre/post treatment, follow-up)
-│   │   └── migration/               # Import Excel bulk data
-│   ├── routes/routes.go            # Central router setup
-│   └── utils/
-│       ├── response.go             # Standard JSON response helpers
-│       ├── uuid.go                 # NewUUID() — UUIDv7 generation
-│       └── time.go                 # Jakarta timezone helpers (ToJakarta, JakartaWallClock)
-```
+Setiap module: `handler.go` → `service.go` → `repository.go` → `routes.go`. Constructor: `NewModule()`.
 
-### 2.3 Pattern Setiap Module
+| Module          | Fungsi                                                        |
+| --------------- | ------------------------------------------------------------- |
+| auth            | Login, register, refresh, me, logout                          |
+| patient         | CRUD pasien + riwayat kunjungan & transaksi                   |
+| service         | CRUD layanan + kategori                                       |
+| product         | CRUD produk + kategori                                        |
+| staff           | CRUD staff                                                    |
+| appointment     | CRUD jadwal + calendar + today queue + cancel + cron reminder |
+| transaction     | CRUD transaksi + items + by-appointment + add-item            |
+| commission      | Komisi staff per transaksi                                    |
+| dashboard       | Stats, revenue, top services/products/customers               |
+| settings        | Pengaturan klinik + logo + favicon                            |
+| cms             | CMS pages + upload image                                      |
+| whatsapp        | WhatsApp multi-device (whatsmeow) + templates                 |
+| omnichannel     | Chat omnichannel via WebSocket                                |
+| organization    | Org CRUD + member management                                  |
+| rbac            | Permission management                                         |
+| stock           | Stock movements                                               |
+| consumable      | Legacy service_consumables                                    |
+| service_package | Consumable groups + alternatif produk                         |
+| consumable_item | Produk habis pakai + usage logs                               |
+| visit_note      | Rekam medis per kunjungan                                     |
+| migration       | Import Excel bulk data                                        |
 
-Setiap module mengikuti pola layered:
+### Utils (`internal/utils/`)
 
-```
-handler.go    → HTTP layer: binding, validasi, call service
-service.go    → Business logic
-repository.go → Raw SQL queries ke database
-routes.go     → Daftarkan route ke Gin router
-```
+| File          | Fungsi                                                                                                   |
+| ------------- | -------------------------------------------------------------------------------------------------------- |
+| `response.go` | `SuccessResponse`, `ErrorResponse`, `SuccessResponseWithMessage`, `ListSuccessResponse`, `ParseIntQuery` |
+| `uuid.go`     | `NewUUID()` — UUIDv7 (time-sortable), fallback UUIDv4                                                    |
+| `time.go`     | `JakartaLocation`, `ToJakarta(t)`, `JakartaWallClock(t)`                                                 |
 
-`NewModule()` di `handler.go` adalah shortcut constructor yang merangkai semua layer.
+### Middleware (`internal/middleware/auth.go`)
 
-### 2.4 Environment Variables (`.env`)
+| Middleware                  | Fungsi                                                                    |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `CORSMiddleware()`          | CORS headers (global)                                                     |
+| `AuthMiddleware()`          | Validate JWT + cek user di DB → set `user_id`, `email`, `role`            |
+| `OrgMiddleware()`           | Baca `X-Organization-ID` → validasi membership → set `org_id`, `org_role` |
+| `RequirePermission("x:y")`  | Cek effective permission (role_permissions + user_permissions)            |
+| `RequireRole("admin", ...)` | Legacy role check                                                         |
+
+### Context keys di handler: `user_id`, `email`, `role`, `org_id`, `org_role`
+
+### Env Vars
 
 ```env
-SERVER_HOST=0.0.0.0
-SERVER_PORT=8080
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_NAME=sc_pos
-DB_SSLMODE=disable
-JWT_SECRET_KEY=your-secret-key-change-in-production
-UPLOAD_DIR=uploads/cms          # opsional, default: uploads/cms
-BASE_URL=http://localhost:8080   # untuk generate URL upload
-DEFAULT_PUBLIC_ORG_SLUG=         # slug tenant untuk landing root (/); fallback org aktif pertama
-WHATSAPP_API_URL=               # opsional: endpoint eksternal WA
-WHATSAPP_API_TOKEN=             # opsional: token API WA
+SERVER_HOST=0.0.0.0  SERVER_PORT=8080
+DB_HOST=localhost  DB_PORT=5432  DB_USER=postgres  DB_PASSWORD=  DB_NAME=sc_pos  DB_SSLMODE=disable
+JWT_SECRET_KEY=  JWT_EXPIRY_HOURS=24  JWT_REFRESH_EXPIRY_HOURS=168
+UPLOAD_DIR=uploads/cms  BASE_URL=http://localhost:8080
+DEFAULT_PUBLIC_ORG_SLUG=  WHATSAPP_API_URL=  WHATSAPP_API_TOKEN=
 ```
 
-### 2.5 Menjalankan Backend
+### Run
 
 ```bash
-cd sc-pos-be
-cp .env.example .env   # isi DB credentials
-go run main.go
-# atau: go build -o server . && ./server
+cd sc-pos-be && cp .env.example .env && go run main.go
+# Migrations otomatis saat startup (idempotent: CREATE TABLE/INDEX IF NOT EXISTS)
 ```
-
-Migrasi **otomatis berjalan** saat startup (`database.RunMigrations()`).
-Schema saat ini adalah **fresh consolidated schema** (4 step: create schema, indexes, seed permissions, seed role permissions).
-Setelah perubahan arsitektur multi-tenant + audit trail, direkomendasikan membuat database baru dari nol supaya schema koheren.
-DDL tetap idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`), jadi aman dijalankan berulang.
-
-### 2.6 API Response Format (Standard)
-
-Semua endpoint menggunakan `utils.SuccessResponse` / `utils.ErrorResponse`:
-
-```json
-// Success
-{ "success": true, "data": <payload> }
-{ "success": true, "message": "...", "data": <payload> }
-
-// Error
-{ "success": false, "error": "pesan error" }
-
-// List (pagination)
-{ "success": true, "data": [...], "has_next": true, "page": 1, "limit": 20 }
-// Umumnya backend tidak mengirim total. Exception: GET /patients?has_whatsapp=true
-// menyertakan total recipient WhatsApp.
-
-// Auth
-{ "success": true, "access_token": "...", "user": {...} }
-```
-
-### 2.7 Auth & Role System
-
-- JWT disimpan di `localStorage` frontend (key: `access_token`, `refresh_token`)
-- Access token: 24 jam, Refresh token: 7 hari
-- Roles: `admin`, `doctor`, `therapist`, `cashier`
-- `AuthMiddleware` tidak hanya cek signature JWT, tapi juga verifikasi `user_id` dari JWT masih ada di tabel `users` (menolak token dari database lama/deleted user)
-- `OrgMiddleware` membaca `X-Organization-ID`, verifikasi keanggotaan user aktif, dan set `org_id` + `org_role`
-- `RequirePermission("resource:action")` → cek effective permission (gabungan `role_permissions` + `user_permissions`) untuk org aktif
-- `RequireRole("admin", ...)` → legacy role check, masih dipakai beberapa route admin-only
-- Context keys dari JWT: `user_id`, `email`, `role`; ditambah dari OrgMiddleware: `org_id`, `org_role`
-
-### 2.8 Semua Route Backend
-
-**Base URL:** `http://localhost:8080/api`
-
-#### Auth (public)
-
-| Method | Path             | Deskripsi                                  |
-| ------ | ---------------- | ------------------------------------------ |
-| POST   | `/auth/login`    | Login, return JWT                          |
-| POST   | `/auth/register` | Register user baru (default role: cashier) |
-| POST   | `/auth/refresh`  | Refresh access token                       |
-
-#### Auth (protected)
-
-| Method | Path                   | Role  | Notes                                        |
-| ------ | ---------------------- | ----- | -------------------------------------------- |
-| GET    | `/auth/me`             | Semua |                                              |
-| POST   | `/auth/logout`         | Semua |                                              |
-| POST   | `/auth/admin/register` | Admin | Buat user baru + auto-add ke org aktif       |
-| GET    | `/auth/users`          | Admin | `?email=...` — cari user untuk invite member |
-
-#### Patients
-
-| Method | Path               | Role  | Notes                           |
-| ------ | ------------------ | ----- | ------------------------------- |
-| GET    | `/patients`        | Semua | `?search=nama` untuk filter     |
-| GET    | `/patients/search` | Semua | dedicated search endpoint       |
-| POST   | `/patients`        | Semua |                                 |
-| GET    | `/patients/:id`    | Semua |                                 |
-| PUT    | `/patients/:id`    | Semua |                                 |
-| DELETE | `/patients/:id`    | Semua | soft delete (`is_active=false`) |
-
-#### Patients (tambahan)
-
-| Method | Path                         | Role  | Notes                                                                 |
-| ------ | ---------------------------- | ----- | --------------------------------------------------------------------- |
-| GET    | `/patients/:id/visits`       | Semua | Riwayat kunjungan: service, doctor_name, therapist_name               |
-| GET    | `/patients/:id/transactions` | Semua | Riwayat transaksi: doctor_name + therapist_name (agregasi dari items) |
-
-#### Services
-
-| Method | Path                      | Role  |
-| ------ | ------------------------- | ----- |
-| GET    | `/services`               | Semua |
-| POST   | `/services`               | Admin |
-| GET    | `/services/:id`           | Semua |
-| PUT    | `/services/:id`           | Admin |
-| DELETE | `/services/:id`           | Admin |
-| GET    | `/service-categories`     | Semua |
-| POST   | `/service-categories`     | Admin |
-| PUT    | `/service-categories/:id` | Admin |
-| DELETE | `/service-categories/:id` | Admin |
-
-#### Products
-
-| Method | Path                      | Role  |
-| ------ | ------------------------- | ----- |
-| GET    | `/products`               | Semua |
-| POST   | `/products`               | Admin |
-| GET    | `/products/:id`           | Semua |
-| PUT    | `/products/:id`           | Admin |
-| DELETE | `/products/:id`           | Admin |
-| GET    | `/product-categories`     | Semua |
-| POST   | `/product-categories`     | Admin |
-| PUT    | `/product-categories/:id` | Admin |
-| DELETE | `/product-categories/:id` | Admin |
-
-#### Staff
-
-| Method | Path         | Role  |
-| ------ | ------------ | ----- |
-| GET    | `/staff`     | Semua |
-| POST   | `/staff`     | Admin |
-| GET    | `/staff/:id` | Semua |
-| PUT    | `/staff/:id` | Admin |
-| DELETE | `/staff/:id` | Admin |
-
-#### Appointments
-
-| Method | Path                            | Role  | Notes                                                                   |
-| ------ | ------------------------------- | ----- | ----------------------------------------------------------------------- |
-| GET    | `/appointments`                 | Semua | `?date=YYYY-MM-DD&view=day\|week` — kalender only (excludes walk-in)    |
-| POST   | `/appointments`                 | Semua | `source` field: `appointment` (default) or `walk_in`                    |
-| GET    | `/appointments/calendar`        | Semua | Kalender view — excludes walk-in (`source='walk_in'`)                   |
-| GET    | `/appointments/today`           | Semua | Queue hari ini — ALL sources (walk-in + appointment), grouped by status |
-| GET    | `/appointments/available-slots` | Semua | Stub — belum implementasi                                               |
-| PATCH  | `/appointments/:id/status`      | Semua | Update status (queue: scheduled→in_progress→completed)                  |
-| POST   | `/appointments/:id/cancel`      | Semua | Cancel appointment + linked draft transaction (409 if paid)             |
-| GET    | `/appointments/:id`             | Semua |                                                                         |
-| PUT    | `/appointments/:id`             | Semua |                                                                         |
-| DELETE | `/appointments/:id`             | Admin | Soft delete + set status=cancelled                                      |
-
-#### Transactions
-
-| Method | Path                           | Role  | Notes                                                                      |
-| ------ | ------------------------------ | ----- | -------------------------------------------------------------------------- |
-| GET    | `/transactions`                | Semua | Paginated list                                                             |
-| POST   | `/transactions`                | Semua | Jika `payment_status = paid`, otomatis generate commission & kurangi stock |
-| GET    | `/transactions/by-appointment` | Semua | `?ids=uuid1,uuid2` — lightweight lookup payment status by appointment_id   |
-| POST   | `/transactions/:id/items`      | Semua | Add new item to existing transaction (recalculates totals)                 |
-| GET    | `/transactions/:id`            | Semua |                                                                            |
-| GET    | `/transactions/:id/items`      | Semua | Setiap item include service/product + doctor/therapist                     |
-| PUT    | `/transactions/:id`            | Semua |                                                                            |
-| DELETE | `/transactions/:id`            | Semua | Soft delete + set payment_status=cancelled                                 |
-
-#### Visit Notes (Rekam Medis)
-
-| Method | Path                        | Role  | Notes                                                       |
-| ------ | --------------------------- | ----- | ----------------------------------------------------------- |
-| GET    | `/patients/:id/visit-notes` | Semua | List rekam medis untuk pasien                               |
-| POST   | `/patients/:id/visit-notes` | Semua | Buat rekam medis (pre-treatment, post-treatment, follow-up) |
-| GET    | `/visit-notes/:id`          | Semua | Detail rekam medis                                          |
-| PUT    | `/visit-notes/:id`          | Semua | Update rekam medis                                          |
-| DELETE | `/visit-notes/:id`          | Semua | Soft delete rekam medis                                     |
-
-#### Commissions
-
-| Method | Path                          | Role                   |
-| ------ | ----------------------------- | ---------------------- |
-| GET    | `/commissions`                | Admin/Doctor/Therapist |
-| GET    | `/commissions/staff/:staffId` | Admin                  |
-| POST   | `/commissions/update-status`  | Admin                  |
-
-Request body update-status:
-
-```json
-{ "ids": ["uuid1", "uuid2"], "status": "paid" }
-```
-
-Services dan products mendukung dua rate komisi: **handling** (`*_commission_*`) untuk PIC, dan **offering** (`*_offering_commission_*`) yang opsional. Ketika `commission_eligible=true` dan rate offering tersedia pada transaction item, offering menggantikan handling agar tidak ada double commission.
-
-#### Dashboard
-
-| Method | Path                            | Permission     | Notes                                           |
-| ------ | ------------------------------- | -------------- | ----------------------------------------------- |
-| GET    | `/dashboard/stats`              | `reports:read` | `?from=YYYY-MM-DD&to=YYYY-MM-DD` opsional       |
-| GET    | `/dashboard/revenue`            | `reports:read` | `?from=&to=` opsional; default 30 hari terakhir |
-| GET    | `/dashboard/top-services`       | `reports:read` | `?from=&to=` opsional                           |
-| GET    | `/dashboard/top-products`       | `reports:read` | `?from=&to=` opsional                           |
-| GET    | `/dashboard/top-customers`      | `reports:read` | `?from=&to=` opsional                           |
-| GET    | `/dashboard/appointments-today` | `reports:read` | selalu hari ini, tidak ada filter               |
-
-**Timezone:** Semua filter date range diinterpretasikan sebagai `Asia/Jakarta (UTC+7)`.
-`parseDateRange()` menggunakan `time.ParseInLocation("Asia/Jakarta")`.
-Query stats "hari ini" juga dihitung dalam WIB, bukan UTC server.
-
-#### CMS (public)
-
-| Method | Path                 | Notes                               |
-| ------ | -------------------- | ----------------------------------- |
-| GET    | `/cms/pages`         | `?org=<organization-slug>` opsional |
-| GET    | `/cms/pages/:pageId` | `?org=<organization-slug>` opsional |
-
-Public CMS selalu resolve slug menjadi organisasi aktif sebelum query data. Bila parameter `org` kosong, backend memakai `DEFAULT_PUBLIC_ORG_SLUG`; jika variabel kosong, fallback ke organisasi aktif pertama. CMS page unik per `(page_id, organization_id)`, sehingga tenant dapat memiliki `hero`, `promotions`, dan page yang sama secara terpisah.
-
-#### CMS (protected admin)
-
-| Method | Path                 | Notes                                                               |
-| ------ | -------------------- | ------------------------------------------------------------------- |
-| POST   | `/cms/pages`         | body: `{ "page_id": "...", ...content }`                            |
-| PUT    | `/cms/pages/:pageId` |                                                                     |
-| POST   | `/cms/upload-image`  | **multipart/form-data**: field `file` (image) + `folder` (opsional) |
-
-Upload image returns: `{ "success": true, "data": { "url": "http://..." } }`
-File disimpan ke `./uploads/cms/<folder>/` dan dapat diakses via `GET /uploads/...`
-
-#### Settings
-
-| Method | Path                    | Role  |
-| ------ | ----------------------- | ----- | ----------------------------------------------------------------------------------------------------- |
-| GET    | `/settings/clinic`      | Semua |
-| PUT    | `/settings/clinic`      | Admin | `invoice_header_title`, `invoice_header_description`, `invoice_footer_text` dipakai untuk cetak struk |
-| POST   | `/settings/clinic/logo` | Admin |
-
-#### Stock Movements
-
-| Method | Path               | Role  | Notes                                    |
-| ------ | ------------------ | ----- | ---------------------------------------- |
-| GET    | `/stock-movements` | Semua | `?product_id=uuid` opsional              |
-| POST   | `/stock-movements` | Admin | Otomatis update `products.current_stock` |
-
-Request body POST:
-
-```json
-{
-  "product_id": "uuid",
-  "movement_type": "in|out|adjustment",
-  "quantity": 10,
-  "reason": "restock",
-  "notes": "...",
-  "reference_id": "uuid (opsional)",
-  "reference_type": "transaction (opsional)"
-}
-```
-
-#### Service Consumables
-
-`/service-consumables` adalah mapping legacy satu produk per service. Konfigurasi baru menggunakan consumable groups:
-
-| Method     | Path                                | Permission       | Notes                     |
-| ---------- | ----------------------------------- | ---------------- | ------------------------- |
-| GET        | `/services/:id/consumable-groups`   | `services:read`  | Group + produk alternatif |
-| POST       | `/services/:id/consumable-groups`   | `services:write` | Buat kebutuhan konsumabel |
-| PUT/DELETE | `/consumable-groups/:groupId`       | `services:write` | Ubah/hapus group          |
-| POST       | `/consumable-groups/:groupId/items` | `services:write` | Tambah alternatif         |
-| DELETE     | `/consumable-group-items/:itemId`   | `services:write` | Hapus alternatif          |
-
-POS mengirim satu `selected_consumable_product_id` per transaction item. Stok pilihan itu divalidasi dan dikurangi saat pembayaran; beberapa group per service belum didukung penuh oleh payload transaksi.
-
-#### WhatsApp
-
-| Method              | Path                  | Notes                                |
-| ------------------- | --------------------- | ------------------------------------ |
-| GET                 | `/whatsapp/devices`   | Daftar device organisasi             |
-| GET                 | `/whatsapp/login`     | QR login device                      |
-| POST                | `/whatsapp/logout`    | Logout device                        |
-| POST                | `/whatsapp/send`      | Kirim pesan individual               |
-| POST                | `/whatsapp/send-bulk` | Kirim bulk recipient                 |
-| POST                | `/whatsapp/blast`     | Blast memakai template dan recipient |
-| GET/POST/PUT/DELETE | `/whatsapp/templates` | Kelola template pesan                |
 
 ---
 
-## 3. Database Schema
+## 3. API Route Summary
 
-### Tabel Utama
+**Base:** `http://localhost:8080/api` | **Auth:** `Authorization: Bearer <token>` | **Org:** `X-Organization-ID: <uuid>`
 
-```sql
-users                -- akun login (id, email, password, role, full_name, avatar_url, created_at, updated_at)
-organizations        -- unit tenant/bisnis SaaS (id, name, slug, description, logo_url, is_active,
-                     --   created_by, updated_by, deleted_at, created_at, updated_at)
-organization_members -- relasi user <-> org (id, org_id, user_id, role, is_active, joined_at,
-                     --   created_by, updated_by, deleted_at, created_at, updated_at)
-permissions          -- daftar permission granular (id, resource, action, description)
-role_permissions     -- mapping role default → permission (id, role, permission_id)
-user_permissions     -- extra grant per user per org (id, user_id, org_id, permission_id,
-                     --   granted_by, granted_at)
+Detail request/response → `docs/API_REFERENCE.md`
 
-service_categories   -- (id, name, description, is_active, organization_id,
-                     --   created_by, updated_by, deleted_at, created_at, updated_at)
-services             -- (id, name, category_id, description, duration_minutes, base_price,
-                     --   doctor/therapist handling commission fields,
-                     --   doctor/therapist offering commission fields, requires_doctor,
-                     --   is_active, organization_id, created_by, updated_by, deleted_at,
-                     --   created_at, updated_at)
-product_categories   -- (id, name, description, is_active, organization_id,
-                     --   created_by, updated_by, deleted_at, created_at, updated_at)
-products             -- (id, name, category, sku, supplier, purchase_price, selling_price,
-                     --   current_stock, minimum_stock, unit, expiry_date, is_active, is_consumable,
-                     --   handling/offering commission fields, organization_id, created_by, updated_by,
-                     --   deleted_at, created_at, updated_at)
-staff                -- (id, user_id, full_name, role, phone, email, specialization,
-                     --   is_active, organization_id, created_by, updated_by, deleted_at,
-                     --   created_at, updated_at)
-patients             -- (id, patient_code, full_name, photo_url, date_of_birth, gender,
-                     --   phone, whatsapp, email, address, allergy_history, medical_conditions,
-                     --   skin_type, notes, tags[], is_active, reminder_opt_in, organization_id,
-                     --   created_by, updated_by, deleted_at, created_at, updated_at)
-appointments         -- (id UUID, patient_id, service_id, doctor_id, therapist_id, scheduled_at,
-                     --   duration_minutes, status, source ('appointment'|'walk_in'), notes,
-                     --   reminder_sent_at, organization_id, created_by, updated_by,
-                     --   deleted_at, created_at, updated_at)
-transactions         -- (id, transaction_code, appointment_id, patient_id, subtotal,
-                     --   discount_amount, discount_type, total_amount, tax_amount,
-                     --   payment_method, payment_status, notes, paid_at, organization_id,
-                     --   created_by, updated_by, deleted_at, created_at, updated_at)
-transaction_items    -- (id, transaction_id, item_type, service_id, product_id, quantity,
-                     --   unit_price, discount_amount, discount_type, total_price, doctor_id, therapist_id,
-                     --   commission_eligible, commission_notes, selected_consumable_product_id,
-                     --   organization_id, created_by, updated_by, deleted_at, created_at)
-commissions          -- (id, staff_id, staff_role, transaction_id, transaction_item_id,
-                     --   base_amount, commission_type, commission_value, commission_amount,
-                     --   commission_reason, status, organization_id, created_by, updated_by, deleted_at,
-                     --   created_at, updated_at)
-clinic_settings      -- (id, clinic_name, address, phone, email, tax_rate, tax_inclusive,
-                     --   low_stock_alerts, appointment_reminders, expiry_warnings,
-                     --   reminder_hours_before, whatsapp_reminder_enabled, email_reminder_enabled,
-                     --   whatsapp_business_phone_id, logo_url, invoice_header_title,
-                     --   invoice_header_description, invoice_footer_text, organization_id,
-                     --   created_by, updated_by, deleted_at, created_at, updated_at)
-cms_pages            -- (id, page_id, data JSONB, organization_id, created_by, updated_by,
-                     --   deleted_at, created_at, updated_at), UNIQUE(page_id, organization_id)
-stock_movements      -- (id, product_id, movement_type, quantity, reason, reference_id,
-                     --   reference_type, notes, organization_id, created_by, created_at)
-service_consumables  -- legacy mapping (id, service_id, product_id, quantity_used, ...)
-service_consumable_groups -- kebutuhan konsumabel service (id, service_id, name, quantity_used, ...)
-service_consumable_group_items -- alternatif produk group (id, group_id, product_id, priority, ...)
-visit_notes           -- rekam medis per kunjungan (id, patient_id, appointment_id nullable, visit_date,
-                     --   diagnosis, patient_condition_before, treatment_performed, treatment_outcome,
-                     --   follow_up_notes, next_visit_recommended, doctor_id, organization_id,
-                     --   created_by, updated_by, deleted_at, created_at, updated_at)
-```
-
-### Notes Penting DB
-
-- `patients.tags` → tipe `TEXT[]` PostgreSQL, di Go gunakan `pq.Array(&patient.Tags)`
-- `cms_pages.data` → tipe `JSONB`
-- `appointments.status` → `scheduled | confirmed | completed | cancelled | no_show`
-- `transactions.payment_status` → `pending | paid | cancelled | refunded`
-- `commissions.status` → `pending | paid | cancelled`
-- `stock_movements.movement_type` → `in | out | adjustment`
-- **Semua tabel bisnis** memiliki kolom audit: `created_by`, `updated_by`, `deleted_at`.
-  - `deleted_at IS NULL` berarti record masih aktif.
-  - `deleted_at IS NOT NULL` berarti record sudah di-soft-delete.
-  - `stock_movements` sengaja tidak punya `updated_by`/`deleted_at` karena record stok bersifat immutable.
-- **Semua tabel bisnis** memiliki `organization_id` FK ke `organizations(id)` untuk multi-tenant.
-- **Semua ID & FK menggunakan native PostgreSQL `UUID` type** (bukan `VARCHAR(36)`).
-  - Primary keys: `UUID PRIMARY KEY DEFAULT gen_random_uuid()` (fallback; app code generates UUIDv7 via `utils.NewUUID()`).
-  - Foreign keys: `UUID REFERENCES <table>(id)`.
-  - Di Go: semua ID tetap `string` (PostgreSQL driver auto-converts).
-- `appointments.source` → `appointment` (kalender) atau `walk_in` (queue). Default: `appointment`.
-  - Kalender (`List`) hanya tampilkan `source='appointment'` atau `source IS NULL`.
-  - Queue (`ListAll`/`TodayQueue`) tampilkan semua source.
-- `permissions.id` memakai format `resource:action` (contoh: `patients:read`).
-- Field tanggal opsional (`patients.date_of_birth`, `products.expiry_date`) di Go menggunakan `models.NullableTime`.
-  - Menerima JSON: `null`, `""`, `YYYY-MM-DD`, atau `RFC3339`.
-  - Jika kosong, disimpan sebagai `NULL` di PostgreSQL.
-- Migration **tidak menggunakan file terpisah** — semua dalam `migrations.go` sebagai SQL string constants.
-- Schema saat ini adalah **fresh consolidated schema** (4 migration steps: create schema, indexes, seed permissions, seed role permissions). Setelah refactor ini, direkomendasikan membuat database baru dari nol.
+| Method              | Path                                                                                       | Notes                                             |
+| ------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| POST                | `/auth/login`                                                                              | Public. Return JWT + organizations[]              |
+| POST                | `/auth/register`                                                                           | Public. Auto-create org jika org_name diisi       |
+| POST                | `/auth/refresh`                                                                            | Public                                            |
+| GET                 | `/auth/me`                                                                                 | Include org_id, permissions jika X-Org header ada |
+| POST                | `/auth/admin/register`                                                                     | Admin. Buat user + auto-add ke org                |
+| GET                 | `/auth/users?email=`                                                                       | Admin. Search user for invite                     |
+| GET/POST/PUT/DELETE | `/patients` + `/patients/:id`                                                              | Standard CRUD                                     |
+| GET                 | `/patients/:id/visits`                                                                     | Riwayat kunjungan + all_services                  |
+| GET                 | `/patients/:id/transactions`                                                               | Riwayat transaksi                                 |
+| GET/POST            | `/patients/:id/visit-notes`                                                                | Rekam medis                                       |
+| GET/PUT/DELETE      | `/visit-notes/:id`                                                                         | Rekam medis detail                                |
+| GET/POST/PUT/DELETE | `/services` + `/services/:id`                                                              | Standard CRUD                                     |
+| GET/POST/PUT/DELETE | `/service-categories` + `/:id`                                                             | Standard CRUD                                     |
+| GET/POST/PUT/DELETE | `/products` + `/products/:id`                                                              | Standard CRUD                                     |
+| GET/POST/PUT/DELETE | `/product-categories` + `/:id`                                                             | Standard CRUD                                     |
+| GET/POST/PUT/DELETE | `/staff` + `/staff/:id`                                                                    | Standard CRUD                                     |
+| GET                 | `/appointments`                                                                            | Kalender only (excludes walk-in)                  |
+| POST                | `/appointments`                                                                            | `source`: appointment (default) / walk_in         |
+| GET                 | `/appointments/calendar`                                                                   | Kalender — excludes walk-in                       |
+| GET                 | `/appointments/today`                                                                      | Queue — ALL sources, grouped by status            |
+| PATCH               | `/appointments/:id/status`                                                                 | Update status (queue flow)                        |
+| POST                | `/appointments/:id/cancel`                                                                 | Cancel + linked draft tx (409 if paid)            |
+| GET/PUT/DELETE      | `/appointments/:id`                                                                        | Standard CRUD (DELETE: admin only)                |
+| GET                 | `/transactions`                                                                            | Paginated list                                    |
+| POST                | `/transactions`                                                                            | If paid → auto commission + stock                 |
+| GET                 | `/transactions/by-appointment?ids=`                                                        | Lightweight payment status lookup                 |
+| POST                | `/transactions/:id/items`                                                                  | Add item to existing tx                           |
+| GET                 | `/transactions/:id` + `/transactions/:id/items`                                            | Detail + items                                    |
+| PUT/DELETE          | `/transactions/:id`                                                                        | Update / soft delete                              |
+| GET                 | `/commissions` + `/commissions/staff/:staffId`                                             | List                                              |
+| POST                | `/commissions/update-status`                                                               | Bulk update: `{ ids, status }`                    |
+| GET                 | `/dashboard/stats\|revenue\|top-services\|top-products\|top-customers\|appointments-today` | `?from=&to=` (Jakarta TZ)                         |
+| GET/PUT             | `/settings/clinic`                                                                         | Clinic settings                                   |
+| POST                | `/settings/clinic/logo` + `/favicon`                                                       | Upload                                            |
+| GET                 | `/cms/pages` + `/cms/pages/:pageId`                                                        | Public (`?org=<slug>`)                            |
+| POST/PUT            | `/cms/pages` + `/:pageId`                                                                  | Admin. Create/update CMS page                     |
+| POST                | `/cms/upload-image`                                                                        | Multipart upload                                  |
+| GET/POST            | `/stock-movements`                                                                         | POST: admin only                                  |
+| GET/POST/PUT/DELETE | `/services/:id/consumable-groups` + `/consumable-groups/:groupId/items`                    | Consumable groups                                 |
+| GET/POST            | `/consumable-items` + `/usage`                                                             | Consumable items + usage logs                     |
+| PUT                 | `/products/:id/mark-consumable`                                                            | Mark/unmark consumable                            |
+| GET/POST/PUT/DELETE | `/organizations` + `/organizations/:id/members`                                            | Org + member management                           |
+| GET                 | `/rbac/permissions` + `/my-permissions` + `/role-permissions` + `/user-permissions`        | RBAC                                              |
+| POST                | `/migration/import`                                                                        | Admin. Import Excel                               |
+| GET                 | `/omni/conversations` + `/messages`                                                        | Omnichannel chat                                  |
+| GET                 | `/whatsapp/devices` + `/templates`                                                         | WhatsApp management                               |
 
 ---
 
-## 4. Frontend — `shasi`
+## 4. Database Quick Reference
 
-### 4.1 Tech Stack
+Detail schema → `docs/DATABASE_SCHEMA.md`
 
-- **Framework:** React 18 + TypeScript
-- **Build Tool:** Vite
-- **UI:** shadcn/ui (Radix UI) + Tailwind CSS
-- **State/Data:** TanStack Query v5 (`@tanstack/react-query`)
-- **Routing:** React Router v6
-- **HTTP Client:** Axios (wrapped dalam custom `ApiClient`)
-- **Forms:** React Hook Form + Zod (di beberapa form)
-- **Charts:** Recharts
-- **Notifications:** Sonner + shadcn `useToast`
+### Tabel (28 total)
 
-### 4.2 Struktur Direktori
+`users`, `organizations`, `organization_members`, `permissions`, `role_permissions`, `user_permissions`, `service_categories`, `services`, `product_categories`, `products`, `staff`, `patients`, `appointments`, `transactions`, `transaction_items`, `commissions`, `clinic_settings`, `cms_pages`, `stock_movements`, `service_consumables` (legacy), `service_consumable_groups`, `service_consumable_group_items`, `consumable_usage_logs`, `visit_notes`, `clinic_whatsapp_devices`, `whatsapp_templates`, `omni_conversations`, `omni_messages`
 
-```
-shasi/src/
-├── App.tsx                     # Root: routes, providers
-├── main.tsx                    # Entry, React 18 createRoot
-├── index.css                   # Tailwind directives + CSS vars
-├── contexts/
-│   └── AuthContext.tsx         # Auth state global, useAuth() hook
-├── integrations/
-│   └── api/
-│       ├── client.ts           # ApiClient class (axios wrapper, token mgmt)
-│       ├── endpoints.ts        # Semua API_ENDPOINTS constants
-│       ├── types.ts            # ApiError, JwtPayload types
-│       └── index.ts            # Re-export
-│   └── supabase/               # LEGACY — masih ada tapi TIDAK digunakan lagi
-│       ├── client.ts           # Supabase client (deprecated)
-│       └── types.ts            # Generated Supabase types (deprecated)
-├── hooks/                      # Custom hooks per domain
-│   ├── useAppointments.ts       # CRUD + cancelAppointment + updateStatus
-│   ├── usePatients.ts           # CRUD + visits + transactions + visit notes
-│   ├── useServices.ts
-│   ├── useProducts.ts
-│   ├── useStaff.ts
-│   ├── useTransactions.ts
-│   ├── useTransactionStats.ts
-│   ├── useCommissions.ts
-│   ├── useCmsData.ts
-│   ├── useClinicSettings.ts
-│   ├── useDashboard.ts          # stats, revenue, top-services/products/customers, appointments-today
-│   ├── useConsumableGroups.ts
-│   ├── useConsumableItems.ts
-│   ├── useVisitNotes.ts         # CRUD visit notes + useTodayQueue + useUpdateAppointmentStatus
-│   ├── useOmniChat.ts
-│   ├── usePublicClinicInfo.ts
-│   ├── useDebounce.ts
-│   ├── useDeviceCapability.ts   # 3D support detection
-│   ├── useDynamicFavicon.ts
-│   ├── useMagneticCursor.ts
-│   ├── use-mobile.tsx
-│   └── use-toast.ts
-├── types/
-│   ├── appointment.ts           # Appointment, AppointmentWithRelations, AppointmentStatus, APPOINTMENT_STATUSES
-│   ├── patient.ts               # Gender, SkinType, Patient, PatientFormData
-│   ├── product.ts              # Interface Product (manual, aligned dengan Go model)
-│   ├── service.ts              # Interface Service, ServiceCategory, re-export Product
-│   ├── transaction.ts          # Transaction, TransactionItem, CartItem
-│   ├── consumable.ts           # Consumable item types
-│   ├── consumable_group.ts     # Service consumable groups + alternative products
-│   ├── visit_note.ts           # VisitNote, TodayQueue, AppointmentQueueItem
-│   ├── cms.ts                  # CMS types
-│   ├── whatsapp.ts             # WhatsApp types
-│   └── omni.ts                 # Omnichannel types
-├── components/
-│   ├── layout/                 # MainLayout, Sidebar, PageHeader
-│   ├── auth/ProtectedRoute.tsx # Guard route dengan role check
-│   ├── patients/               # PatientFormDialog, PatientList, ServePatientDialog (walk-in flow)
-│   ├── appointments/           # AppointmentCalendar, AppointmentFormDialog (with cancel button)
-│   ├── services/               # Form/detail service + consumable group editor
-│   ├── products/               # ProductFormDialog, ProductList
-│   ├── staff/                  # StaffFormDialog, StaffList
-│   ├── transactions/           # Detail transaksi + receipt
-│   ├── pos/                    # POSInterface + ConsumableSelectionDialog
-│   ├── visit_notes/            # VisitNoteFormDialog (rekam medis)
-│   ├── cms/ImageUpload.tsx     # Upload gambar ke backend (multipart)
-│   ├── whatsapp/               # Komponen WhatsApp
-│   ├── filters/DateRangeFilter.tsx
-│   ├── landing/                # Semua section landing page publik
-│   └── ui/                     # shadcn components (jangan edit manual)
-└── pages/
-    ├── LandingPage.tsx         # Public landing page (/ atau /:orgSlug)
-    ├── Auth.tsx                # Login page (/admin/login)
-    ├── Onboarding.tsx          # Buat/join organisasi pertama
-    ├── Dashboard.tsx           # /dashboard
-    ├── Reports.tsx             # /reports
-    ├── Patients.tsx            # /patients
-    ├── PatientDetail.tsx       # /patients/:id
-    ├── Appointments.tsx        # /appointments — kalender (excludes walk-in)
-    ├── Queue.tsx               # /queue — antrian hari ini (walk-in + appointment, grouped by status)
-    ├── Services.tsx            # /services (admin only)
-    ├── Products.tsx            # /products (admin only)
-    ├── POS.tsx                 # /pos — kasir
-    ├── Transactions.tsx        # /transactions
-    ├── Commissions.tsx         # /commissions
-    ├── Staff.tsx               # /staff (admin only)
-    ├── Members.tsx             # /members
-    ├── Settings.tsx            # /settings (admin only)
-    ├── StockOpname.tsx         # /stock-opname
-    ├── ImportExcel.tsx         # /import-excel
-    ├── ConsumableItems/        # /consumable-items
-    ├── Messaging/              # /messaging
-    ├── RBACManagement.tsx      # /rbac
-    ├── CmsManagement.tsx       # /cms (admin only)
-    └── NotFound.tsx
+### Key Conventions
+
+- **ID type:** Native PostgreSQL `UUID`. PK: `UUID PRIMARY KEY DEFAULT gen_random_uuid()`. App generates UUIDv7 via `utils.NewUUID()`.
+- **Multi-tenant:** Semua tabel bisnis punya `organization_id UUID REFERENCES organizations(id)`. Filter: `WHERE (organization_id = $N OR ($N::text = '' AND organization_id IS NULL))`
+- **Soft delete:** `deleted_at TIMESTAMP`. Aktif: `WHERE deleted_at IS NULL`. Exception: `stock_movements` immutable (no deleted_at).
+- **Audit trail:** `created_by UUID`, `updated_by UUID` → dari `user_id` context.
+- **Timezone:** Semua date/time diinterpretasikan sebagai `Asia/Jakarta (UTC+7)`.
+- **`appointments.source`:** `appointment` (kalender) atau `walk_in` (queue). Default: `appointment`.
+- **`appointments.status`:** scheduled | confirmed | in_progress | completed | cancelled | no_show
+- **`transactions.payment_status`:** pending | paid | cancelled | refunded
+- **`patients.tags`:** `TEXT[]` → Go: `pq.Array(&tags)`
+- **`cms_pages.data`:** `JSONB`
+- **Nullable dates:** `models.NullableTime` (menerima null, "", YYYY-MM-DD, RFC3339)
+
+### Index Penting (seleksi)
+
+- `idx_transactions_appointment` — transactions(appointment_id) WHERE NOT NULL AND deleted_at IS NULL
+- `idx_visit_notes_patient/org/date/doctor/appt` — visit_notes indexes
+- `idx_*_name_lower` — LOWER(name) untuk search di patients, services, products, staff
+- Full list → `docs/DATABASE_SCHEMA.md`
+
+---
+
+## 5. Frontend Quick Reference
+
+Detail struktur → `docs/FRONTEND_STRUCTURE.md`
+
+### Tech Stack
+
+React 18 + TypeScript, Vite, shadcn/ui (Radix), Tailwind CSS, TanStack Query v5, React Router v7, Axios, React Hook Form + Zod, Recharts, Sonner.
+
+### Pages
+
+| Path                        | Page                     | Permission         |
+| --------------------------- | ------------------------ | ------------------ |
+| `/` `/:orgSlug`             | LandingPage              | Public             |
+| `/admin/login`              | Auth                     | Public             |
+| `/onboarding`               | Onboarding               | Auth (no org)      |
+| `/dashboard`                | Dashboard                | reports:read       |
+| `/patients` `/patients/:id` | Patients, PatientDetail  | patients:read      |
+| `/appointments`             | Appointments (calendar)  | appointments:read  |
+| `/queue`                    | Queue (antrian hari ini) | appointments:read  |
+| `/services`                 | Services                 | services:read      |
+| `/products` `/categories`   | Products, Categories     | products:read      |
+| `/pos`                      | POS                      | transactions:write |
+| `/transactions`             | Transactions             | transactions:read  |
+| `/commissions`              | Commissions              | commissions:read   |
+| `/staff`                    | Staff                    | staff:read         |
+| `/members`                  | Members                  | organization:write |
+| `/messaging`                | Messaging                | authenticated      |
+| `/rbac`                     | RBACManagement           | rbac:read          |
+| `/cms`                      | CmsManagement            | cms:read           |
+| `/settings`                 | Settings                 | settings:read      |
+| `/stock-opname`             | StockOpname              | products:write     |
+| `/consumable-items`         | ConsumableItems          | consumables:read   |
+| `/import-excel`             | ImportExcel              | products:write     |
+| `/reports`                  | Reports                  | reports:read       |
+
+### Key Components
+
+- `patients/ServePatientDialog` — walk-in flow (create appointment + draft tx + optional visit note)
+- `appointments/AppointmentCalendar` + `AppointmentFormDialog` — calendar + cancel button
+- `pos/POSInterface` — POS checkout (new tx or add to existing draft)
+- `visit_notes/VisitNoteFormDialog` — rekam medis form
+- `layout/MainLayout` + `Sidebar` + `OrgSwitcher` — layout + org switch
+
+### Key Hooks
+
+- `useAppointments` — CRUD + cancelAppointment + updateStatus
+- `useVisitNotes` — CRUD visit notes + useTodayQueue + useUpdateAppointmentStatus
+- `useTransactions` — CRUD + todayTransactions + todayRevenue
+- `usePatients` — CRUD + visits + transactions
+- `useDashboard` — stats, revenue, top-services/products/customers, appointments-today
+
+### API Client (`integrations/api/client.ts`)
+
+- Auto-attach `Authorization: Bearer` + `X-Organization-ID` headers
+- Auto-refresh on 401 → retry, or redirect to `/admin/login`
+- Token di localStorage: `access_token`, `refresh_token`, `active_org_id`
+- Methods: `get()`, `post()`, `put()`, `patch()`, `delete()`, `postForm()`
+
+### State Management
+
+- **TanStack Query** — query keys: `["appointments", start, end]`, `["patients", search, page]`, `["today-queue"]`, `["transactions", page, limit]`, dll
+- **AuthContext** — auth state, activeOrg, permissions, hasPermission()
+- **Local state** — useState untuk UI (dialogs, forms, filters)
+
+### Run
+
+```bash
+cd shasi && npm install && npm run dev
 ```
 
-### 4.3 ApiClient — Cara Pakai
-
-```typescript
-import { apiClient, API_ENDPOINTS } from "@/integrations/api";
-
-// GET
-const data = await apiClient.get<{ data: Patient[] }>(
-  API_ENDPOINTS.PATIENTS.LIST,
-);
-
-// GET dengan params
-const data = await apiClient.get<{ data: Patient[] }>(
-  API_ENDPOINTS.PATIENTS.LIST,
-  { search: "budi" },
-);
-
-// POST
-const result = await apiClient.post<{ data: Patient }>(
-  API_ENDPOINTS.PATIENTS.CREATE,
-  payload,
-);
-
-// PUT
-await apiClient.put(API_ENDPOINTS.PATIENTS.UPDATE(id), updates);
-
-// DELETE
-await apiClient.delete(API_ENDPOINTS.PATIENTS.DELETE(id));
-
-// File upload (multipart) — gunakan apiClient.postForm agar Authorization dan
-// X-Organization-ID dari interceptor tetap dikirim.
-const formData = new FormData();
-formData.append("file", file);
-formData.append("folder", "promotions");
-const response = await apiClient.postForm(
-  API_ENDPOINTS.CMS.UPLOAD_IMAGE,
-  formData,
-);
-```
-
-Token disimpan di `localStorage`:
-
-- `access_token` — JWT access (24 jam)
-- `refresh_token` — JWT refresh (7 hari)
-
-Auto-refresh: jika request 401, ApiClient otomatis coba refresh token lalu retry.
-Jika refresh gagal → redirect ke `/admin/login`.
-
-### 4.4 Route Pages & Akses
-
-| Path            | Page              | Role yang boleh akses           |
-| --------------- | ----------------- | ------------------------------- |
-| `/`             | LandingPage       | Public; default public org      |
-| `/:orgSlug`     | LandingPage       | Public; tenant berdasarkan slug |
-| `/admin/login`  | Auth              | Public                          |
-| `/dashboard`    | Dashboard         | `reports:read`                  |
-| `/patients`     | Patients          | admin, doctor, therapist        |
-| `/patients/:id` | PatientDetail     | admin, doctor, therapist        |
-| `/appointments` | Appointments      | Semua                           |
-| `/queue`        | Queue             | Semua (appointments:read)       |
-| `/services`     | Services          | admin                           |
-| `/products`     | Products          | admin                           |
-| `/categories`   | Categories        | admin                           |
-| `/pos`          | POS               | Semua                           |
-| `/transactions` | Transactions      | admin, cashier                  |
-| `/commissions`  | Commissions       | admin, doctor, therapist        |
-| `/staff`        | Staff             | admin                           |
-| `/members`      | Members           | admin (org admin)               |
-| `/settings`     | Settings          | admin                           |
-| `/whatsapp`     | WhatsAppMessaging | admin, cashier                  |
-| `/cms`          | CmsManagement     | admin                           |
-| `/rbac`         | RBACManagement    | admin                           |
-
-**Default redirect setelah login:** berdasarkan role organisasi aktif:
-
-- `admin` → `/dashboard`
-- `doctor` / `therapist` → `/appointments`
-- `cashier` → `/pos`
-
-Jika user mengakses route tanpa permission, `ProtectedRoute` redirect ke default route role-nya (bukan ke `/dashboard`).
-
-### 4.5 Hooks Pattern
-
-Semua hooks menggunakan TanStack Query:
-
-- Query retries tidak dilakukan untuk error 4xx (misal 403) agar tidak spam API yang tidak diizinkan.
-- `useProducts(enabled?)` dan `useCommissions(enabled?)` menerima parameter `enabled` opsional sehingga halaman
-  seperti Dashboard bisa menonaktifkan query ketika user tidak punya permission terkait.
-
-```typescript
-// Read
-const { data, isLoading, error } = useQuery({
-  queryKey: ["patients"],
-  queryFn: async () => apiClient.get<{data: Patient[]}>(API_ENDPOINTS.PATIENTS.LIST),
-});
-
-// Mutate
-const mutation = useMutation({
-  mutationFn: async (payload) => apiClient.post(...),
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ["patients"] });
-    toast.success("...");
-  },
-  onError: (error) => toast.error(error.message),
-});
-```
-
-### 4.6 Env Variables Frontend
+### Env
 
 ```env
-VITE_API_BASE_URL=http://localhost:8080/api   # default jika tidak diset
-VITE_API_TIMEOUT=30000                         # ms, opsional
-```
-
-### 4.7 Menjalankan Frontend
-
-```bash
-cd shasi
-cp .env.example .env   # isi VITE_API_BASE_URL
-npm install
-npm run dev            # dev server default: http://localhost:5173
-npm run build          # production build ke shasi/dist/
+VITE_API_BASE_URL=http://localhost:8080/api
+VITE_API_TIMEOUT=30000
 ```
 
 ---
 
-## 5. Alur Data End-to-End (Contoh: Buat Transaksi)
+## 6. RBAC Roles & Permissions
 
-```
-User klik "Bayar" di POS.tsx
-  → POSInterface.tsx call useTransactions().createTransaction(payload)
-    → apiClient.post("/api/transactions", payload)
-      → Backend: POST /api/transactions
-        → transaction/handler.go → Create()
-          → transaction/service.go → Create()
-            → transaction/repository.go → INSERT + auto-generate commission
-  → onSuccess: invalidate ["transactions"] query
-  → UI auto-refresh
-```
+### Roles: `admin`, `doctor`, `therapist`, `cashier`
 
----
+### Default permissions per role
 
-## 6. Integrasi Eksternal
+| Role      | Permissions                                                                   |
+| --------- | ----------------------------------------------------------------------------- |
+| admin     | ALL                                                                           |
+| doctor    | patients:read/write, appointments:read/write, services:read, commissions:read |
+| therapist | patients:read, appointments:read/write, services:read, commissions:read       |
+| cashier   | patients:read, transactions:read/write, products:read, services:read          |
 
-### WhatsApp
+### Permission format: `resource:action`
 
-- **Status:** Opsional — hanya aktif jika `WHATSAPP_API_URL` diset di `.env`
-- Jika tidak diset: endpoint `/whatsapp/send` tetap return success tapi tidak kirim pesan nyata
-- Frontend: `WhatsAppMessaging.tsx` — kirim individual atau bulk reminder appointment
-- Untuk produksi: integrasikan dengan Wablas, Fonnte, atau penyedia WA API lain
+Resources: patients, appointments, services, products, categories, transactions, commissions, staff, reports, settings, cms, rbac, organization, consumables
 
-### Image Upload
-
-- File disimpan **lokal** di `sc-pos-be/uploads/cms/`
-- Accessible via `GET http://localhost:8080/uploads/cms/<filename>`
-- Untuk produksi: pertimbangkan CDN atau object storage (S3, Cloudflare R2)
-- Max file size: 5 MB, hanya tipe `image/*`
+Effective permission = UNION(role_permissions by org_role + user_permissions per user+org)
 
 ---
 
-## 7. Hal yang BELUM Diimplementasi / Pekerjaan Tersisa
+## 7. Business Workflows (Summary)
 
-### Fungsionalitas Backend yang masih stub/kosong
+Detail → `docs/FEATURES_AND_PROCESSES.md`
 
-- [ ] `settings/handler.go` → `UploadLogo()` — belum implementasi upload nyata (masih return empty)
-- [ ] `appointment/handler.go` → `AvailableSlots()` — perlu cek jadwal staff
-- [ ] Filter lanjutan transactions (`from`, `to`, `status`) — endpoint list saat ini baru mendukung `page` dan `limit`
-
-### Fungsionalitas Frontend yang belum ada
-
-- [ ] Form untuk `stock_movements` (tambah stok manual) di halaman Products
-- [ ] Dukungan selection transaksi per consumable group; implementasi saat ini hanya menyimpan satu selected product per transaction item
-- [ ] `reminder_opt_in` toggle di form patient
-- [ ] WhatsApp bulk reminder menggunakan `SEND_BULK` endpoint (sekarang masih loop individual)
-- [ ] Export data (PDF/Excel) untuk laporan transaksi dan komisi
-- [ ] Notifikasi real-time (saat ini manual refresh)
-
-### Known Issues
-
-- `internal/repository/patient.go` — ada file duplikat lama di `internal/repository/`, yang aktif ada di `internal/modules/patient/repository.go`. File lama mungkin stale.
-- Supabase client (`shasi/src/integrations/supabase/`) masih ada di codebase. Sudah tidak dipakai tapi belum dihapus — aman dibiarkan, tidak di-import oleh kode aktif.
-- `useTransactionStats` hook masih fetch dari endpoint yang mungkin belum optimal (fetch semua transaksi lalu filter client-side untuk stats)
-
-### Bug yang sudah diperbaiki (untuk referensi)
-
-- **`pq: unexpected Parse response 'C'`** saat mark transaction as paid → `MarkPaidEffects()` di `transaction/repository.go` memanggil query baru di dalam loop `rows.Next()` saat cursor masih terbuka. Fix: collect semua rows ke slice, `rows.Close()` eksplisit, baru lakukan DML.
-- **Dashboard stats = 0 saat filter hari ini** → `parseDateRange` menggunakan UTC midnight (`time.Parse`), bukan WIB. Fix: `time.ParseInLocation("Asia/Jakarta")`. Query no-filter juga diperbaiki dari `CURRENT_DATE` PostgreSQL ke batas waktu WIB yang dihitung di Go.
-- **Backend binary lama tidak di-restart** → routes baru tidak aktif setelah deploy. Selalu `pkill -f "go run main.go" && go run main.go` atau `make kill && make run` setelah perubahan Go.
-- **`pq: foreign key constraint patients_updated_by_fkey cannot be implemented`** setelah nambah audit trail → audit columns dideklarasikan sebagai `UUID` padahal `users.id` adalah `VARCHAR(36)`. Fix: semua FK user/audit dijadikan `VARCHAR(36)`, sekaligus migrasi di-consolidate jadi schema bersih dari awal.
-- **JWT dari database lama masih diterima setelah reset DB** → `AuthMiddleware` sekarang cek `user_id` dari JWT masih ada di tabel `users`.
-- **Banyak endpoint mengembalikan `permission check failed` untuk user/org baru** → query `checkPermission` memfilter `user_permissions.deleted_at IS NULL`, padahal tabel `user_permissions` tidak punya kolom `deleted_at` (grants di-revoke via hard DELETE). Fix: hapus filter `deleted_at` dari query tersebut.
-- **`parsing time ""` / `parsing time "YYYY-MM-DD"` saat create/update Patient/Product** → `*time.Time` tidak menerima string kosong atau date-only. Fix: buat `models.NullableTime` yang menerima `null`, `""`, `RFC3339`, dan `YYYY-MM-DD`, lalu apply ke `Patient.DateOfBirth` dan `Product.ExpiryDate`.
+| Workflow        | Singkat                                                                                              |
+| --------------- | ---------------------------------------------------------------------------------------------------- |
+| **Walk-in**     | ServePatientDialog → create appointment(source=walk_in) + draft tx → navigate to /queue              |
+| **Calendar**    | List() excludes walk-in; AppointmentFormDialog has cancel button                                     |
+| **Queue**       | TodayQueue = ListAll() (all sources) → grouped by status → cancel/checkout buttons                   |
+| **Cancel**      | POST /appointments/:id/cancel → cancel draft tx (if pending) + set status=cancelled. 409 if tx paid. |
+| **POS**         | New tx: POST /transactions. Existing draft: add items via POST /:id/items, pay via PUT /:id          |
+| **Visit Notes** | Independent of appointments. Pre/post treatment + follow-up. View in PatientDetail timeline.         |
+| **Commission**  | Auto on paid: handling (PIC) or offering (upsell). Offering replaces handling if eligible.           |
+| **Stock**       | Auto on paid: validate → reduce → stock_movements. Atomic (DB transaction).                          |
 
 ---
 
-## 8. Cara Menambah Module Baru (Pola Standar)
+## 8. Cara Menambah Module Baru
 
-Misalnya ingin tambah module `report`:
+**Backend:** Buat `internal/modules/<name>/` (handler+service+repository+routes) → daftar di `routes/routes.go` → tambah migration jika perlu tabel baru.
 
-**Backend:**
+**Frontend:** Tambah endpoint di `endpoints.ts` → buat hook → buat page → tambah route di `App.tsx` + link di `Sidebar.tsx`.
 
-1. Buat folder `sc-pos-be/internal/modules/report/`
-2. Buat `repository.go` — query SQL
-3. Buat `service.go` — business logic
-4. Buat `handler.go` — HTTP handlers + `NewModule()`
-5. Buat `routes.go` — `RegisterRoutes(router, admin)`
-6. Daftarkan di `routes/routes.go`: import + `report.RegisterRoutes(protectedAPI, adminOnly)`
-7. Jika perlu tabel baru: tambah migration di `database/migrations.go` (tambah ke array `migrations` + buat konstanta SQL-nya)
-
-**Frontend:**
-
-1. Tambah endpoint di `integrations/api/endpoints.ts`
-2. Buat hook `hooks/useReport.ts` (TanStack Query pattern)
-3. Buat page `pages/Reports.tsx`
-4. Tambah route di `App.tsx` dengan `ProtectedRoute`
-5. Tambah link di `components/layout/Sidebar.tsx`
+Detail step-by-step → `docs/CREATING_NEW_FEATURE.md`
 
 ---
 
-## 9. Commands Penting
+## 9. Commands
 
 ```bash
 # Backend
 cd sc-pos-be
 go build ./...                    # compile check
-go run main.go                    # start dev server
-go test ./...                     # run tests (belum ada test files)
+go run main.go                    # start dev (migrations auto)
+go test ./...                     # tests
 
 # Frontend
 cd shasi
 npm run dev                       # dev server
 npm run build                     # production build
-npx tsc -p tsconfig.app.json --noEmit      # typecheck menyeluruh
-npm run lint                                # lint frontend
-
-# Database (contoh psql)
-psql -U postgres -d sc_pos        # connect
-\dt                               # list tables
+npx tsc -p tsconfig.app.json --noEmit   # typecheck (WAJIB setelah refactor)
+npm run lint                      # lint
 ```
 
 ---
 
-## 10. Git History Ringkas
+## 10. Hal yang Belum Diimplementasi
 
-```
-d3a2814 - fix: commissions missing organization_id
-          Backend: `commissions` sekarang menyimpan `organization_id` saat transaksi
-                   menjadi paid. Migration backfill data lama yang `organization_id` NULL.
-                   Hal ini memperbaiki list Commissions dan widget Dashboard yang
-                   tadinya kosong meskipun row di DB sudah ada.
-
-87ffce2 - fix: role-based default routes + guard API calls + mandatory form validation
-          Backend: Dashboard routes sekarang pakai permission `reports:read` (bukan admin-only).
-          Frontend: Default redirect setelah login berdasarkan role (admin→dashboard,
-                   doctor/therapist→appointments, cashier→pos). ProtectedRoute redirect
-                   ke default route saat permission ditolak. Dashboard hanya fetch
-                   products/commissions jika user punya permission. QueryClient tidak
-                   retry request 4xx. Validasi mandatory field ditambah di Product,
-                   Service, Appointment, Category, Settings.
-
-596a571 - feat: direct user creation in Members + POS print receipt prompt
-          Backend: POST /auth/admin/register sudah tersedia; di frontend sekarang
-                   Members page bisa langsung buat user baru + auto-add ke org.
-          Frontend: Setelah checkout POS berhasil, muncul AlertDialog bertanya
-                   "Cetak struk?" dengan tombol Cetak / Tidak.
-
-06ba869 - feat: organization members management page + user lookup by email
-          Backend: GET /auth/users?email=... (admin-only) untuk mencari user yang sudah
-                   terdaftar sebelum di-invite ke organisasi.
-          Frontend: Halaman /members + menu sidebar "Members" untuk kelola anggota
-                   organisasi: list, ubah role, hapus, dan tambah anggota via email.
-
-6dd3a06 - feat: commissions on paid transaction creation, patient history staff names, transaction detail + print receipt
-          Backend: Create paid transaction otomatis generate commission & kurangi stock.
-                   Patient visits/transactions sertakan doctor_name + therapist_name.
-          Frontend: TransactionDetailDialog dengan Print Receipt. Receipt header/footer
-                   pakai clinic_settings.invoice_header_* / invoice_footer_text.
-
-36fea2a - fix(frontend): show gender in patient list even when date of birth is empty
-          Cell Age/Gender di PatientList tadinya tidak render apa-apa kalau age null.
-          Sekarang gender tetap tampil meskipun DOB kosong.
-
-68af740 - fix(models): handle empty string dates for optional date fields
-          Buat models.NullableTime. Apply ke Patient.DateOfBirth & Product.ExpiryDate.
-          Menerima null, "", date-only (YYYY-MM-DD), dan RFC3339.
-
-a357a69 - fix(rbac): remove deleted_at filter from user_permissions permission check
-          Query checkPermission salah filter user_permissions.deleted_at IS NULL,
-          padahal tabel tidak punya kolom deleted_at. Fix: hapus filter.
-
-6f2b237 - fix(auth): reject JWTs when the user no longer exists
-          AuthMiddleware sekarang verifikasi user_id dari JWT masih ada di tabel users.
-
-fafa73c - refactor: clean consolidated database schema from scratch
-          Ganti 27-step migration tumpuk jadi 4 migration step bersih.
-          Semua tabel bisnis langsung punya organization_id + created_by/updated_by/deleted_at.
-          Fix FK type mismatch: audit/user FK pakai VARCHAR(36) konsisten dengan users.id.
-
-8a5bd48 - feat: full audit trail (created_by, updated_by, deleted_at) across all business tables
-          Semua repository soft-delete pattern: deleted_at IS NULL, create set created_by,
-          update set updated_by + updated_at. stock_movements tetap immutable.
-
-2ed7388 - feat: multi-tenant SaaS + granular RBAC
-          Organizations, org_members, permissions, role_permissions, user_permissions.
-          OrgMiddleware, RequirePermission, Onboarding, RBACManagement page, OrgSwitcher.
-
-7b3933a - docs(AGENTS.md): update context — new routes, schema, bugs, git history
-
-0706431 - chore: add Makefile kill target + update frontend dist build
-
-72587c3 - fix: close rows cursor before DML in MarkPaidEffects
-          Root cause: pq error "unexpected Parse response 'C'" karena QueryRow
-          dipanggil di dalam loop rows.Next() di MarkPaidEffects().
-          Fix: collect rows ke slice → rows.Close() → lalu DML.
-
-109edca - fix(timezone) + feat(categories)
-          Backend: parseDateRange pakai ParseInLocation(Asia/Jakarta).
-                   Dashboard no-filter hitung batas hari ini di Go (WIB), bukan CURRENT_DATE.
-          Frontend: Transactions filter & display pakai paid_at bukan created_at.
-                    Halaman /categories baru (CRUD service & product categories).
-                    Sidebar: tambah menu Categories.
-                    useServiceCategories diperluas dengan create/update/delete mutations.
-
-5bb4583 - feat: patient history, product/service category CRUD, dashboard filter, POS search
-          Backend:  GET /patients/:id/visits, /patients/:id/transactions
-                    Tabel product_categories + full CRUD /product-categories
-                    PUT/DELETE /service-categories/:id
-                    Dashboard endpoints terima ?from=&to= date range filter
-          Frontend: PatientDetail tab Visit History & Transactions (data real dari backend)
-                    ProductFormDialog fetch categories dari API
-                    useDashboard hooks terima DateRangeParams
-                    POSInterface patient dropdown → searchable Popover+Command combobox
-                    PatientFormDialog tambah field Tags (chip input)
-
-149bb81 - Fix end-to-end bugs: auth redirect, transaction, dashboard
-
-a07cf80 - Fix router conflict: rename service-consumables route path
-
-ca2cdde - Add AGENTS.md
-
-29fc79d - Migrate backend integrations from Supabase to self-managed service
-```
+- `appointment/AvailableSlots()` — stub, perlu cek jadwal staff
+- Filter lanjutan transactions (`from`, `to`, `status`)
+- Selection consumable per group (saat ini hanya 1 selected product per transaction item)
+- Export PDF/Excel untuk laporan
+- Notifikasi real-time (saat ini manual refresh)
 
 ---
 
-_Terakhir diupdate: 2026-08-01 — UUID migration (UUIDv7), visit notes, queue system, POS walk-in flow, cancel appointment, transaction by-appointment, add items to transaction_
+## 11. Known Issues
+
+- Supabase client (`shasi/src/integrations/supabase/`) masih ada tapi tidak dipakai — `types.ts` masih dipakai untuk generated types
+- `useTransactionStats` hook fetch semua transaksi lalu filter client-side (belum optimal)
 
 ---
 
-## 11. Multi-Tenant & RBAC Architecture (Fitur Baru)
-
-### 11.1 Overview
-
-Sistem telah diupgrade ke arsitektur **multi-organization SaaS** dengan **RBAC granular**:
-
-- Satu user bisa menjadi anggota lebih dari satu organisasi/klinik dengan role berbeda
-- Setiap data (pasien, produk, dll.) diisolasi per `organization_id`
-- Permission diperiksa di middleware backend — bukan hanya role
-- Frontend menyimpan `active_org_id` di localStorage dan mengirimnya via header
-
-### 11.2 Tabel Database Baru
-
-```sql
-organizations       -- (id, name, slug UNIQUE, description, logo_url, created_by FK→users,
-                   --   is_active, deleted_at, created_at, updated_at)
-organization_members-- (id, org_id FK, user_id FK, role, is_active, joined_at,
-                   --   created_by, updated_by, deleted_at, created_at, updated_at)
-                   --   UNIQUE(org_id, user_id)
-permissions         -- (id, resource, action, description) — tabel master permission
-                   -- contoh: { resource: "patients", action: "read", description: "..." }
-role_permissions    -- (id, role, permission_id FK) — default permission per role
-                   -- di-seed saat migration; admin punya semua permission
-user_permissions    -- (id, user_id FK, permission_id FK, org_id FK, granted_by FK, granted_at)
-                   -- extra permission per-user di luar default role-nya
-                   -- kosong by default; baru terisi kalau admin grant extra permission
-```
-
-Setiap tabel bisnis (patients, services, products, staff, appointments, transactions, commissions,
-clinic_settings, cms_pages, stock_movements, service_consumables, visit_notes) mendapat kolom:
-
-```sql
-organization_id UUID REFERENCES organizations(id)  -- nullable, NULL = data lama/global
-```
-
-### 11.3 Backend: Middleware Baru
-
-```go
-// middleware/auth.go
-
-// OrgMiddleware — dipasang setelah AuthMiddleware di semua protected routes
-// Membaca header X-Organization-ID, verifikasi keanggotaan user, set ke context:
-//   c.Set("org_id", orgID)
-//   c.Set("org_role", role)   // role user di org tersebut (override JWT role)
-middleware.OrgMiddleware()
-
-// RequirePermission — cek permission spesifik (gabungan role_permissions + user_permissions)
-// Contoh: middleware.RequirePermission("patients:read")
-// Urutan cek: 1) ambil default perms dari role_permissions, 2) merge user_permissions,
-//             3) jika permission ada → lanjut, jika tidak → 403
-// Catatan: user_permissions di-revoke via hard DELETE (tidak ada soft delete), jadi query
-// tidak memfilter deleted_at di sini.
-middleware.RequirePermission("resource:action")
-
-// RequireRole — legacy, masih digunakan untuk beberapa route (misal: admin-only)
-middleware.RequireRole("admin")
-middleware.RequireRole("admin", "doctor", "therapist")
-```
-
-**Context keys yang tersedia di handler setelah middleware:**
-
-- `user_id` — dari JWT
-- `email` — dari JWT
-- `role` — dari JWT (atau dioverride oleh org_role)
-- `org_id` — dari X-Organization-ID header (setelah diverifikasi)
-- `org_role` — role user di organisasi aktif
-
-### 11.4 Backend: Pola Repository Org-Aware
-
-Semua repository method sekarang menerima `orgID string` sebagai parameter. Pattern SQL:
-
-```sql
--- Filter di WHERE: jika orgID kosong (""), kembalikan semua; jika ada, filter ketat
-AND (organization_id = $N OR ($N::text = '' AND organization_id IS NULL))
-
--- CREATE: simpan orgID, NULL jika kosong
--- Di Go: var orgVal interface{}; if orgID != "" { orgVal = orgID }
--- INSERT: organization_id = $N → orgVal
-```
-
-Setiap handler mengekstrak `orgID` dari context:
-
-```go
-orgID := c.GetString("org_id")
-```
-
-### 11.5 Backend: Route Baru
-
-#### Organizations
-
-| Method | Path                                 | Permission                                    |
-| ------ | ------------------------------------ | --------------------------------------------- |
-| GET    | `/organizations/my`                  | authenticated                                 |
-| POST   | `/organizations`                     | authenticated (creates + sets owner as admin) |
-| GET    | `/organizations/:id`                 | org member (via OrgMiddleware)                |
-| PUT    | `/organizations/:id`                 | `organization:write`                          |
-| DELETE | `/organizations/:id`                 | `organization:write`                          |
-| GET    | `/organizations/:id/members`         | org member (via OrgMiddleware)                |
-| POST   | `/organizations/:id/members`         | `organization:write`                          |
-| PUT    | `/organizations/:id/members/:userId` | `organization:write`                          |
-| DELETE | `/organizations/:id/members/:userId` | `organization:write`                          |
-
-#### RBAC
-
-| Method | Path                                     | Permission                                             |
-| ------ | ---------------------------------------- | ------------------------------------------------------ |
-| GET    | `/rbac/permissions`                      | authenticated                                          |
-| GET    | `/rbac/my-permissions`                   | authenticated (returns effective perms for active org) |
-| GET    | `/rbac/role-permissions`                 | authenticated                                          |
-| GET    | `/rbac/role-permissions/:role`           | authenticated                                          |
-| PUT    | `/rbac/role-permissions/:role`           | `rbac:write`                                           |
-| GET    | `/rbac/user-permissions/:userId`         | `rbac:read`                                            |
-| POST   | `/rbac/user-permissions/:userId`         | `rbac:write`                                           |
-| DELETE | `/rbac/user-permissions/:userId/:permId` | `rbac:write`                                           |
-
-#### Auth (updated)
-
-- `POST /auth/register` — sekarang menerima `full_name` + `organization_name` (opsional).
-  Jika `organization_name` diisi, auto-create org dan return `organizations[]` dalam response.
-- `POST /auth/login` — response sekarang include `organizations: []OrgInfo`
-- `GET /auth/me` — response include `org_id`, `org_role`, `permissions[]` jika ada `X-Organization-ID`
-
-### 11.6 Frontend: Perubahan Kunci
-
-#### AuthContext (`contexts/AuthContext.tsx`)
-
-State baru:
-
-```ts
-activeOrg: OrgInfo | null          // org yang sedang aktif
-organizations: OrgInfo[]           // semua org user
-permissions: string[]              // effective perms di activeOrg
-needsOnboarding: boolean           // true jika user tapi belum punya org
-```
-
-Method baru:
-
-```ts
-signIn(user, orgs); // set user + set org pertama sebagai aktif
-switchOrg(org); // ganti activeOrg, reload permissions
-hasPermission("patients:read"); // cek permission
-hasRole("admin", "doctor"); // cek role
-```
-
-#### ApiClient (`integrations/api/client.ts`)
-
-- Setiap request otomatis menyertakan `X-Organization-ID: <active_org_id>`
-- Method baru: `setActiveOrgId(id)`, `getActiveOrgId()`, `clearActiveOrg()`
-- `clearTokens()` sekarang juga clear `active_org_id` dari localStorage
-
-#### Komponen & Halaman Baru
-
-| Path          | Komponen                            | Deskripsi                                        |
-| ------------- | ----------------------------------- | ------------------------------------------------ |
-| `/onboarding` | `pages/Onboarding.tsx`              | Buat organisasi pertama setelah register         |
-| `/rbac`       | `pages/RBACManagement.tsx`          | Kelola role permissions + user extra permissions |
-| -             | `components/layout/OrgSwitcher.tsx` | Dropdown ganti organisasi aktif                  |
-
-#### ProtectedRoute (`components/auth/ProtectedRoute.tsx`)
-
-Prop baru:
-
-```tsx
-<ProtectedRoute requirePermission="patients:read">  // permission-based guard
-<ProtectedRoute allowedRoles={["admin"]}>            // legacy role guard (masih didukung)
-```
-
-Juga otomatis redirect ke `/onboarding` jika `needsOnboarding === true`.
-
-#### Sidebar
-
-- Menampilkan nama org aktif di header (menggantikan hardcoded "Shasi Beauty Care")
-- OrgSwitcher muncul di atas nav menu
-- Menu item disembunyikan jika user tidak punya permission yang diperlukan
-- Menu baru: **Roles & Permissions** (`/rbac`, icon Shield, permission: `rbac:read`)
-
-### 11.7 Permission List (Seeds Default)
-
-Resource x Action pairs yang ada di tabel `permissions`:
-
-| Resource       | Actions                   |
-| -------------- | ------------------------- |
-| `patients`     | `read`, `write`, `delete` |
-| `appointments` | `read`, `write`, `delete` |
-| `services`     | `read`, `write`, `delete` |
-| `products`     | `read`, `write`, `delete` |
-| `categories`   | `read`, `write`, `delete` |
-| `transactions` | `read`, `write`, `delete` |
-| `commissions`  | `read`, `write`           |
-| `staff`        | `read`, `write`, `delete` |
-| `reports`      | `read`                    |
-| `settings`     | `read`, `write`           |
-| `cms`          | `read`, `write`           |
-| `rbac`         | `read`, `write`           |
-| `organization` | `read`, `write`           |
-
-Default role assignments (role_permissions):
-
-- `admin` → semua permission
-- `doctor` → patients:read/write, appointments:read/write, services:read, commissions:read
-- `therapist` → patients:read, appointments:read/write, services:read, commissions:read
-- `cashier` → patients:read, transactions:read/write, products:read, services:read
-
-### 11.8 Flow Register Baru
-
-```
-1. User isi: email, password, full_name (opsional), organization_name (wajib di form)
-2. POST /auth/register { email, password, full_name, organization_name }
-3. Backend: AuthMiddleware verifikasi user_id JWT masih ada di DB → create user → create org → add user sebagai org.role = "admin" → return tokens + orgs[]
-4. Frontend: simpan token → signIn(user, orgs) → navigate("/dashboard")
-5. Jika org_name kosong (misal: API langsung): register berhasil, orgs[] = [] → redirect ke /onboarding
-```
-
-### 11.9 Flow Login Baru
-
-```
-1. POST /auth/login { email, password }
-2. Response: { access_token, user, organizations: [{id, name, slug, role}, ...] }
-3. Frontend: simpan token → signIn(user, orgs) → set org pertama sebagai active
-4. ApiClient mulai kirim X-Organization-ID di setiap request
-5. Backend OrgMiddleware verifikasi keanggotaan → set org_id + org_role di context
-6. Repository memfilter data by org_id
-```
-
----
-
-## 5. Development Guidelines & Best Practices
-
-### 5.1 Verifikasi TypeScript (Khusus Frontend Vite)
-
-Pada project berbasis **Vite + React + TypeScript** yang menggunakan arsitektur TypeScript 5 References (`tsconfig.json` memiliki `"files": []`), perintah standar `npx tsc --noEmit` **TIDAK AKAN** mengecek kode sumber (`src/`) secara menyeluruh. Hal ini dapat menyebabkan lolosnya error seperti _missing imports_, _undefined props_, atau masalah _type_ lainnya (terutama saat memecah/modularisasi file).
-
-**ATURAN WAJIB SAAT REFACTOR / MODULARISASI:**
-Untuk melakukan pengecekan secara komprehensif, pastikan Anda menggunakan file konfigurasi yang benar:
-
-```bash
-# Lakukan pengecekan menyeluruh pada direktori frontend (shasi)
-npx tsc -p tsconfig.app.json --noEmit
-
-# Jangan lupa untuk juga menjalankan linter
-npm run lint
-```
-
-Selalu jalankan perintah ini setelah mengekstrak, memecah file monolitik, atau mengubah _props_ antar komponen agar aplikasi dijamin stabil secara tipe (type-safe) dan terbebas dari _ReferenceError_ atau variabel tidak terdefinisi di runtime.
+_Terakhir diupdate: 2026-08-01_
