@@ -206,6 +206,30 @@ func RunMigrations() error {
 		return fmt.Errorf("failed to add performance indexes: %w", err)
 	}
 
+	// ---------------------------------------------------------------------------
+	// 12) UNIQUE indexes for ON CONFLICT upsert (import fast path).
+	//     These enable INSERT ... ON CONFLICT DO UPDATE so we don't need a
+	//     separate SELECT before every INSERT during bulk import.
+	//     Match key: (organization_id, LOWER(name)) for products/services,
+	//                (organization_id, LOWER(full_name), COALESCE(phone,'')) for patients.
+	//     Partial: only active, non-deleted rows participate in uniqueness.
+	// ---------------------------------------------------------------------------
+	if _, err := DB.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_products_org_name
+			ON products (organization_id, LOWER(name))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true;
+
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_services_org_name
+			ON services (organization_id, LOWER(name))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true;
+
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_patients_org_name_phone
+			ON patients (organization_id, LOWER(full_name), COALESCE(phone, ''))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true;
+	`); err != nil {
+		return fmt.Errorf("failed to add unique indexes for upsert: %w", err)
+	}
+
 	return nil
 }
 

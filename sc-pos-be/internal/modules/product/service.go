@@ -20,6 +20,7 @@ type Service interface {
 	GetByNames(names []string, orgID string) (map[string]*models.Product, error)
 	Create(req models.Product, orgID, userID string) (*models.Product, error)
 	Update(id string, req models.Product, orgID, userID string) (*models.Product, error)
+	Upsert(req models.Product, orgID, userID string) (bool, error)
 	UpsertByName(req models.Product, orgID, userID string) (*models.Product, error)
 	Delete(id, orgID, userID string) error
 	ListCategories(orgID string) ([]models.ProductCategory, error)
@@ -76,6 +77,21 @@ func (s *service) Create(req models.Product, orgID, userID string) (*models.Prod
 		return nil, err
 	}
 	return &req, nil
+}
+
+// Upsert inserts or updates a product using ON CONFLICT on (org_id, LOWER(name)).
+// Returns (true, nil) if created, (false, nil) if updated.
+func (s *service) Upsert(req models.Product, orgID, userID string) (bool, error) {
+	now := time.Now()
+	req.ID = uuid.New().String()
+	req.IsActive = true
+	if userID != "" {
+		req.CreatedBy = &userID
+	}
+	req.CreatedAt = now
+	req.UpdatedAt = now
+	applyProductDefaults(&req)
+	return s.repo.Upsert(&req, orgID, userID)
 }
 
 func (s *service) Update(id string, req models.Product, orgID, userID string) (*models.Product, error) {

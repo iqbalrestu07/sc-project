@@ -142,6 +142,57 @@ func (r *Repository) Create(patient *models.Patient, orgID string) error {
 	return nil
 }
 
+// Upsert inserts a new patient or updates an existing one based on the unique
+// index (organization_id, LOWER(full_name), COALESCE(phone, ”)).
+// Uses PostgreSQL ON CONFLICT DO UPDATE — 1 round-trip instead of 2 (SELECT + INSERT/UPDATE).
+// Returns true if a new row was inserted, false if an existing row was updated.
+func (r *Repository) Upsert(patient *models.Patient, orgID, userID string) (bool, error) {
+	if patient.CreatedBy == nil || *patient.CreatedBy == "" {
+		if userID != "" {
+			patient.CreatedBy = &userID
+		}
+	}
+
+	query := `
+		INSERT INTO patients (id, patient_code, full_name, photo_url, date_of_birth,
+		                     gender, phone, whatsapp, email, address, allergy_history,
+		                     medical_conditions, skin_type, notes, tags, is_active,
+		                     reminder_opt_in, created_by, created_at, updated_at,
+		                     organization_id, updated_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+		ON CONFLICT (organization_id, LOWER(full_name), COALESCE(phone, ''))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true
+		DO UPDATE SET
+			full_name        = EXCLUDED.full_name,
+			photo_url        = COALESCE(EXCLUDED.photo_url, patients.photo_url),
+			phone            = COALESCE(EXCLUDED.phone, patients.phone),
+			whatsapp         = COALESCE(EXCLUDED.whatsapp, patients.whatsapp),
+			email            = COALESCE(EXCLUDED.email, patients.email),
+			address          = COALESCE(EXCLUDED.address, patients.address),
+			allergy_history  = COALESCE(EXCLUDED.allergy_history, patients.allergy_history),
+			medical_conditions = COALESCE(EXCLUDED.medical_conditions, patients.medical_conditions),
+			skin_type        = COALESCE(EXCLUDED.skin_type, patients.skin_type),
+			notes            = COALESCE(EXCLUDED.notes, patients.notes),
+			updated_by       = EXCLUDED.updated_by,
+			updated_at       = NOW()
+		RETURNING (xmax = 0) AS inserted
+	`
+	var inserted bool
+	err := r.db.QueryRow(query,
+		patient.ID, patient.PatientCode, patient.FullName, patient.PhotoURL,
+		patient.DateOfBirth, patient.Gender, patient.Phone, patient.WhatsApp,
+		patient.Email, patient.Address, patient.AllergyHistory,
+		patient.MedicalConditions, patient.SkinType, patient.Notes,
+		pq.Array(patient.Tags), patient.IsActive, patient.ReminderOptIn,
+		patient.CreatedBy, patient.CreatedAt, patient.UpdatedAt,
+		nullableString(orgID), nullableString(userID),
+	).Scan(&inserted)
+	if err != nil {
+		return false, fmt.Errorf("failed to upsert patient: %w", err)
+	}
+	return inserted, nil
+}
+
 func (r *Repository) Update(id string, patient *models.Patient, orgID string) error {
 	var updatedByVal interface{}
 	if patient.UpdatedBy != nil {

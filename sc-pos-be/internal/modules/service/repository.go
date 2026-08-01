@@ -212,6 +212,68 @@ func (r *Repository) Create(service *models.Service, orgID string) error {
 	return nil
 }
 
+// Upsert inserts a new service or updates an existing one based on the unique
+// index (organization_id, LOWER(name)). Uses ON CONFLICT DO UPDATE — 1 round-trip.
+// Returns true if inserted, false if updated.
+func (r *Repository) Upsert(service *models.Service, orgID, userID string) (bool, error) {
+	var createdByVal interface{}
+	if service.CreatedBy != nil && *service.CreatedBy != "" {
+		createdByVal = *service.CreatedBy
+	} else if userID != "" {
+		createdByVal = userID
+	}
+
+	query := `
+		INSERT INTO services (
+			id, name, category_id, description, duration_minutes, base_price,
+			doctor_commission_type, doctor_commission_value,
+			therapist_commission_type, therapist_commission_value,
+			doctor_offering_commission_type, doctor_offering_commission_value,
+			therapist_offering_commission_type, therapist_offering_commission_value,
+			offering_price,
+			requires_doctor, is_active, created_at, updated_at,
+			organization_id, created_by, updated_by
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+		ON CONFLICT (organization_id, LOWER(name))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true
+		DO UPDATE SET
+			category_id    = COALESCE(EXCLUDED.category_id, services.category_id),
+			description    = COALESCE(EXCLUDED.description, services.description),
+			duration_minutes = COALESCE(EXCLUDED.duration_minutes, services.duration_minutes),
+			base_price     = EXCLUDED.base_price,
+			doctor_commission_type  = EXCLUDED.doctor_commission_type,
+			doctor_commission_value = EXCLUDED.doctor_commission_value,
+			therapist_commission_type  = EXCLUDED.therapist_commission_type,
+			therapist_commission_value = EXCLUDED.therapist_commission_value,
+			doctor_offering_commission_type   = COALESCE(EXCLUDED.doctor_offering_commission_type, services.doctor_offering_commission_type),
+			doctor_offering_commission_value  = COALESCE(EXCLUDED.doctor_offering_commission_value, services.doctor_offering_commission_value),
+			therapist_offering_commission_type = COALESCE(EXCLUDED.therapist_offering_commission_type, services.therapist_offering_commission_type),
+			therapist_offering_commission_value = COALESCE(EXCLUDED.therapist_offering_commission_value, services.therapist_offering_commission_value),
+			offering_price = COALESCE(EXCLUDED.offering_price, services.offering_price),
+			requires_doctor = EXCLUDED.requires_doctor,
+			updated_by     = EXCLUDED.updated_by,
+			updated_at     = NOW()
+		RETURNING (xmax = 0) AS inserted
+	`
+	var inserted bool
+	err := r.db.QueryRow(query,
+		service.ID, service.Name, service.CategoryID, service.Description,
+		service.DurationMinutes, service.BasePrice,
+		service.DoctorCommissionType, service.DoctorCommissionValue,
+		service.TherapistCommissionType, service.TherapistCommissionValue,
+		service.DoctorOfferingCommissionType, service.DoctorOfferingCommissionValue,
+		service.TherapistOfferingCommissionType, service.TherapistOfferingCommissionValue,
+		service.OfferingPrice,
+		service.RequiresDoctor, service.IsActive,
+		service.CreatedAt, service.UpdatedAt, nullableString(orgID), createdByVal, nullableString(userID),
+	).Scan(&inserted)
+	if err != nil {
+		return false, fmt.Errorf("failed to upsert service: %w", err)
+	}
+	return inserted, nil
+}
+
 func (r *Repository) Update(id string, service *models.Service, orgID string) error {
 	var updatedByVal interface{}
 	if service.UpdatedBy != nil && *service.UpdatedBy != "" {

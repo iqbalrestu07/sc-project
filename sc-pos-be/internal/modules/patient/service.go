@@ -20,6 +20,7 @@ type Service interface {
 	Get(id, orgID string) (*models.Patient, error)
 	Create(req models.Patient, userID, orgID string) (*models.Patient, error)
 	Update(id string, req models.Patient, userID, orgID string) (*models.Patient, error)
+	Upsert(req models.Patient, userID, orgID string) (bool, error)
 	Delete(id, orgID, userID string) error
 	GetVisits(patientID string) ([]VisitSummary, error)
 	GetTransactions(patientID string) ([]TransactionSummary, error)
@@ -72,6 +73,27 @@ func (s *service) Create(req models.Patient, userID, orgID string) (*models.Pati
 	}
 
 	return &req, nil
+}
+
+// Upsert inserts a new patient or updates an existing one using ON CONFLICT.
+// Match key: (organization_id, LOWER(full_name), COALESCE(phone, ”)).
+// Returns (true, nil) if a new patient was created, (false, nil) if updated.
+func (s *service) Upsert(req models.Patient, userID, orgID string) (bool, error) {
+	now := time.Now()
+	req.ID = uuid.New().String()
+	req.PatientCode = "PAT-" + strings.ToUpper(uuid.New().String()[:8])
+	req.IsActive = true
+	if userID != "" {
+		req.CreatedBy = &userID
+	}
+	req.CreatedAt = now
+	req.UpdatedAt = now
+
+	if req.Tags == nil {
+		req.Tags = []string{}
+	}
+
+	return s.repo.Upsert(&req, orgID, userID)
 }
 
 func (s *service) Update(id string, req models.Patient, userID, orgID string) (*models.Patient, error) {

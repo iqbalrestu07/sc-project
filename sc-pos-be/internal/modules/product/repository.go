@@ -216,6 +216,65 @@ func (r *Repository) Create(product *models.Product, orgID string) error {
 	return nil
 }
 
+// Upsert inserts a new product or updates an existing one based on the unique
+// index (organization_id, LOWER(name)). Uses ON CONFLICT DO UPDATE — 1 round-trip.
+// Returns true if inserted, false if updated.
+func (r *Repository) Upsert(product *models.Product, orgID, userID string) (bool, error) {
+	var createdByVal interface{}
+	if product.CreatedBy != nil && *product.CreatedBy != "" {
+		createdByVal = *product.CreatedBy
+	} else if userID != "" {
+		createdByVal = userID
+	}
+
+	query := `
+		INSERT INTO products (
+			id, name, category, sku, supplier, purchase_price, selling_price,
+			current_stock, minimum_stock, unit, expiry_date, is_active,
+			is_consumable, consumable_category,
+			doctor_commission_type, doctor_commission_value,
+			therapist_commission_type, therapist_commission_value,
+			doctor_offering_commission_type, doctor_offering_commission_value,
+			therapist_offering_commission_type, therapist_offering_commission_value,
+			created_at, updated_at, organization_id, created_by, updated_by
+		)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+		ON CONFLICT (organization_id, LOWER(name))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true
+		DO UPDATE SET
+			category          = COALESCE(EXCLUDED.category, products.category),
+			sku               = COALESCE(EXCLUDED.sku, products.sku),
+			supplier          = COALESCE(EXCLUDED.supplier, products.supplier),
+			purchase_price    = COALESCE(EXCLUDED.purchase_price, products.purchase_price),
+			selling_price     = COALESCE(EXCLUDED.selling_price, products.selling_price),
+			is_consumable     = EXCLUDED.is_consumable,
+			consumable_category = COALESCE(EXCLUDED.consumable_category, products.consumable_category),
+			doctor_commission_type   = COALESCE(EXCLUDED.doctor_commission_type, products.doctor_commission_type),
+			doctor_commission_value  = COALESCE(EXCLUDED.doctor_commission_value, products.doctor_commission_value),
+			therapist_commission_type = COALESCE(EXCLUDED.therapist_commission_type, products.therapist_commission_type),
+			therapist_commission_value = COALESCE(EXCLUDED.therapist_commission_value, products.therapist_commission_value),
+			updated_by       = EXCLUDED.updated_by,
+			updated_at       = NOW()
+		RETURNING (xmax = 0) AS inserted
+	`
+	var inserted bool
+	err := r.db.QueryRow(query,
+		product.ID, product.Name, product.Category, product.Sku, product.Supplier,
+		product.PurchasePrice, product.SellingPrice, product.CurrentStock,
+		product.MinimumStock, product.Unit, product.ExpiryDate, product.IsActive,
+		product.IsConsumable, product.ConsumableCategory,
+		product.DoctorCommissionType, product.DoctorCommissionValue,
+		product.TherapistCommissionType, product.TherapistCommissionValue,
+		product.DoctorOfferingCommissionType, product.DoctorOfferingCommissionValue,
+		product.TherapistOfferingCommissionType, product.TherapistOfferingCommissionValue,
+		product.CreatedAt, product.UpdatedAt, nullableString(orgID), createdByVal, nullableString(userID),
+	).Scan(&inserted)
+	if err != nil {
+		return false, fmt.Errorf("failed to upsert product: %w", err)
+	}
+	return inserted, nil
+}
+
 func (r *Repository) Update(id string, product *models.Product, orgID string) error {
 	var updatedByVal interface{}
 	if product.UpdatedBy != nil && *product.UpdatedBy != "" {
