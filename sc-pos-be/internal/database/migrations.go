@@ -271,6 +271,22 @@ func RunMigrations() error {
 		return fmt.Errorf("failed to create visit_notes table: %w", err)
 	}
 
+	// ---------------------------------------------------------------------------
+	// 16) Add source column to appointments.
+	//     "appointment" = booked via calendar (e.g. patient calls/WA, admin
+	//                    schedules them for a future date/time)
+	//     "walk_in"     = walk-in patient served immediately via "Layani Pasien"
+	//     Walk-ins are excluded from the calendar view but appear in the queue.
+	//     Idempotent — only adds the column if it doesn't exist.
+	// ---------------------------------------------------------------------------
+	if _, err := DB.Exec(`
+		ALTER TABLE appointments ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'appointment';
+		-- Backfill: any existing appointment with notes starting 'Walk-in' is a walk-in
+		UPDATE appointments SET source = 'walk_in' WHERE source = 'appointment' AND notes LIKE 'Walk-in%';
+	`); err != nil {
+		return fmt.Errorf("failed to add source column to appointments: %w", err)
+	}
+
 	return nil
 }
 
@@ -609,6 +625,7 @@ CREATE TABLE IF NOT EXISTS appointments (
 	scheduled_at TIMESTAMP NOT NULL,
 	duration_minutes INTEGER,
 	status VARCHAR(50) DEFAULT 'scheduled',
+	source VARCHAR(20) DEFAULT 'appointment',
 	notes TEXT,
 	organization_id UUID REFERENCES organizations(id),
 	created_by UUID REFERENCES users(id),

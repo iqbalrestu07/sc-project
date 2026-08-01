@@ -131,6 +131,7 @@ export function ServePatientDialog({
         therapist_id: selectedServices[0].therapist_id || null,
         scheduled_at,
         duration_minutes: 30,
+        source: "walk_in",
         notes: `Walk-in — ${selectedServices.length} layanan`,
       });
 

@@ -83,7 +83,7 @@ func (r *Repository) GetServicesByAppointment(appointmentID string) ([]string, e
 func (r *Repository) List(orgID string, start, end *time.Time) ([]AppointmentWithRelations, error) {
 	query := `
 		SELECT a.id, a.patient_id, a.service_id, a.doctor_id, a.therapist_id,
-		       a.scheduled_at, a.duration_minutes, a.status, a.notes, a.created_by,
+		       a.scheduled_at, a.duration_minutes, a.status, a.source, a.notes, a.created_by,
 		       a.created_at, a.updated_at,
 		       p.id, p.full_name, p.patient_code, p.phone, p.whatsapp,
 		       s.id, s.name, s.base_price, s.duration_minutes,
@@ -98,6 +98,7 @@ func (r *Repository) List(orgID string, start, end *time.Time) ([]AppointmentWit
 		  AND ($3::timestamp IS NULL OR a.scheduled_at <= $3)
 		  AND (a.organization_id = $1 OR ($1::text = '' AND a.organization_id IS NULL))
 		  AND a.deleted_at IS NULL
+		  AND (a.source = 'appointment' OR a.source IS NULL)
 		ORDER BY a.scheduled_at ASC
 	`
 	rows, err := r.db.Query(query, orgID, start, end)
@@ -126,7 +127,7 @@ func (r *Repository) List(orgID string, start, end *time.Time) ([]AppointmentWit
 func (r *Repository) Get(id, orgID string) (*AppointmentWithRelations, error) {
 	row := r.db.QueryRow(`
 		SELECT a.id, a.patient_id, a.service_id, a.doctor_id, a.therapist_id,
-		       a.scheduled_at, a.duration_minutes, a.status, a.notes, a.created_by,
+		       a.scheduled_at, a.duration_minutes, a.status, a.source, a.notes, a.created_by,
 		       a.created_at, a.updated_at,
 		       p.id, p.full_name, p.patient_code, p.phone, p.whatsapp,
 		       s.id, s.name, s.base_price, s.duration_minutes,
@@ -159,12 +160,12 @@ func (r *Repository) Create(appointment *models.Appointment, orgID string) error
 	_, err := r.db.Exec(`
 		INSERT INTO appointments (
 			id, patient_id, service_id, doctor_id, therapist_id, scheduled_at,
-			duration_minutes, status, notes, created_by, organization_id, created_at, updated_at
+			duration_minutes, status, source, notes, created_by, organization_id, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`, appointment.ID, appointment.PatientID, appointment.ServiceID, appointment.DoctorID,
 		appointment.TherapistID, appointment.ScheduledAt, appointment.DurationMinutes,
-		appointment.Status, appointment.Notes, appointment.CreatedBy, orgVal, appointment.CreatedAt,
+		appointment.Status, appointment.Source, appointment.Notes, appointment.CreatedBy, orgVal, appointment.CreatedAt,
 		appointment.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create appointment: %w", err)
@@ -269,7 +270,7 @@ func scanAppointmentWithRelations(scanner appointmentScanner) (AppointmentWithRe
 	err := scanner.Scan(
 		&result.ID, &result.PatientID, &result.ServiceID, &result.DoctorID,
 		&result.TherapistID, &result.ScheduledAt, &result.DurationMinutes,
-		&result.Status, &result.Notes, &result.CreatedBy, &result.CreatedAt,
+		&result.Status, &result.Source, &result.Notes, &result.CreatedBy, &result.CreatedAt,
 		&result.UpdatedAt, &patientID, &patientName, &patientCode, &patientPhone,
 		&patientWhatsApp, &serviceID, &serviceName, &servicePrice, &serviceDuration,
 		&doctorID, &doctorName, &therapistID, &therapistName,

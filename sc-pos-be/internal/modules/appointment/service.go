@@ -57,6 +57,9 @@ func (s *service) Create(req models.Appointment, userID *string, orgID string) (
 	if req.Status == "" {
 		req.Status = "scheduled"
 	}
+	if req.Source == "" {
+		req.Source = "appointment"
+	}
 	// Treat all appointment times as Asia/Jakarta wall-clock before storing.
 	req.ScheduledAt = utils.ToJakarta(req.ScheduledAt)
 	if err := s.repo.Create(&req, orgID); err != nil {

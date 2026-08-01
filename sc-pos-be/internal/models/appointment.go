@@ -12,6 +12,7 @@ type Appointment struct {
 	ScheduledAt     time.Time  `json:"scheduled_at" db:"scheduled_at"`
 	DurationMinutes *int       `json:"duration_minutes" db:"duration_minutes"`
 	Status          string     `json:"status" db:"status"` // pending, confirmed, completed, cancelled
+	Source          string     `json:"source" db:"source"` // "appointment" (booked via calendar) or "walk_in" (walk-in queue)
 	Notes           *string    `json:"notes" db:"notes"`
 	CreatedBy       *string    `json:"created_by" db:"created_by"`
 	UpdatedBy       *string    `json:"updated_by,omitempty" db:"updated_by"`
