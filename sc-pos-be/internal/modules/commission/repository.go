@@ -55,7 +55,7 @@ func (r *Repository) List(orgID, staffID string) ([]CommissionWithRelations, err
 		LEFT JOIN transaction_items ti ON ti.id = c.transaction_item_id
 		LEFT JOIN services svc ON svc.id = ti.service_id
 		LEFT JOIN products prod ON prod.id = ti.product_id
-		WHERE ($2 = '' OR c.staff_id = $2)
+		WHERE ($2::text = '' OR c.staff_id::text = $2::text)
 		  AND (c.organization_id = $1 OR ($1::text = '' AND c.organization_id IS NULL))
 		  AND c.deleted_at IS NULL
 		ORDER BY c.created_at DESC
