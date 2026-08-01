@@ -394,6 +394,90 @@ Body sama dengan POST, ditambah `"status": "confirmed|completed|cancelled|no_sho
 
 ### GET `/appointments/available-slots` 🔒
 
+### GET `/appointments/today` 🔒
+
+Queue hari ini (semua source: walk-in + appointment), dikelompokkan berdasarkan status.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "waiting": [],
+    "in_progress": [],
+    "completed": [],
+    "other": []
+  }
+}
+```
+
+Setiap item include `all_services` (array of service names dari linked transaction).
+
+### PATCH `/appointments/:id/status` 🔒
+
+Update status appointment.
+
+**Body:**
+
+```json
+{ "status": "scheduled|in_progress|completed|cancelled" }
+```
+
+### POST `/appointments/:id/cancel` 🔒
+
+Cancel appointment + linked draft transaction. Mengembalikan `409` jika linked transaction sudah `paid`.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Appointment berhasil dibatalkan",
+  "data": { "...appointment object..." }
+}
+```
+
+---
+
+## Visit Notes (Rekam Medis)
+
+### GET `/patients/:id/visit-notes` 🔒
+
+List rekam medis untuk pasien tertentu.
+
+### POST `/patients/:id/visit-notes` 🔒
+
+Buat rekam medis baru (pre-treatment, post-treatment, follow-up).
+
+**Body:**
+
+```json
+{
+  "visit_date": "2026-07-10T10:00:00Z",
+  "diagnosis": "...",
+  "patient_condition_before": "...",
+  "treatment_performed": "...",
+  "treatment_outcome": "...",
+  "follow_up_notes": "...",
+  "next_visit_recommended": true,
+  "doctor_id": "uuid",
+  "appointment_id": "uuid"
+}
+```
+
+### GET `/visit-notes/:id` 🔒
+
+Detail rekam medis.
+
+### PUT `/visit-notes/:id` 🔒
+
+Update rekam medis.
+
+### DELETE `/visit-notes/:id` 🔒
+
+Soft delete rekam medis.
+
 ---
 
 ## Transactions
@@ -449,6 +533,37 @@ Daftar transaksi terpaginated. Query yang didukung saat ini: `?page=1&limit=50`.
 ### GET `/transactions/:id` 🔒 transactions:read
 
 ### GET `/transactions/:id/items` 🔒 transactions:read
+
+### GET `/transactions/by-appointment` 🔒 transactions:read
+
+Lightweight lookup payment status by appointment_id. Query: `?ids=uuid1,uuid2`.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "uuid1": { "id": "tx-uuid", "payment_status": "paid" }
+  }
+}
+```
+
+### POST `/transactions/:id/items` 🔒 transactions:write
+
+Tambah item ke transaksi existing. Recalculates totals. Jika transaksi sudah `paid`, generate komisi + efek stok untuk item baru.
+
+**Body:**
+
+```json
+{
+  "item_type": "service|product",
+  "service_id": "uuid",
+  "product_id": "uuid",
+  "quantity": 1,
+  "unit_price": 250000
+}
+```
 
 ### PUT `/transactions/:id` 🔒 transactions:write
 
@@ -745,4 +860,4 @@ Import data dari Excel. `multipart/form-data` field: `file`
 
 ---
 
-_Last updated: 2026-07-09_
+_Last updated: 2026-08-01_

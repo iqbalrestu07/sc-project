@@ -11,8 +11,8 @@
 | --------------------------- | ------------------------------------------------------------------------------------ |
 | `organization_id`           | Ada di setiap tabel bisnis. Multi-tenant: selalu filter `WHERE organization_id = $n` |
 | `deleted_at`                | Soft delete. Data aktif: `WHERE deleted_at IS NULL`                                  |
-| `created_by` / `updated_by` | Audit trail. Isi dari `user_id` context (VARCHAR 36)                                 |
-| `id`                        | UUID sebagai string VARCHAR(36), bukan UUID native PostgreSQL                        |
+| `created_by` / `updated_by` | Audit trail. Isi dari `user_id` context (UUID)                                       |
+| `id`                        | UUID native PostgreSQL (`UUID PRIMARY KEY DEFAULT gen_random_uuid()`)                |
 | `is_active`                 | Beberapa tabel punya flag ini untuk disable tanpa delete                             |
 
 ---
@@ -21,7 +21,7 @@
 
 ```sql
 CREATE TABLE users (
-    id          VARCHAR(36)  PRIMARY KEY,
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email       VARCHAR(255) UNIQUE NOT NULL,
     password    VARCHAR(255) NOT NULL,           -- bcrypt hash
     role        VARCHAR(50)  NOT NULL DEFAULT 'cashier',  -- global role (legacy)
@@ -44,14 +44,14 @@ CREATE TABLE users (
 
 ```sql
 CREATE TABLE organizations (
-    id          VARCHAR(36)  PRIMARY KEY,
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name        VARCHAR(255) NOT NULL,
     slug        VARCHAR(255) UNIQUE NOT NULL,
     description TEXT,
     logo_url    TEXT,
     is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
-    created_by  VARCHAR(36),
-    updated_by  VARCHAR(36),
+    created_by  UUID,
+    updated_by  UUID,
     deleted_at  TIMESTAMP,
     created_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMP    NOT NULL DEFAULT NOW()
@@ -64,14 +64,14 @@ CREATE TABLE organizations (
 
 ```sql
 CREATE TABLE organization_members (
-    id          VARCHAR(36) PRIMARY KEY,
-    org_id      VARCHAR(36) NOT NULL REFERENCES organizations(id),
-    user_id     VARCHAR(36) NOT NULL REFERENCES users(id),
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id      UUID NOT NULL REFERENCES organizations(id),
+    user_id     UUID NOT NULL REFERENCES users(id),
     role        VARCHAR(50) NOT NULL DEFAULT 'cashier',  -- org-level role
     is_active   BOOLEAN     NOT NULL DEFAULT TRUE,
     joined_at   TIMESTAMP   NOT NULL DEFAULT NOW(),
-    created_by  VARCHAR(36),
-    updated_by  VARCHAR(36),
+    created_by  UUID,
+    updated_by  UUID,
     deleted_at  TIMESTAMP,
     created_at  TIMESTAMP   NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMP   NOT NULL DEFAULT NOW(),
@@ -110,7 +110,7 @@ reports:read     | reports      | read
 
 ```sql
 CREATE TABLE role_permissions (
-    id            VARCHAR(36)  PRIMARY KEY,
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     role          VARCHAR(50)  NOT NULL,
     permission_id VARCHAR(100) NOT NULL REFERENCES permissions(id),
     UNIQUE(role, permission_id)
@@ -125,11 +125,11 @@ Default mapping: Admin dapat semua permission, cashier dapat transaksi + pasien 
 
 ```sql
 CREATE TABLE user_permissions (
-    id            VARCHAR(36)  PRIMARY KEY,
-    user_id       VARCHAR(36)  NOT NULL REFERENCES users(id),
-    org_id        VARCHAR(36)  NOT NULL REFERENCES organizations(id),
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id       UUID  NOT NULL REFERENCES users(id),
+    org_id        UUID  NOT NULL REFERENCES organizations(id),
     permission_id VARCHAR(100) NOT NULL REFERENCES permissions(id),
-    granted_by    VARCHAR(36),
+    granted_by    UUID,
     granted_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
     UNIQUE(user_id, org_id, permission_id)
 );
@@ -143,7 +143,7 @@ CREATE TABLE user_permissions (
 
 ```sql
 CREATE TABLE patients (
-    id                 VARCHAR(36)  PRIMARY KEY,
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_code       VARCHAR(50)  UNIQUE NOT NULL,  -- format: "PAT-XXXXXXXX"
     full_name          VARCHAR(255) NOT NULL,
     photo_url          TEXT,
@@ -160,9 +160,9 @@ CREATE TABLE patients (
     tags               TEXT[],                         -- pq.Array di Go
     is_active          BOOLEAN      NOT NULL DEFAULT TRUE,
     reminder_opt_in    BOOLEAN      NOT NULL DEFAULT TRUE,
-    organization_id    VARCHAR(36)  NOT NULL REFERENCES organizations(id),
-    created_by         VARCHAR(36),
-    updated_by         VARCHAR(36),
+    organization_id    UUID  NOT NULL REFERENCES organizations(id),
+    created_by         UUID,
+    updated_by         UUID,
     deleted_at         TIMESTAMP,
     created_at         TIMESTAMP    NOT NULL DEFAULT NOW(),
     updated_at         TIMESTAMP    NOT NULL DEFAULT NOW()
@@ -175,13 +175,13 @@ CREATE TABLE patients (
 
 ```sql
 CREATE TABLE service_categories (
-    id              VARCHAR(36)  PRIMARY KEY,
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name            VARCHAR(255) NOT NULL,
     description     TEXT,
     is_active       BOOLEAN      NOT NULL DEFAULT TRUE,
-    organization_id VARCHAR(36)  NOT NULL REFERENCES organizations(id),
-    created_by      VARCHAR(36),
-    updated_by      VARCHAR(36),
+    organization_id UUID  NOT NULL REFERENCES organizations(id),
+    created_by      UUID,
+    updated_by      UUID,
     deleted_at      TIMESTAMP,
     created_at      TIMESTAMP    NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP    NOT NULL DEFAULT NOW()
@@ -194,9 +194,9 @@ CREATE TABLE service_categories (
 
 ```sql
 CREATE TABLE services (
-    id                         VARCHAR(36)    PRIMARY KEY,
+    id                         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name                       VARCHAR(255)   NOT NULL,
-    category_id                VARCHAR(36)    REFERENCES service_categories(id),
+    category_id                UUID    REFERENCES service_categories(id),
     description                TEXT,
     duration_minutes           INTEGER        NOT NULL DEFAULT 60,
     base_price                 DECIMAL(15,2)  NOT NULL DEFAULT 0,
@@ -210,9 +210,9 @@ CREATE TABLE services (
     therapist_offering_commission_value DECIMAL(10,2),
     requires_doctor            BOOLEAN        NOT NULL DEFAULT FALSE,
     is_active                  BOOLEAN        NOT NULL DEFAULT TRUE,
-    organization_id            VARCHAR(36)    NOT NULL REFERENCES organizations(id),
-    created_by                 VARCHAR(36),
-    updated_by                 VARCHAR(36),
+    organization_id            UUID    NOT NULL REFERENCES organizations(id),
+    created_by                 UUID,
+    updated_by                 UUID,
     deleted_at                 TIMESTAMP,
     created_at                 TIMESTAMP      NOT NULL DEFAULT NOW(),
     updated_at                 TIMESTAMP      NOT NULL DEFAULT NOW()
@@ -227,13 +227,13 @@ CREATE TABLE services (
 
 ```sql
 CREATE TABLE product_categories (
-    id              VARCHAR(36)  PRIMARY KEY,
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name            VARCHAR(255) NOT NULL,
     description     TEXT,
     is_active       BOOLEAN      NOT NULL DEFAULT TRUE,
-    organization_id VARCHAR(36)  NOT NULL REFERENCES organizations(id),
-    created_by      VARCHAR(36),
-    updated_by      VARCHAR(36),
+    organization_id UUID  NOT NULL REFERENCES organizations(id),
+    created_by      UUID,
+    updated_by      UUID,
     deleted_at      TIMESTAMP,
     created_at      TIMESTAMP    NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP    NOT NULL DEFAULT NOW()
@@ -246,7 +246,7 @@ CREATE TABLE product_categories (
 
 ```sql
 CREATE TABLE products (
-    id              VARCHAR(36)    PRIMARY KEY,
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name            VARCHAR(255)   NOT NULL,
     category        VARCHAR(100),
     sku             VARCHAR(100),
@@ -268,9 +268,9 @@ CREATE TABLE products (
     doctor_offering_commission_value    DECIMAL(10,2),
     therapist_offering_commission_type  VARCHAR(20), -- offering, optional
     therapist_offering_commission_value DECIMAL(10,2),
-    organization_id VARCHAR(36)    NOT NULL REFERENCES organizations(id),
-    created_by      VARCHAR(36),
-    updated_by      VARCHAR(36),
+    organization_id UUID    NOT NULL REFERENCES organizations(id),
+    created_by      UUID,
+    updated_by      UUID,
     deleted_at      TIMESTAMP,
     created_at      TIMESTAMP      NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP      NOT NULL DEFAULT NOW()
@@ -283,17 +283,17 @@ CREATE TABLE products (
 
 ```sql
 CREATE TABLE staff (
-    id              VARCHAR(36)  PRIMARY KEY,
-    user_id         VARCHAR(36)  REFERENCES users(id),  -- nullable: staff tanpa akun login
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID  REFERENCES users(id),  -- nullable: staff tanpa akun login
     full_name       VARCHAR(255) NOT NULL,
     role            VARCHAR(50)  NOT NULL,   -- "doctor" | "therapist" | "cashier"
     phone           VARCHAR(50),
     email           VARCHAR(255),
     specialization  VARCHAR(255),
     is_active       BOOLEAN      NOT NULL DEFAULT TRUE,
-    organization_id VARCHAR(36)  NOT NULL REFERENCES organizations(id),
-    created_by      VARCHAR(36),
-    updated_by      VARCHAR(36),
+    organization_id UUID  NOT NULL REFERENCES organizations(id),
+    created_by      UUID,
+    updated_by      UUID,
     deleted_at      TIMESTAMP,
     created_at      TIMESTAMP    NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP    NOT NULL DEFAULT NOW()
@@ -306,20 +306,21 @@ CREATE TABLE staff (
 
 ```sql
 CREATE TABLE appointments (
-    id               VARCHAR(36) PRIMARY KEY,
-    patient_id       VARCHAR(36) NOT NULL REFERENCES patients(id),
-    service_id       VARCHAR(36) REFERENCES services(id),
-    doctor_id        VARCHAR(36) REFERENCES staff(id),
-    therapist_id     VARCHAR(36) REFERENCES staff(id),
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id       UUID NOT NULL REFERENCES patients(id),
+    service_id       UUID REFERENCES services(id),
+    doctor_id        UUID REFERENCES staff(id),
+    therapist_id     UUID REFERENCES staff(id),
     scheduled_at     TIMESTAMP   NOT NULL,
     duration_minutes INTEGER     NOT NULL DEFAULT 60,
     status           VARCHAR(50) NOT NULL DEFAULT 'scheduled',
     -- status: scheduled | confirmed | completed | cancelled | no_show
+    source           VARCHAR(20) DEFAULT 'appointment',  -- "appointment" (kalender) | "walk_in" (queue)
     notes            TEXT,
     reminder_sent_at TIMESTAMP,  -- tracking pengiriman reminder WA
-    organization_id  VARCHAR(36) NOT NULL REFERENCES organizations(id),
-    created_by       VARCHAR(36),
-    updated_by       VARCHAR(36),
+    organization_id  UUID NOT NULL REFERENCES organizations(id),
+    created_by       UUID,
+    updated_by       UUID,
     deleted_at       TIMESTAMP,
     created_at       TIMESTAMP   NOT NULL DEFAULT NOW(),
     updated_at       TIMESTAMP   NOT NULL DEFAULT NOW()
@@ -332,10 +333,10 @@ CREATE TABLE appointments (
 
 ```sql
 CREATE TABLE transactions (
-    id               VARCHAR(36)    PRIMARY KEY,
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     transaction_code VARCHAR(50)    UNIQUE NOT NULL,
-    appointment_id   VARCHAR(36)    REFERENCES appointments(id),
-    patient_id       VARCHAR(36)    NOT NULL REFERENCES patients(id),
+    appointment_id   UUID    REFERENCES appointments(id),
+    patient_id       UUID    NOT NULL REFERENCES patients(id),
     subtotal         DECIMAL(15,2)  NOT NULL DEFAULT 0,
     discount_amount  DECIMAL(15,2)  NOT NULL DEFAULT 0,
     discount_type    VARCHAR(20),   -- "percentage" | "fixed"
@@ -346,9 +347,9 @@ CREATE TABLE transactions (
     -- payment_status: pending | paid | cancelled | refunded
     notes            TEXT,
     paid_at          TIMESTAMP,
-    organization_id  VARCHAR(36)    NOT NULL REFERENCES organizations(id),
-    created_by       VARCHAR(36),
-    updated_by       VARCHAR(36),
+    organization_id  UUID    NOT NULL REFERENCES organizations(id),
+    created_by       UUID,
+    updated_by       UUID,
     deleted_at       TIMESTAMP,
     created_at       TIMESTAMP      NOT NULL DEFAULT NOW(),
     updated_at       TIMESTAMP      NOT NULL DEFAULT NOW()
@@ -361,23 +362,23 @@ CREATE TABLE transactions (
 
 ```sql
 CREATE TABLE transaction_items (
-    id                  VARCHAR(36)    PRIMARY KEY,
-    transaction_id      VARCHAR(36)    NOT NULL REFERENCES transactions(id),
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    transaction_id      UUID    NOT NULL REFERENCES transactions(id),
     item_type           VARCHAR(20)    NOT NULL,  -- "service" | "product"
-    service_id          VARCHAR(36)    REFERENCES services(id),
-    product_id          VARCHAR(36)    REFERENCES products(id),
+    service_id          UUID    REFERENCES services(id),
+    product_id          UUID    REFERENCES products(id),
     quantity            INTEGER        NOT NULL DEFAULT 1,
     unit_price          DECIMAL(15,2)  NOT NULL DEFAULT 0,
     discount_amount     DECIMAL(15,2)  NOT NULL DEFAULT 0,
     total_price         DECIMAL(15,2)  NOT NULL DEFAULT 0,
-    doctor_id           VARCHAR(36)    REFERENCES staff(id),
-    therapist_id        VARCHAR(36)    REFERENCES staff(id),
+    doctor_id           UUID    REFERENCES staff(id),
+    therapist_id        UUID    REFERENCES staff(id),
     commission_eligible BOOLEAN        NOT NULL DEFAULT TRUE,
     commission_notes    TEXT,
-    selected_consumable_product_id VARCHAR(36) REFERENCES products(id),
-    organization_id     VARCHAR(36)    NOT NULL REFERENCES organizations(id),
-    created_by          VARCHAR(36),
-    updated_by          VARCHAR(36),
+    selected_consumable_product_id UUID REFERENCES products(id),
+    organization_id     UUID    NOT NULL REFERENCES organizations(id),
+    created_by          UUID,
+    updated_by          UUID,
     deleted_at          TIMESTAMP,
     created_at          TIMESTAMP      NOT NULL DEFAULT NOW()
 );
@@ -389,11 +390,11 @@ CREATE TABLE transaction_items (
 
 ```sql
 CREATE TABLE commissions (
-    id                  VARCHAR(36)    PRIMARY KEY,
-    staff_id            VARCHAR(36)    NOT NULL REFERENCES staff(id),
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    staff_id            UUID    NOT NULL REFERENCES staff(id),
     staff_role          VARCHAR(50)    NOT NULL,
-    transaction_id      VARCHAR(36)    NOT NULL REFERENCES transactions(id),
-    transaction_item_id VARCHAR(36)    NOT NULL REFERENCES transaction_items(id),
+    transaction_id      UUID    NOT NULL REFERENCES transactions(id),
+    transaction_item_id UUID    NOT NULL REFERENCES transaction_items(id),
     base_amount         DECIMAL(15,2)  NOT NULL,
     commission_type     VARCHAR(20)    NOT NULL,   -- "percentage" | "fixed"
     commission_value    DECIMAL(15,2)  NOT NULL,
@@ -401,9 +402,9 @@ CREATE TABLE commissions (
     status              VARCHAR(50)    NOT NULL DEFAULT 'pending',
     commission_reason   VARCHAR(20),   -- "handling" | "offering"; NULL untuk data lama
     -- status: pending | paid | cancelled
-    organization_id     VARCHAR(36)    NOT NULL REFERENCES organizations(id),
-    created_by          VARCHAR(36),
-    updated_by          VARCHAR(36),
+    organization_id     UUID    NOT NULL REFERENCES organizations(id),
+    created_by          UUID,
+    updated_by          UUID,
     deleted_at          TIMESTAMP,
     created_at          TIMESTAMP      NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMP      NOT NULL DEFAULT NOW()
@@ -414,11 +415,37 @@ CREATE TABLE commissions (
 
 ---
 
+## Tabel: `visit_notes`
+
+```sql
+CREATE TABLE IF NOT EXISTS visit_notes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL REFERENCES patients(id),
+    appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+    visit_date DATE NOT NULL,
+    diagnosis TEXT,
+    patient_condition_before TEXT,
+    treatment_performed TEXT,
+    treatment_outcome TEXT,
+    follow_up_notes TEXT,
+    next_visit_recommended DATE,
+    doctor_id UUID REFERENCES staff(id),
+    organization_id UUID REFERENCES organizations(id),
+    created_by UUID REFERENCES users(id),
+    updated_by UUID REFERENCES users(id),
+    deleted_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+---
+
 ## Tabel: `clinic_settings`
 
 ```sql
 CREATE TABLE clinic_settings (
-    id                           VARCHAR(36)    PRIMARY KEY,
+    id                           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     clinic_name                  VARCHAR(255),
     address                      TEXT,
     phone                        VARCHAR(50),
@@ -439,9 +466,9 @@ CREATE TABLE clinic_settings (
     wa_invoice_header_title      VARCHAR(255),  -- WA-specific invoice header
     wa_invoice_header_description TEXT,
     wa_invoice_footer_text       TEXT,
-    organization_id              VARCHAR(36)    NOT NULL REFERENCES organizations(id),
-    created_by                   VARCHAR(36),
-    updated_by                   VARCHAR(36),
+    organization_id              UUID    NOT NULL REFERENCES organizations(id),
+    created_by                   UUID,
+    updated_by                   UUID,
     deleted_at                   TIMESTAMP,
     created_at                   TIMESTAMP      NOT NULL DEFAULT NOW(),
     updated_at                   TIMESTAMP      NOT NULL DEFAULT NOW()
@@ -454,16 +481,16 @@ CREATE TABLE clinic_settings (
 
 ```sql
 CREATE TABLE stock_movements (
-    id              VARCHAR(36) PRIMARY KEY,
-    product_id      VARCHAR(36) NOT NULL REFERENCES products(id),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id      UUID NOT NULL REFERENCES products(id),
     movement_type   VARCHAR(20) NOT NULL,  -- "in" | "out" | "adjustment"
     quantity        INTEGER     NOT NULL,
     reason          VARCHAR(255),
-    reference_id    VARCHAR(36),           -- optional: link ke transaction
+    reference_id    UUID,           -- optional: link ke transaction
     reference_type  VARCHAR(50),           -- optional: "transaction"
     notes           TEXT,
-    organization_id VARCHAR(36) NOT NULL REFERENCES organizations(id),
-    created_by      VARCHAR(36),
+    organization_id UUID NOT NULL REFERENCES organizations(id),
+    created_by      UUID,
     created_at      TIMESTAMP   NOT NULL DEFAULT NOW()
     -- TIDAK ada updated_by / deleted_at karena bersifat immutable
 );
@@ -475,13 +502,13 @@ CREATE TABLE stock_movements (
 
 ```sql
 CREATE TABLE service_consumables (
-    id              VARCHAR(36)    PRIMARY KEY,
-    service_id      VARCHAR(36)    NOT NULL REFERENCES services(id),
-    product_id      VARCHAR(36)    NOT NULL REFERENCES products(id),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    service_id      UUID    NOT NULL REFERENCES services(id),
+    product_id      UUID    NOT NULL REFERENCES products(id),
     quantity_used   DECIMAL(10,3)  NOT NULL DEFAULT 1,
-    organization_id VARCHAR(36)    NOT NULL REFERENCES organizations(id),
-    created_by      VARCHAR(36),
-    updated_by      VARCHAR(36),
+    organization_id UUID    NOT NULL REFERENCES organizations(id),
+    created_by      UUID,
+    updated_by      UUID,
     deleted_at      TIMESTAMP,
     created_at      TIMESTAMP      NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP      NOT NULL DEFAULT NOW(),
@@ -499,13 +526,13 @@ Satu row mewakili satu kebutuhan produk habis pakai per service, misalnya satu m
 
 ```sql
 CREATE TABLE service_consumable_groups (
-    id              VARCHAR(36)    PRIMARY KEY,
-    service_id      VARCHAR(36)    NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    service_id      UUID    NOT NULL REFERENCES services(id) ON DELETE CASCADE,
     name            VARCHAR(255)   NOT NULL,
     quantity_used   DECIMAL(10,3)  NOT NULL DEFAULT 1,
-    organization_id VARCHAR(36)    REFERENCES organizations(id),
-    created_by      VARCHAR(36)    REFERENCES users(id),
-    updated_by      VARCHAR(36)    REFERENCES users(id),
+    organization_id UUID    REFERENCES organizations(id),
+    created_by      UUID    REFERENCES users(id),
+    updated_by      UUID    REFERENCES users(id),
     deleted_at      TIMESTAMP,
     created_at      TIMESTAMP      DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP      DEFAULT CURRENT_TIMESTAMP
@@ -518,12 +545,12 @@ Produk alternatif yang dapat memenuhi sebuah group. Nilai `priority` lebih kecil
 
 ```sql
 CREATE TABLE service_consumable_group_items (
-    id              VARCHAR(36) PRIMARY KEY,
-    group_id        VARCHAR(36) NOT NULL REFERENCES service_consumable_groups(id) ON DELETE CASCADE,
-    product_id      VARCHAR(36) NOT NULL REFERENCES products(id),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id        UUID NOT NULL REFERENCES service_consumable_groups(id) ON DELETE CASCADE,
+    product_id      UUID NOT NULL REFERENCES products(id),
     priority        INT NOT NULL DEFAULT 0,
-    organization_id VARCHAR(36) REFERENCES organizations(id),
-    created_by      VARCHAR(36) REFERENCES users(id),
+    organization_id UUID REFERENCES organizations(id),
+    created_by      UUID REFERENCES users(id),
     deleted_at      TIMESTAMP,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (group_id, product_id)
@@ -540,12 +567,12 @@ CREATE TABLE service_consumable_group_items (
 
 ```sql
 CREATE TABLE cms_pages (
-    id              VARCHAR(36) PRIMARY KEY,
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     page_id         VARCHAR(100) NOT NULL,    -- slug/identifier halaman (e.g. "home", "about")
     data            JSONB,                     -- konten halaman (schema bebas)
-    organization_id VARCHAR(36) REFERENCES organizations(id),
-    created_by      VARCHAR(36),
-    updated_by      VARCHAR(36),
+    organization_id UUID REFERENCES organizations(id),
+    created_by      UUID,
+    updated_by      UUID,
     deleted_at      TIMESTAMP,
     created_at      TIMESTAMP   NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP   NOT NULL DEFAULT NOW(),
@@ -565,7 +592,7 @@ Tabel untuk WhatsApp multi-device (whatsmeow):
 -- Device sessions
 CREATE TABLE whatsapp_devices (
     jid             VARCHAR(100) PRIMARY KEY,  -- WhatsApp JID
-    org_id          VARCHAR(36)  NOT NULL,
+    org_id          UUID  NOT NULL,
     label           VARCHAR(255),
     is_connected    BOOLEAN      NOT NULL DEFAULT FALSE,
     created_at      TIMESTAMP    NOT NULL DEFAULT NOW()
@@ -589,23 +616,23 @@ CREATE TABLE whatsapp_messages (
 
 ```sql
 CREATE TABLE omni_conversations (
-    id              VARCHAR(36)  PRIMARY KEY,
-    org_id          VARCHAR(36)  NOT NULL,
-    patient_id      VARCHAR(36),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id          UUID  NOT NULL,
+    patient_id      UUID,
     channel         VARCHAR(50)  NOT NULL,   -- "whatsapp" | "email" | etc.
     external_id     VARCHAR(255),            -- ID dari channel eksternal
     status          VARCHAR(50)  NOT NULL DEFAULT 'open',
-    assigned_to     VARCHAR(36),
+    assigned_to     UUID,
     created_at      TIMESTAMP    NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE omni_messages (
-    id               VARCHAR(36) PRIMARY KEY,
-    conversation_id  VARCHAR(36) NOT NULL REFERENCES omni_conversations(id),
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id  UUID NOT NULL REFERENCES omni_conversations(id),
     direction        VARCHAR(20) NOT NULL,   -- "inbound" | "outbound"
     content          TEXT,
-    sender_id        VARCHAR(36),
+    sender_id        UUID,
     is_read          BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at       TIMESTAMP   NOT NULL DEFAULT NOW()
 );
@@ -634,6 +661,16 @@ CREATE INDEX IF NOT EXISTS idx_scg_active         ON service_consumable_groups(s
 CREATE INDEX IF NOT EXISTS idx_scgi_group         ON service_consumable_group_items(group_id);
 CREATE INDEX IF NOT EXISTS idx_scgi_product       ON service_consumable_group_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_scgi_active        ON service_consumable_group_items(group_id) WHERE deleted_at IS NULL;
+
+-- Transactions: appointment lookup (partial, non-deleted only)
+CREATE INDEX IF NOT EXISTS idx_transactions_appointment ON transactions(appointment_id) WHERE appointment_id IS NOT NULL AND deleted_at IS NULL;
+
+-- Visit notes indexes
+CREATE INDEX IF NOT EXISTS idx_visit_notes_patient ON visit_notes(patient_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_visit_notes_org     ON visit_notes(organization_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_visit_notes_date    ON visit_notes(visit_date DESC) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_visit_notes_doctor  ON visit_notes(doctor_id) WHERE deleted_at IS NULL AND doctor_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_visit_notes_appt    ON visit_notes(appointment_id) WHERE appointment_id IS NOT NULL;
 ```
 
 ---
@@ -648,4 +685,4 @@ CREATE INDEX IF NOT EXISTS idx_scgi_active        ON service_consumable_group_it
 
 ---
 
-_Last updated: 2026-07-09_
+_Last updated: 2026-08-01_

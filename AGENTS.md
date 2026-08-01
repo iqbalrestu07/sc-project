@@ -10,15 +10,16 @@
 > File-file berikut di `docs/` berisi dokumentasi lebih lengkap dan terstruktur.
 > Baca dokumen yang relevan sesuai task yang dikerjakan.
 
-| Dokumen                                                        | Kapan Dibaca                                                        |
-| -------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [`docs/BACKEND_STRUCTURE.md`](docs/BACKEND_STRUCTURE.md)       | Sebelum membuat/edit kode backend                                   |
-| [`docs/FRONTEND_STRUCTURE.md`](docs/FRONTEND_STRUCTURE.md)     | Sebelum membuat/edit kode frontend                                  |
-| [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md)       | Debugging integrasi, auth, org context                              |
-| [`docs/CREATING_NEW_FEATURE.md`](docs/CREATING_NEW_FEATURE.md) | Step-by-step membuat fitur baru                                     |
-| [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md)           | Referensi schema tabel, tipe data, index                            |
-| [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)               | Referensi semua endpoint + request/response                         |
-| [`docs/3D_LANDING_PAGE.md`](docs/3D_LANDING_PAGE.md)           | Sebelum edit 3D scene, ganti model, atau tuning visual landing page |
+| Dokumen                                                            | Kapan Dibaca                                                         |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| [`docs/BACKEND_STRUCTURE.md`](docs/BACKEND_STRUCTURE.md)           | Sebelum membuat/edit kode backend                                    |
+| [`docs/FRONTEND_STRUCTURE.md`](docs/FRONTEND_STRUCTURE.md)         | Sebelum membuat/edit kode frontend                                   |
+| [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md)           | Debugging integrasi, auth, org context                               |
+| [`docs/CREATING_NEW_FEATURE.md`](docs/CREATING_NEW_FEATURE.md)     | Step-by-step membuat fitur baru                                      |
+| [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md)               | Referensi schema tabel, tipe data, index                             |
+| [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)                   | Referensi semua endpoint + request/response                          |
+| [`docs/FEATURES_AND_PROCESSES.md`](docs/FEATURES_AND_PROCESSES.md) | Memahami business workflow: walk-in, queue, POS, cancel, visit notes |
+| [`docs/3D_LANDING_PAGE.md`](docs/3D_LANDING_PAGE.md)               | Sebelum edit 3D scene, ganti model, atau tuning visual landing page  |
 
 ---
 
@@ -44,7 +45,7 @@ Terdiri dari dua sub-project dalam satu monorepo:
 - **Framework:** Gin (`github.com/gin-gonic/gin`)
 - **Database:** PostgreSQL (driver: `lib/pq`, raw `database/sql` — **bukan ORM**)
 - **Auth:** JWT (`github.com/golang-jwt/jwt/v5`)
-- **UUID:** `github.com/google/uuid`
+- **UUID:** `github.com/google/uuid` — generate via `utils.NewUUID()` (UUIDv7, time-sortable)
 - **Config:** `.env` via `github.com/joho/godotenv`
 
 ### 2.2 Struktur Direktori
@@ -74,6 +75,7 @@ sc-pos-be/
 │   │   ├── stock_movement.go
 │   │   ├── service_consumable.go
 │   │   ├── organization.go          # Organization, OrganizationMember, Permission, RolePermission, UserPermission
+│   │   ├── visit_note.go            # VisitNote — rekam medis per kunjungan
 │   │   └── nullable_time.go         # NullableTime — wrapper time.Time untuk JSON/SQL NULL + empty string
 │   ├── modules/                    # Feature modules (handler + service + repository + routes)
 │   │   ├── auth/
@@ -81,8 +83,8 @@ sc-pos-be/
 │   │   ├── service/
 │   │   ├── product/
 │   │   ├── staff/
-│   │   ├── appointment/
-│   │   ├── transaction/
+│   │   ├── appointment/             # CRUD + calendar + today queue + cancel + reminder cron
+│   │   ├── transaction/             # CRUD + items + by-appointment lookup + add-item
 │   │   ├── commission/
 │   │   ├── dashboard/
 │   │   ├── settings/
@@ -95,9 +97,13 @@ sc-pos-be/
 │   │   ├── consumable/              # legacy service_consumables
 │   │   ├── service_package/         # consumable groups + alternatif produk service
 │   │   ├── consumable_item/         # Produk habis pakai + usage logs
+│   │   ├── visit_note/              # Rekam medis per kunjungan (pre/post treatment, follow-up)
 │   │   └── migration/               # Import Excel bulk data
 │   ├── routes/routes.go            # Central router setup
-│   └── utils/response.go          # Standard JSON response helpers
+│   └── utils/
+│       ├── response.go             # Standard JSON response helpers
+│       ├── uuid.go                 # NewUUID() — UUIDv7 generation
+│       └── time.go                 # Jakarta timezone helpers (ToJakarta, JakartaWallClock)
 ```
 
 ### 2.3 Pattern Setiap Module
@@ -257,26 +263,41 @@ Semua endpoint menggunakan `utils.SuccessResponse` / `utils.ErrorResponse`:
 
 #### Appointments
 
-| Method | Path                            | Role  | Notes                             |
-| ------ | ------------------------------- | ----- | --------------------------------- |
-| GET    | `/appointments`                 | Semua | `?date=YYYY-MM-DD&view=day\|week` |
-| POST   | `/appointments`                 | Semua |                                   |
-| GET    | `/appointments/calendar`        | Semua |                                   |
-| GET    | `/appointments/available-slots` | Semua |                                   |
-| GET    | `/appointments/:id`             | Semua |                                   |
-| PUT    | `/appointments/:id`             | Semua |                                   |
-| DELETE | `/appointments/:id`             | Semua |                                   |
+| Method | Path                            | Role  | Notes                                                                   |
+| ------ | ------------------------------- | ----- | ----------------------------------------------------------------------- |
+| GET    | `/appointments`                 | Semua | `?date=YYYY-MM-DD&view=day\|week` — kalender only (excludes walk-in)    |
+| POST   | `/appointments`                 | Semua | `source` field: `appointment` (default) or `walk_in`                    |
+| GET    | `/appointments/calendar`        | Semua | Kalender view — excludes walk-in (`source='walk_in'`)                   |
+| GET    | `/appointments/today`           | Semua | Queue hari ini — ALL sources (walk-in + appointment), grouped by status |
+| GET    | `/appointments/available-slots` | Semua | Stub — belum implementasi                                               |
+| PATCH  | `/appointments/:id/status`      | Semua | Update status (queue: scheduled→in_progress→completed)                  |
+| POST   | `/appointments/:id/cancel`      | Semua | Cancel appointment + linked draft transaction (409 if paid)             |
+| GET    | `/appointments/:id`             | Semua |                                                                         |
+| PUT    | `/appointments/:id`             | Semua |                                                                         |
+| DELETE | `/appointments/:id`             | Admin | Soft delete + set status=cancelled                                      |
 
 #### Transactions
 
-| Method | Path                      | Role  |
-| ------ | ------------------------- | ----- | -------------------------------------------------------------------------- |
-| GET    | `/transactions`           | Semua |
-| POST   | `/transactions`           | Semua | Jika `payment_status = paid`, otomatis generate commission & kurangi stock |
-| GET    | `/transactions/:id`       | Semua |
-| GET    | `/transactions/:id/items` | Semua | Setiap item include service/product + doctor/therapist                     |
-| PUT    | `/transactions/:id`       | Semua |
-| DELETE | `/transactions/:id`       | Semua |
+| Method | Path                           | Role  | Notes                                                                      |
+| ------ | ------------------------------ | ----- | -------------------------------------------------------------------------- |
+| GET    | `/transactions`                | Semua | Paginated list                                                             |
+| POST   | `/transactions`                | Semua | Jika `payment_status = paid`, otomatis generate commission & kurangi stock |
+| GET    | `/transactions/by-appointment` | Semua | `?ids=uuid1,uuid2` — lightweight lookup payment status by appointment_id   |
+| POST   | `/transactions/:id/items`      | Semua | Add new item to existing transaction (recalculates totals)                 |
+| GET    | `/transactions/:id`            | Semua |                                                                            |
+| GET    | `/transactions/:id/items`      | Semua | Setiap item include service/product + doctor/therapist                     |
+| PUT    | `/transactions/:id`            | Semua |                                                                            |
+| DELETE | `/transactions/:id`            | Semua | Soft delete + set payment_status=cancelled                                 |
+
+#### Visit Notes (Rekam Medis)
+
+| Method | Path                        | Role  | Notes                                                       |
+| ------ | --------------------------- | ----- | ----------------------------------------------------------- |
+| GET    | `/patients/:id/visit-notes` | Semua | List rekam medis untuk pasien                               |
+| POST   | `/patients/:id/visit-notes` | Semua | Buat rekam medis (pre-treatment, post-treatment, follow-up) |
+| GET    | `/visit-notes/:id`          | Semua | Detail rekam medis                                          |
+| PUT    | `/visit-notes/:id`          | Semua | Update rekam medis                                          |
+| DELETE | `/visit-notes/:id`          | Semua | Soft delete rekam medis                                     |
 
 #### Commissions
 
@@ -302,6 +323,7 @@ Services dan products mendukung dua rate komisi: **handling** (`*_commission_*`)
 | GET    | `/dashboard/revenue`            | `reports:read` | `?from=&to=` opsional; default 30 hari terakhir |
 | GET    | `/dashboard/top-services`       | `reports:read` | `?from=&to=` opsional                           |
 | GET    | `/dashboard/top-products`       | `reports:read` | `?from=&to=` opsional                           |
+| GET    | `/dashboard/top-customers`      | `reports:read` | `?from=&to=` opsional                           |
 | GET    | `/dashboard/appointments-today` | `reports:read` | selalu hari ini, tidak ada filter               |
 
 **Timezone:** Semua filter date range diinterpretasikan sebagai `Asia/Jakarta (UTC+7)`.
@@ -420,8 +442,9 @@ patients             -- (id, patient_code, full_name, photo_url, date_of_birth, 
                      --   phone, whatsapp, email, address, allergy_history, medical_conditions,
                      --   skin_type, notes, tags[], is_active, reminder_opt_in, organization_id,
                      --   created_by, updated_by, deleted_at, created_at, updated_at)
-appointments         -- (id, patient_id, service_id, doctor_id, therapist_id, scheduled_at,
-                     --   duration_minutes, status, notes, organization_id, created_by, updated_by,
+appointments         -- (id UUID, patient_id, service_id, doctor_id, therapist_id, scheduled_at,
+                     --   duration_minutes, status, source ('appointment'|'walk_in'), notes,
+                     --   reminder_sent_at, organization_id, created_by, updated_by,
                      --   deleted_at, created_at, updated_at)
 transactions         -- (id, transaction_code, appointment_id, patient_id, subtotal,
                      --   discount_amount, discount_type, total_amount, tax_amount,
@@ -448,6 +471,10 @@ stock_movements      -- (id, product_id, movement_type, quantity, reason, refere
 service_consumables  -- legacy mapping (id, service_id, product_id, quantity_used, ...)
 service_consumable_groups -- kebutuhan konsumabel service (id, service_id, name, quantity_used, ...)
 service_consumable_group_items -- alternatif produk group (id, group_id, product_id, priority, ...)
+visit_notes           -- rekam medis per kunjungan (id, patient_id, appointment_id nullable, visit_date,
+                     --   diagnosis, patient_condition_before, treatment_performed, treatment_outcome,
+                     --   follow_up_notes, next_visit_recommended, doctor_id, organization_id,
+                     --   created_by, updated_by, deleted_at, created_at, updated_at)
 ```
 
 ### Notes Penting DB
@@ -463,7 +490,13 @@ service_consumable_group_items -- alternatif produk group (id, group_id, product
   - `deleted_at IS NOT NULL` berarti record sudah di-soft-delete.
   - `stock_movements` sengaja tidak punya `updated_by`/`deleted_at` karena record stok bersifat immutable.
 - **Semua tabel bisnis** memiliki `organization_id` FK ke `organizations(id)` untuk multi-tenant.
-- `users.id` dan semua FK user/audit adalah `VARCHAR(36)` (bukan UUID), supaya konsisten dengan Go UUID string.
+- **Semua ID & FK menggunakan native PostgreSQL `UUID` type** (bukan `VARCHAR(36)`).
+  - Primary keys: `UUID PRIMARY KEY DEFAULT gen_random_uuid()` (fallback; app code generates UUIDv7 via `utils.NewUUID()`).
+  - Foreign keys: `UUID REFERENCES <table>(id)`.
+  - Di Go: semua ID tetap `string` (PostgreSQL driver auto-converts).
+- `appointments.source` → `appointment` (kalender) atau `walk_in` (queue). Default: `appointment`.
+  - Kalender (`List`) hanya tampilkan `source='appointment'` atau `source IS NULL`.
+  - Queue (`ListAll`/`TodayQueue`) tampilkan semua source.
 - `permissions.id` memakai format `resource:action` (contoh: `patients:read`).
 - Field tanggal opsional (`patients.date_of_birth`, `products.expiry_date`) di Go menggunakan `models.NullableTime`.
   - Menerima JSON: `null`, `""`, `YYYY-MM-DD`, atau `RFC3339`.
@@ -506,9 +539,8 @@ shasi/src/
 │       ├── client.ts           # Supabase client (deprecated)
 │       └── types.ts            # Generated Supabase types (deprecated)
 ├── hooks/                      # Custom hooks per domain
-│   ├── useAuth.ts              → alias AuthContext (jika ada)
-│   ├── usePatients.ts
-│   ├── useAppointments.ts
+│   ├── useAppointments.ts       # CRUD + cancelAppointment + updateStatus
+│   ├── usePatients.ts           # CRUD + visits + transactions + visit notes
 │   ├── useServices.ts
 │   ├── useProducts.ts
 │   ├── useStaff.ts
@@ -517,33 +549,41 @@ shasi/src/
 │   ├── useCommissions.ts
 │   ├── useCmsData.ts
 │   ├── useClinicSettings.ts
-│   ├── useDashboard.ts
+│   ├── useDashboard.ts          # stats, revenue, top-services/products/customers, appointments-today
 │   ├── useConsumableGroups.ts
 │   ├── useConsumableItems.ts
+│   ├── useVisitNotes.ts         # CRUD visit notes + useTodayQueue + useUpdateAppointmentStatus
 │   ├── useOmniChat.ts
 │   ├── usePublicClinicInfo.ts
 │   ├── useDebounce.ts
+│   ├── useDeviceCapability.ts   # 3D support detection
+│   ├── useDynamicFavicon.ts
+│   ├── useMagneticCursor.ts
 │   ├── use-mobile.tsx
 │   └── use-toast.ts
 ├── types/
+│   ├── appointment.ts           # Appointment, AppointmentWithRelations, AppointmentStatus, APPOINTMENT_STATUSES
+│   ├── patient.ts               # Gender, SkinType, Patient, PatientFormData
 │   ├── product.ts              # Interface Product (manual, aligned dengan Go model)
 │   ├── service.ts              # Interface Service, ServiceCategory, re-export Product
 │   ├── transaction.ts          # Transaction, TransactionItem, CartItem
 │   ├── consumable.ts           # Consumable item types
 │   ├── consumable_group.ts     # Service consumable groups + alternative products
+│   ├── visit_note.ts           # VisitNote, TodayQueue, AppointmentQueueItem
 │   ├── cms.ts                  # CMS types
 │   ├── whatsapp.ts             # WhatsApp types
 │   └── omni.ts                 # Omnichannel types
 ├── components/
 │   ├── layout/                 # MainLayout, Sidebar, PageHeader
 │   ├── auth/ProtectedRoute.tsx # Guard route dengan role check
-│   ├── patients/               # PatientFormDialog, PatientList
-│   ├── appointments/           # AppointmentCalendar, AppointmentFormDialog
+│   ├── patients/               # PatientFormDialog, PatientList, ServePatientDialog (walk-in flow)
+│   ├── appointments/           # AppointmentCalendar, AppointmentFormDialog (with cancel button)
 │   ├── services/               # Form/detail service + consumable group editor
 │   ├── products/               # ProductFormDialog, ProductList
 │   ├── staff/                  # StaffFormDialog, StaffList
 │   ├── transactions/           # Detail transaksi + receipt
-│   ├── pos/                    # POS + pilihan consumable
+│   ├── pos/                    # POSInterface + ConsumableSelectionDialog
+│   ├── visit_notes/            # VisitNoteFormDialog (rekam medis)
 │   ├── cms/ImageUpload.tsx     # Upload gambar ke backend (multipart)
 │   ├── whatsapp/               # Komponen WhatsApp
 │   ├── filters/DateRangeFilter.tsx
@@ -557,7 +597,8 @@ shasi/src/
     ├── Reports.tsx             # /reports
     ├── Patients.tsx            # /patients
     ├── PatientDetail.tsx       # /patients/:id
-    ├── Appointments.tsx        # /appointments
+    ├── Appointments.tsx        # /appointments — kalender (excludes walk-in)
+    ├── Queue.tsx               # /queue — antrian hari ini (walk-in + appointment, grouped by status)
     ├── Services.tsx            # /services (admin only)
     ├── Products.tsx            # /products (admin only)
     ├── POS.tsx                 # /pos — kasir
@@ -633,6 +674,7 @@ Jika refresh gagal → redirect ke `/admin/login`.
 | `/patients`     | Patients          | admin, doctor, therapist        |
 | `/patients/:id` | PatientDetail     | admin, doctor, therapist        |
 | `/appointments` | Appointments      | Semua                           |
+| `/queue`        | Queue             | Semua (appointments:read)       |
 | `/services`     | Services          | admin                           |
 | `/products`     | Products          | admin                           |
 | `/categories`   | Categories        | admin                           |
@@ -918,7 +960,7 @@ ca2cdde - Add AGENTS.md
 
 ---
 
-_Terakhir diupdate: 2026-07-15 — CMS multi-tenant public slug, consumable groups, pagination, dan dual commission_
+_Terakhir diupdate: 2026-08-01 — UUID migration (UUIDv7), visit notes, queue system, POS walk-in flow, cancel appointment, transaction by-appointment, add items to transaction_
 
 ---
 
@@ -951,10 +993,10 @@ user_permissions    -- (id, user_id FK, permission_id FK, org_id FK, granted_by 
 ```
 
 Setiap tabel bisnis (patients, services, products, staff, appointments, transactions, commissions,
-clinic_settings, cms_pages, stock_movements, service_consumables) mendapat kolom:
+clinic_settings, cms_pages, stock_movements, service_consumables, visit_notes) mendapat kolom:
 
 ```sql
-organization_id VARCHAR(36) REFERENCES organizations(id)  -- nullable, NULL = data lama/global
+organization_id UUID REFERENCES organizations(id)  -- nullable, NULL = data lama/global
 ```
 
 ### 11.3 Backend: Middleware Baru

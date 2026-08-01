@@ -74,6 +74,7 @@ export const API_ENDPOINTS = {
         AVAILABLE_SLOTS: "/appointments/available-slots",
         TODAY_QUEUE: "/appointments/today",
         UPDATE_STATUS: (id: string) => `/appointments/${id}/status`,
+        CANCEL: (id: string) => `/appointments/${id}/cancel`,
     },
 
     // Transactions

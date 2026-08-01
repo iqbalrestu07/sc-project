@@ -809,6 +809,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_active ON appointments(status) WHERE
 CREATE INDEX IF NOT EXISTS idx_transactions_org ON transactions(organization_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_code ON transactions(transaction_code);
 CREATE INDEX IF NOT EXISTS idx_transactions_active ON transactions(payment_status) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_transactions_appointment ON transactions(appointment_id) WHERE appointment_id IS NOT NULL AND deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_transaction_items_tx ON transaction_items(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_items_org ON transaction_items(organization_id);

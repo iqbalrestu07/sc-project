@@ -34,6 +34,7 @@ sc-pos-be/
 │   │   ├── stock_movement.go
 │   │   ├── service_consumable.go
 │   │   ├── organization.go          # Organization, OrganizationMember, Permission, RolePermission, UserPermission
+│   │   ├── visit_note.go            # VisitNote — rekam medis per kunjungan
 │   │   └── nullable_time.go         # NullableTime — wrapper time.Time untuk JSON/SQL NULL + empty string
 │   ├── modules/                     # Feature modules (setiap module: handler + service + repository + routes)
 │   │   ├── auth/                    # Login, register, refresh, me, logout
@@ -41,8 +42,8 @@ sc-pos-be/
 │   │   ├── service/                 # CRUD layanan + kategori
 │   │   ├── product/                 # CRUD produk + kategori
 │   │   ├── staff/                   # CRUD staff
-│   │   ├── appointment/             # CRUD jadwal + cron reminder job
-│   │   ├── transaction/             # CRUD transaksi + items
+│   │   ├── appointment/             # CRUD jadwal + calendar + today queue + cancel + cron reminder
+│   │   ├── transaction/             # CRUD transaksi + items + by-appointment + add-item
 │   │   ├── commission/              # Komisi staff per transaksi
 │   │   ├── dashboard/               # Stats, revenue, top services/products
 │   │   ├── settings/                # Pengaturan klinik + logo
@@ -55,11 +56,14 @@ sc-pos-be/
 │   │   ├── consumable/              # Mapping consumable legacy (service_consumables)
 │   │   ├── service_package/         # Consumable groups + alternatif produk untuk service
 │   │   ├── consumable_item/         # Produk habis pakai + usage logs
+│   │   ├── visit_note/              # Rekam medis per kunjungan
 │   │   └── migration/               # Import Excel bulk data
 │   ├── routes/
 │   │   └── routes.go                # Central router: register semua module routes
 │   └── utils/
-│       └── response.go              # SuccessResponse, ErrorResponse, SuccessResponseWithMessage
+│       ├── response.go              # SuccessResponse, ErrorResponse, SuccessResponseWithMessage, ListSuccessResponse, ParseIntQuery
+│       ├── uuid.go                  # NewUUID() — UUIDv7 (time-sortable), fallback UUIDv4
+│       └── time.go                  # Jakarta timezone helpers (JakartaLocation, ToJakarta, JakartaWallClock)
 ├── Makefile                         # Build, run, test shortcuts
 ├── Dockerfile                       # Multi-stage build Go image
 ├── go.mod                           # Go module dependencies
@@ -297,13 +301,13 @@ Setiap tabel bisnis punya `created_by VARCHAR(36)` dan `updated_by VARCHAR(36)` 
 
 ### Tipe Khusus
 
-| Field                      | Tipe PostgreSQL | Tipe Go               | Catatan                      |
-| -------------------------- | --------------- | --------------------- | ---------------------------- |
-| `patients.tags`            | `TEXT[]`        | `[]string`            | Gunakan `pq.Array(&p.Tags)`  |
-| `cms_pages.data`           | `JSONB`         | `json.RawMessage`     |                              |
-| `*.date_of_birth`          | `DATE`          | `models.NullableTime` | Handle null, "", YYYY-MM-DD  |
-| `products.expiry_date`     | `DATE`          | `models.NullableTime` | Handle null, "", YYYY-MM-DD  |
-| `users.id`, semua FK users | `VARCHAR(36)`   | `string`              | UUID disimpan sebagai string |
+| Field                  | Tipe PostgreSQL          | Tipe Go               | Catatan                                                                |
+| ---------------------- | ------------------------ | --------------------- | ---------------------------------------------------------------------- |
+| `patients.tags`        | `TEXT[]`                 | `[]string`            | Gunakan `pq.Array(&p.Tags)`                                            |
+| `cms_pages.data`       | `JSONB`                  | `json.RawMessage`     |                                                                        |
+| `*.date_of_birth`      | `DATE`                   | `models.NullableTime` | Handle null, "", YYYY-MM-DD                                            |
+| `products.expiry_date` | `DATE`                   | `models.NullableTime` | Handle null, "", YYYY-MM-DD                                            |
+| Semua ID & FK          | UUID (native PostgreSQL) | `string`              | UUIDv7 via utils.NewUUID(), DEFAULT gen_random_uuid() sebagai fallback |
 
 ---
 
@@ -355,6 +359,8 @@ DB_PASSWORD=your_password
 DB_NAME=sc_pos
 DB_SSLMODE=disable
 JWT_SECRET_KEY=your-secret-key
+JWT_EXPIRY_HOURS=24
+JWT_REFRESH_EXPIRY_HOURS=168
 UPLOAD_DIR=uploads/cms
 BASE_URL=http://localhost:8080
 WHATSAPP_API_URL=               # opsional
@@ -390,6 +396,16 @@ curl http://localhost:8080/health
 
 ---
 
+## Utils Tersedia
+
+| File          | Fungsi yang tersedia                                                                           |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| `response.go` | SuccessResponse, ErrorResponse, SuccessResponseWithMessage, ListSuccessResponse, ParseIntQuery |
+| `uuid.go`     | NewUUID() — generate UUIDv7 (time-sortable), fallback UUIDv4                                   |
+| `time.go`     | JakartaLocation, ToJakarta(t), JakartaWallClock(t) — timezone Jakarta (Asia/Jakarta) helpers   |
+
+---
+
 ## Key Libraries
 
 | Library               | Kegunaan                         |
@@ -407,4 +423,4 @@ curl http://localhost:8080/health
 
 ---
 
-_Last updated: 2026-07-09_
+_Last updated: 2026-08-01_

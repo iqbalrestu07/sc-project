@@ -28,7 +28,8 @@ shasi/
 │   │
 │   ├── hooks/                       # Custom React hooks per domain
 │   │   ├── usePatients.ts           # usePatients, usePatient, useCreatePatient, useUpdatePatient, useDeletePatient
-│   │   ├── useAppointments.ts       # CRUD appointments
+│   │   ├── useAppointments.ts       # CRUD appointments + cancelAppointment mutation
+│   │   ├── useVisitNotes.ts         # CRUD visit notes + useTodayQueue + useUpdateAppointmentStatus
 │   │   ├── useServices.ts           # CRUD services + categories
 │   │   ├── useProducts.ts           # CRUD products + categories
 │   │   ├── useStaff.ts              # CRUD staff
@@ -57,6 +58,7 @@ shasi/
 │   │   ├── Patients.tsx             # Daftar pasien
 │   │   ├── PatientDetail.tsx        # Detail pasien + riwayat kunjungan
 │   │   ├── Appointments.tsx         # Jadwal appointment
+│   │   ├── Queue.tsx                # Antrian hari ini (waiting, in-progress, completed) dengan tombol Batalkan
 │   │   ├── Services.tsx             # Daftar layanan
 │   │   ├── Products.tsx             # Daftar produk
 │   │   ├── Categories.tsx           # Kategori service & product
@@ -85,13 +87,16 @@ shasi/
 │   │   │   ├── MainLayout.tsx       # Layout utama: sidebar + header + content
 │   │   │   └── Sidebar.tsx          # Sidebar navigasi
 │   │   ├── appointments/            # Komponen khusus appointment
-│   │   ├── patients/                # Komponen khusus patient (form, tabel)
+│   │   ├── patients/                # Komponen khusus patient (form, tabel, ServePatientDialog)
+│   │   │   └── ServePatientDialog.tsx # Dialog serve pasien dari queue (walk-in flow)
 │   │   ├── products/                # Komponen khusus product
 │   │   ├── services/                # Form/detail service + ServiceConsumableGroupsEditor
 │   │   ├── staff/                   # Komponen khusus staff
 │   │   ├── transactions/            # Komponen khusus transaksi
 │   │   ├── pos/                     # POS + ConsumableSelectionDialog
 │   │   ├── cms/                     # Komponen CMS editor
+│   │   ├── visit_notes/             # Komponen khusus rekam medis
+│   │   │   └── VisitNoteFormDialog.tsx # Dialog form rekam medis (pre/post treatment, follow-up)
 │   │   ├── landing/                 # Komponen landing page
 │   │   ├── whatsapp/                # Komponen WhatsApp
 │   │   ├── filters/                 # Filter & search components
@@ -99,7 +104,8 @@ shasi/
 │   │
 │   ├── types/                       # TypeScript interfaces (aligned dengan Go models)
 │   │   ├── patient.ts               # Patient, PatientFormData
-│   │   ├── appointment.ts           # Appointment
+│   │   ├── appointment.ts           # Appointment, AppointmentWithRelations
+│   │   ├── visit_note.ts            # VisitNote, TodayQueue, AppointmentQueueItem
 │   │   ├── service.ts               # Service, ServiceCategory
 │   │   ├── consumable_group.ts      # ConsumableGroup + alternatif produk
 │   │   ├── product.ts               # Product, ProductCategory
@@ -299,6 +305,7 @@ Semua protected route dibungkus `ProtectedRoute`:
 | `/patients`         | `patients:read`      |
 | `/patients/:id`     | `patients:read`      |
 | `/appointments`     | `appointments:read`  |
+| `/queue`            | `appointments:read`  |
 | `/services`         | `services:read`      |
 | `/products`         | `products:read`      |
 | `/categories`       | `categories:read`    |
@@ -373,4 +380,4 @@ npm run test
 
 ---
 
-_Last updated: 2026-07-09_
+_Last updated: 2026-08-01_

@@ -350,7 +350,7 @@ export default function PatientDetail() {
                         id: v.id,
                         date: v.scheduled_at,
                         type: "appointment" as const,
-                        title: v.service_name || "—",
+                        title: (v.all_services?.length ? v.all_services.join(", ") : v.service_name) || "—",
                         subtitle: [v.doctor_name ? `Dr. ${v.doctor_name}` : null, v.therapist_name ? `Therapist: ${v.therapist_name}` : null].filter(Boolean).join(" · ") || undefined,
                         notes: v.notes,
                         status: v.status,

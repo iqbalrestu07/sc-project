@@ -124,6 +124,53 @@ func (r *Repository) List(orgID string, start, end *time.Time) ([]AppointmentWit
 	return appointments, nil
 }
 
+// ListAll returns appointments within the given time range regardless of source
+// (includes both regular appointments and walk-ins). Used by the today queue,
+// which should show every visit scheduled for today. The calendar view uses
+// List instead, which excludes walk-ins.
+func (r *Repository) ListAll(orgID string, start, end *time.Time) ([]AppointmentWithRelations, error) {
+	query := `
+		SELECT a.id, a.patient_id, a.service_id, a.doctor_id, a.therapist_id,
+		       a.scheduled_at, a.duration_minutes, a.status, a.source, a.notes, a.created_by,
+		       a.created_at, a.updated_at,
+		       p.id, p.full_name, p.patient_code, p.phone, p.whatsapp,
+		       s.id, s.name, s.base_price, s.duration_minutes,
+		       d.id, d.full_name,
+		       t.id, t.full_name
+		FROM appointments a
+		LEFT JOIN patients p ON p.id = a.patient_id
+		LEFT JOIN services s ON s.id = a.service_id
+		LEFT JOIN staff d ON d.id = a.doctor_id
+		LEFT JOIN staff t ON t.id = a.therapist_id
+		WHERE ($2::timestamp IS NULL OR a.scheduled_at >= $2)
+		  AND ($3::timestamp IS NULL OR a.scheduled_at <= $3)
+		  AND (a.organization_id = $1 OR ($1::text = '' AND a.organization_id IS NULL))
+		  AND a.deleted_at IS NULL
+		ORDER BY a.scheduled_at ASC
+	`
+	rows, err := r.db.Query(query, orgID, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query appointments: %w", err)
+	}
+	defer rows.Close()
+
+	var appointments []AppointmentWithRelations
+	for rows.Next() {
+		appointment, err := scanAppointmentWithRelations(rows)
+		if err != nil {
+			return nil, err
+		}
+		appointments = append(appointments, appointment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read appointments: %w", err)
+	}
+	if appointments == nil {
+		appointments = []AppointmentWithRelations{}
+	}
+	return appointments, nil
+}
+
 func (r *Repository) Get(id, orgID string) (*AppointmentWithRelations, error) {
 	row := r.db.QueryRow(`
 		SELECT a.id, a.patient_id, a.service_id, a.doctor_id, a.therapist_id,

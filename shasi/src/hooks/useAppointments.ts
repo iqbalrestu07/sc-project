@@ -110,10 +110,36 @@ export function useAppointments(options?: UseAppointmentsOptions) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      queryClient.invalidateQueries({ queryKey: ["today-queue"] });
       toast.success("Appointment status updated");
     },
     onError: (error) => {
       toast.error(`Failed to update status: ${(error as Error).message}`);
+    },
+  });
+
+  const cancelAppointment = useMutation({
+    mutationFn: async (id: string) => {
+      try {
+        const data = await apiClient.post<{ data: AppointmentWithRelations }>(
+          API_ENDPOINTS.APPOINTMENTS.CANCEL(id),
+          {}
+        );
+        return data.data;
+      } catch (error) {
+        console.error("Error cancelling appointment:", error);
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      queryClient.invalidateQueries({ queryKey: ["today-queue"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast.success("Appointment berhasil dibatalkan");
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.error || (error as Error).message;
+      toast.error(`Gagal membatalkan: ${msg}`);
     },
   });
 
@@ -124,5 +150,6 @@ export function useAppointments(options?: UseAppointmentsOptions) {
     createAppointment,
     updateAppointment,
     updateStatus,
+    cancelAppointment,
   };
 }

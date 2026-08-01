@@ -11,6 +11,7 @@ func RegisterRoutes(router gin.IRouter, admin gin.HandlerFunc) {
 	router.GET("/appointments/today", handler.TodayQueue)
 	router.GET("/appointments/available-slots", handler.AvailableSlots)
 	router.PATCH("/appointments/:id/status", handler.UpdateStatus)
+	router.POST("/appointments/:id/cancel", handler.Cancel)
 	router.GET("/appointments/:id", handler.Get)
 	router.PUT("/appointments/:id", handler.Update)
 	router.DELETE("/appointments/:id", admin, handler.Delete)

@@ -25,6 +25,7 @@ export type Database = {
           patient_id: string
           scheduled_at: string
           service_id: string
+          source: string | null
           status: string
           therapist_id: string | null
           updated_at: string | null
@@ -39,6 +40,7 @@ export type Database = {
           patient_id: string
           scheduled_at: string
           service_id: string
+          source?: string | null
           status?: string
           therapist_id?: string | null
           updated_at?: string | null
@@ -53,6 +55,7 @@ export type Database = {
           patient_id?: string
           scheduled_at?: string
           service_id?: string
+          source?: string | null
           status?: string
           therapist_id?: string | null
           updated_at?: string | null

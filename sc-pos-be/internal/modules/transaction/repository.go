@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -306,6 +307,63 @@ func (r *Repository) GetByAppointmentIDs(orgID, csvIDs string) (map[string]map[s
 		}
 	}
 	return result, nil
+}
+
+// GetByAppointmentID returns the (id, payment_status) of the non-deleted
+// transaction linked to the given appointment, if any.
+func (r *Repository) GetByAppointmentID(appointmentID string) (txID, paymentStatus string, found bool, err error) {
+	var id, status sql.NullString
+	err = r.db.QueryRow(`
+		SELECT id, payment_status
+		FROM transactions
+		WHERE appointment_id = $1
+		  AND deleted_at IS NULL
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, appointmentID).Scan(&id, &status)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", "", false, nil
+		}
+		return "", "", false, fmt.Errorf("failed to query transaction by appointment: %w", err)
+	}
+	return id.String, status.String, true, nil
+}
+
+// CancelByAppointment soft-deletes the draft (pending) transaction linked to
+// the given appointment. Paid/partial/refunded transactions are NOT touched —
+// they represent completed sales that must be preserved for reporting.
+// Returns the cancelled transaction id (if any) and whether a paid transaction
+// blocked the cancellation.
+func (r *Repository) CancelByAppointment(appointmentID, orgID, userByID string) (cancelledID string, blocked bool, err error) {
+	txID, status, found, err := r.GetByAppointmentID(appointmentID)
+	if err != nil {
+		return "", false, err
+	}
+	if !found {
+		return "", false, nil
+	}
+	// Only draft transactions may be cancelled. Paid/partial/refunded
+	// transactions are kept intact for audit/reporting.
+	if status != "pending" {
+		return "", true, nil
+	}
+	result, err := r.db.Exec(`
+		UPDATE transactions
+		SET deleted_at = NOW(), payment_status = 'cancelled', updated_by = $3
+		WHERE id = $1
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL
+		  AND payment_status = 'pending'`,
+		txID, orgID, nullableString(userByID))
+	if err != nil {
+		return "", false, fmt.Errorf("failed to cancel transaction by appointment: %w", err)
+	}
+	if affected, _ := result.RowsAffected(); affected == 0 {
+		// Race: status changed between check and update. Treat as blocked.
+		return "", true, nil
+	}
+	return txID, false, nil
 }
 
 func (r *Repository) Delete(id, orgID, userByID string) error {

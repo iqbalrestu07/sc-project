@@ -9,6 +9,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Form,
   FormControl,
   FormField,
@@ -59,8 +69,9 @@ export function AppointmentFormDialog({
   appointment,
   defaultDate,
 }: AppointmentFormDialogProps) {
-  const { createAppointment, updateAppointment } = useAppointments();
+  const { createAppointment, updateAppointment, cancelAppointment } = useAppointments();
   const [patientSearch, setPatientSearch] = useState("");
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const patientsQuery = usePatients(patientSearch || undefined);
   const servicesQuery = useServices();
   const { doctors, therapists } = useStaff();
@@ -147,6 +158,17 @@ export function AppointmentFormDialog({
   };
 
   const isPending = createAppointment.isPending || updateAppointment.isPending;
+
+  const handleCancelAppointment = async () => {
+    if (!appointment) return;
+    try {
+      await cancelAppointment.mutateAsync(appointment.id);
+      setShowCancelConfirm(false);
+      onOpenChange(false);
+    } catch {
+      // Error handled in mutation
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -337,25 +359,61 @@ export function AppointmentFormDialog({
               )}
             />
 
-            <div className="flex justify-end gap-3 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending
-                  ? "Saving..."
-                  : isEditing
-                  ? "Update Appointment"
-                  : "Create Appointment"}
-              </Button>
+            <div className="flex justify-between gap-3 pt-4">
+              {isEditing ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setShowCancelConfirm(true)}
+                  disabled={cancelAppointment.isPending}
+                >
+                  {cancelAppointment.isPending ? "Membatalkan..." : "Batalkan Appointment"}
+                </Button>
+              ) : (
+                <div />
+              )}
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Close
+                </Button>
+                <Button type="submit" disabled={isPending}>
+                  {isPending
+                    ? "Saving..."
+                    : isEditing
+                    ? "Update Appointment"
+                    : "Create Appointment"}
+                </Button>
+              </div>
             </div>
           </form>
         </Form>
       </DialogContent>
+
+      <AlertDialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Batalkan Appointment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Apakah Anda yakin ingin membatalkan appointment untuk{" "}
+              <strong>{appointment?.patient?.full_name}</strong>? Transaksi draft
+              yang terkait juga akan dibatalkan. Tindakan ini tidak dapat dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Tidak</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelAppointment}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Ya, Batalkan
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

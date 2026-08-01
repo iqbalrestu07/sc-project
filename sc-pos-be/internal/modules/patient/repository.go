@@ -377,13 +377,14 @@ func (r *Repository) Delete(id, orgID, userByID string) error {
 
 // VisitSummary is a condensed appointment record for patient history
 type VisitSummary struct {
-	ID            string  `json:"id"`
-	ScheduledAt   string  `json:"scheduled_at"`
-	Status        string  `json:"status"`
-	ServiceName   string  `json:"service_name"`
-	DoctorName    *string `json:"doctor_name,omitempty"`
-	TherapistName *string `json:"therapist_name,omitempty"`
-	Notes         *string `json:"notes,omitempty"`
+	ID            string   `json:"id"`
+	ScheduledAt   string   `json:"scheduled_at"`
+	Status        string   `json:"status"`
+	ServiceName   string   `json:"service_name"`
+	AllServices   []string `json:"all_services"` // all service names from linked transaction (walk-in multi-service)
+	DoctorName    *string  `json:"doctor_name,omitempty"`
+	TherapistName *string  `json:"therapist_name,omitempty"`
+	Notes         *string  `json:"notes,omitempty"`
 }
 
 // TransactionSummary is a condensed transaction record for patient history
@@ -405,7 +406,16 @@ func (r *Repository) GetVisits(patientID string) ([]VisitSummary, error) {
 		       COALESCE(s.name, '') AS service_name,
 		       d.full_name AS doctor_name,
 		       th.full_name AS therapist_name,
-		       a.notes
+		       a.notes,
+		       COALESCE((
+		           SELECT array_agg(DISTINCT si.name)
+		           FROM transactions t
+		           JOIN transaction_items ti ON ti.transaction_id = t.id AND ti.deleted_at IS NULL
+		           LEFT JOIN services si ON si.id = ti.service_id
+		           WHERE t.appointment_id = a.id
+		             AND ti.item_type = 'service'
+		             AND si.name IS NOT NULL
+		       ), ARRAY[]::text[]) AS all_services
 		FROM appointments a
 		LEFT JOIN services s ON s.id = a.service_id
 		LEFT JOIN staff d ON d.id = a.doctor_id
@@ -427,7 +437,7 @@ func (r *Repository) GetVisits(patientID string) ([]VisitSummary, error) {
 		var therapistName sql.NullString
 		var notes sql.NullString
 		var scheduledAt sql.NullTime
-		if err := rows.Scan(&v.ID, &scheduledAt, &v.Status, &v.ServiceName, &doctorName, &therapistName, &notes); err != nil {
+		if err := rows.Scan(&v.ID, &scheduledAt, &v.Status, &v.ServiceName, &doctorName, &therapistName, &notes, pq.Array(&v.AllServices)); err != nil {
 			return nil, fmt.Errorf("failed to scan visit: %w", err)
 		}
 		if scheduledAt.Valid {
@@ -441,6 +451,9 @@ func (r *Repository) GetVisits(patientID string) ([]VisitSummary, error) {
 		}
 		if notes.Valid {
 			v.Notes = &notes.String
+		}
+		if v.AllServices == nil {
+			v.AllServices = []string{}
 		}
 		visits = append(visits, v)
 	}

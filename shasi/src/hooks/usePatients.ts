@@ -112,6 +112,7 @@ export interface PatientVisit {
   scheduled_at: string;
   status: string;
   service_name: string;
+  all_services?: string[];
   doctor_name?: string | null;
   therapist_name?: string | null;
   notes?: string | null;

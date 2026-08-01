@@ -3,38 +3,51 @@ package appointment
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/modules/transaction"
 	"github.com/sc-pos/backend/internal/utils"
 )
 
 var ErrNotFound = errors.New("appointment not found")
 
+// ErrTransactionPaid is returned when an appointment cannot be cancelled
+// because its linked transaction has already been paid.
+var ErrTransactionPaid = errors.New("cannot cancel appointment: linked transaction is already paid")
+
 // Service is the public interface for the appointment module business logic.
 type Service interface {
 	List(orgID string, start, end *time.Time) ([]AppointmentWithRelations, error)
+	ListAll(orgID string, start, end *time.Time) ([]AppointmentWithRelations, error)
 	Get(id, orgID string) (*AppointmentWithRelations, error)
 	Create(req models.Appointment, userID *string, orgID string) (*AppointmentWithRelations, error)
 	Update(id, orgID, userID string, req models.Appointment) (*AppointmentWithRelations, error)
 	UpdateStatus(id, status, orgID, userID string) (*AppointmentWithRelations, error)
 	Delete(id, orgID, userID string) error
+	Cancel(id, orgID, userID string) (*AppointmentWithRelations, error)
 	GetServicesByAppointment(appointmentID string) ([]string, error)
 }
 
 type service struct {
-	repo *Repository
+	repo   *Repository
+	txRepo *transaction.Repository
 }
 
 func NewService(repo ...*Repository) Service {
 	if len(repo) > 0 {
-		return &service{repo: repo[0]}
+		return &service{repo: repo[0], txRepo: transaction.NewRepository()}
 	}
-	return &service{repo: NewRepository()}
+	return &service{repo: NewRepository(), txRepo: transaction.NewRepository()}
 }
 
 func (s *service) List(orgID string, start, end *time.Time) ([]AppointmentWithRelations, error) {
 	return s.repo.List(orgID, start, end)
+}
+
+func (s *service) ListAll(orgID string, start, end *time.Time) ([]AppointmentWithRelations, error) {
+	return s.repo.ListAll(orgID, start, end)
 }
 
 func (s *service) Get(id, orgID string) (*AppointmentWithRelations, error) {
@@ -119,6 +132,40 @@ func (s *service) Delete(id, orgID, userID string) error {
 		return err
 	}
 	return nil
+}
+
+// Cancel cancels an appointment and its linked draft transaction (if any).
+// If the linked transaction is already paid/partial/refunded, the cancellation
+// is refused with ErrTransactionPaid — paid sales must be preserved.
+func (s *service) Cancel(id, orgID, userID string) (*AppointmentWithRelations, error) {
+	// Verify the appointment exists and belongs to the org.
+	current, err := s.Get(id, orgID)
+	if err != nil {
+		return nil, err
+	}
+	// Already cancelled — idempotent no-op.
+	if current.Status == "cancelled" {
+		return current, nil
+	}
+
+	// Cancel linked draft transaction (if any).
+	cancelledTxID, blocked, err := s.txRepo.CancelByAppointment(id, orgID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to cancel linked transaction: %w", err)
+	}
+	if blocked {
+		return nil, ErrTransactionPaid
+	}
+	_ = cancelledTxID // transaction was cancelled (or none existed)
+
+	// Soft-delete + set status = cancelled on the appointment.
+	if err := s.repo.Delete(id, orgID, userID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return s.Get(id, orgID)
 }
 
 func (s *service) GetServicesByAppointment(appointmentID string) ([]string, error) {

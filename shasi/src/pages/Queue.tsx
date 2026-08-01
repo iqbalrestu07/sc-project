@@ -11,19 +11,32 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useTodayQueue, useUpdateAppointmentStatus } from "@/hooks/useVisitNotes";
+import { useCancelAppointment } from "@/hooks/useAppointments";
 import { apiClient } from "@/integrations/api/client";
 import { format } from "date-fns";
-import { Users, Clock, CheckCircle2, Play, ArrowRight, CheckCircle } from "lucide-react";
+import { Users, Clock, CheckCircle2, Play, ArrowRight, CheckCircle, XCircle } from "lucide-react";
 
 export default function QueuePage() {
   const navigate = useNavigate();
   const { data: queue, isLoading } = useTodayQueue();
   const updateStatus = useUpdateAppointmentStatus();
+  const cancelAppointment = useCancelAppointment();
   const [loadingTxFor, setLoadingTxFor] = useState<string | null>(null);
   // Map of appointment_id → transaction payment status
   const [paidAppointments, setPaidAppointments] = useState<Set<string>>(new Set());
   const [txByAppointment, setTxByAppointment] = useState<Record<string, string>>({});
+  const [cancelTarget, setCancelTarget] = useState<{ id: string; name: string } | null>(null);
 
   const waiting = queue?.waiting ?? [];
   const inProgress = queue?.in_progress ?? [];
@@ -59,6 +72,16 @@ export default function QueuePage() {
 
   const handleStatusChange = (id: string, status: string) => {
     updateStatus.mutate({ id, status });
+  };
+
+  const handleCancel = (id: string, name: string) => {
+    setCancelTarget({ id, name });
+  };
+
+  const confirmCancel = () => {
+    if (!cancelTarget) return;
+    cancelAppointment.mutate(cancelTarget.id);
+    setCancelTarget(null);
   };
 
   // Find pending transaction for an appointment and navigate to POS with it
@@ -125,6 +148,12 @@ export default function QueuePage() {
                     onClick: () => navigate(`/patients/${apt.patient_id}`),
                     variant: "outline",
                   },
+                  {
+                    label: "Batalkan",
+                    icon: XCircle,
+                    onClick: () => handleCancel(apt.id, apt.patient?.full_name || "Unknown"),
+                    variant: "outline",
+                  },
                 ]}
               />
             ))
@@ -161,6 +190,12 @@ export default function QueuePage() {
                     label: "Lihat Detail",
                     icon: ArrowRight,
                     onClick: () => navigate(`/patients/${apt.patient_id}`),
+                    variant: "outline",
+                  },
+                  {
+                    label: "Batalkan",
+                    icon: XCircle,
+                    onClick: () => handleCancel(apt.id, apt.patient?.full_name || "Unknown"),
                     variant: "outline",
                   },
                 ]}
@@ -209,6 +244,14 @@ export default function QueuePage() {
                       onClick: () => navigate(`/patients/${apt.patient_id}`),
                       variant: "outline",
                     },
+                    ...(!isPaid
+                      ? [{
+                          label: "Batalkan",
+                          icon: XCircle,
+                          onClick: () => handleCancel(apt.id, apt.patient?.full_name || "Unknown"),
+                          variant: "outline" as const,
+                        }]
+                      : []),
                   ]}
                 />
               );
@@ -216,6 +259,28 @@ export default function QueuePage() {
           )}
         </div>
       </div>
+
+      <AlertDialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Batalkan Antrian?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Apakah Anda yakin ingin membatalkan antrian untuk{" "}
+              <strong>{cancelTarget?.name}</strong>? Transaksi draft yang
+              terkait juga akan dibatalkan. Tindakan ini tidak dapat dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Tidak</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCancel}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Ya, Batalkan
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

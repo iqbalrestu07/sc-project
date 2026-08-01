@@ -108,6 +108,25 @@ func (h *Handler) Delete(c *gin.Context) {
 	utils.SuccessResponseWithMessage(c, http.StatusOK, "Appointment deleted successfully", nil)
 }
 
+// Cancel handles POST /appointments/:id/cancel
+// Cancels an appointment and its linked draft transaction. Available to all
+// org members (not admin-only) so cashiers and doctors can cancel walk-ins
+// from the queue page. If the linked transaction is already paid, returns 409.
+func (h *Handler) Cancel(c *gin.Context) {
+	orgID := c.GetString("org_id")
+	userID := c.GetString("user_id")
+	appointment, err := h.service.Cancel(c.Param("id"), orgID, userID)
+	if err != nil {
+		if errors.Is(err, ErrTransactionPaid) {
+			utils.ErrorResponse(c, http.StatusConflict, "Tidak dapat membatalkan: transaksi sudah dibayar")
+			return
+		}
+		h.handleError(c, err)
+		return
+	}
+	utils.SuccessResponseWithMessage(c, http.StatusOK, "Appointment berhasil dibatalkan", appointment)
+}
+
 // UpdateStatus handles PATCH /appointments/:id/status
 // Used by the queue page to move patients between antrian → dilayani → selesai.
 func (h *Handler) UpdateStatus(c *gin.Context) {
@@ -144,7 +163,7 @@ func (h *Handler) TodayQueue(c *gin.Context) {
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, jakarta)
 	endOfDay := startOfDay.Add(24 * time.Hour)
 
-	appointments, err := h.service.List(orgID, &startOfDay, &endOfDay)
+	appointments, err := h.service.ListAll(orgID, &startOfDay, &endOfDay)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
