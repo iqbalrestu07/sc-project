@@ -65,7 +65,14 @@ import {
 import { ConsumableSelectionDialog } from "./ConsumableSelectionDialog";
 import type { ConsumableGroup } from "@/types/consumable_group";
 
-export function POSInterface() {
+interface POSInterfaceProps {
+  /** Transaction draft ID to pre-fill cart from (walk-in flow). */
+  initialTransactionId?: string | null;
+  /** Patient ID to pre-select (walk-in product purchase flow). */
+  initialPatientId?: string | null;
+}
+
+export function POSInterface({ initialTransactionId, initialPatientId }: POSInterfaceProps = {}) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>("");
   const [patientPopoverOpen, setPatientPopoverOpen] = useState(false);
@@ -116,7 +123,7 @@ export function POSInterface() {
   const servicesQuery = useServices();
   const { products } = useProducts();
   const { doctors, therapists } = useStaff();
-  const { createTransaction, updatePaymentStatus } = useTransactions();
+  const { createTransaction, updatePaymentStatus, fetchTransactionDetail } = useTransactions();
   const { settings } = useClinicSettings();
 
   // Fetch consumable groups for the pending service (only when a service is being added)
@@ -124,6 +131,60 @@ export function POSInterface() {
     data: pendingServiceGroups = [],
     isLoading: pendingGroupsLoading,
   } = useConsumableGroups(pendingService?.itemId ?? null);
+
+  // Pre-fill cart from transaction draft (walk-in flow).
+  // Loads transaction + items by ID and populates the cart + patient selection.
+  const [draftTransactionId, setDraftTransactionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialTransactionId) {
+      setDraftTransactionId(initialTransactionId);
+    }
+    if (initialPatientId) {
+      setSelectedPatientId(initialPatientId);
+    }
+  }, [initialTransactionId, initialPatientId]);
+
+  useEffect(() => {
+    if (!draftTransactionId || !fetchTransactionDetail) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const tx = await fetchTransactionDetail(draftTransactionId);
+        if (cancelled) return;
+        // Set patient
+        if (tx.patient_id) {
+          setSelectedPatientId(tx.patient_id);
+        }
+        // Fill cart from items
+        if (tx.items && tx.items.length > 0) {
+          const newCart: CartItem[] = tx.items.map((item: any) => ({
+            id: crypto.randomUUID(),
+            type: item.item_type === "product" ? "product" : "service",
+            itemId: item.service_id || item.product_id || "",
+            name: item.service_id
+              ? services.find((s) => s.id === item.service_id)?.name || "Service"
+              : products.find((p) => p.id === item.product_id)?.name || "Product",
+            unitPrice: item.unit_price,
+            quantity: item.quantity,
+            discountAmount: item.discount_amount || undefined,
+            discountType: item.discount_type || undefined,
+            doctorId: item.doctor_id || undefined,
+            therapistId: item.therapist_id || undefined,
+            commissionEligible: item.commission_eligible ?? true,
+            commissionNotes: item.commission_notes || undefined,
+            selectedConsumableProductId: item.selected_consumable_product_id || undefined,
+          }));
+          setCart(newCart);
+        }
+        toast.info("Cart pre-filled dari walk-in draft. Tambah produk jika perlu, lalu bayar.");
+      } catch (e) {
+        console.error("Failed to load transaction draft:", e);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftTransactionId, services, products]);
 
   const patients = accumulatedPatients;
   const services = servicesQuery.data?.data ?? [];

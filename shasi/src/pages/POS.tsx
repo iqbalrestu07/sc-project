@@ -1,3 +1,4 @@
+import { useLocation } from "react-router-dom";
 import { PageHeader } from "@/components/layout";
 import { POSInterface } from "@/components/pos";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -6,6 +7,10 @@ import { ShoppingCart, DollarSign, TrendingUp } from "lucide-react";
 
 export default function POS() {
   const { todayTransactions, todayRevenue } = useTransactions();
+  const location = useLocation();
+  const initialState = location.state as any;
+  const initialTransactionId = initialState?.transactionId ?? null;
+  const initialPatientId = initialState?.patientId ?? null;
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("id-ID", {
@@ -69,7 +74,10 @@ export default function POS() {
         </Card>
       </div>
 
-      <POSInterface />
+      <POSInterface
+        initialTransactionId={initialTransactionId}
+        initialPatientId={initialPatientId}
+      />
     </div>
   );
 }

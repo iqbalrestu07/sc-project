@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTodayQueue, useUpdateAppointmentStatus } from "@/hooks/useVisitNotes";
+import { apiClient } from "@/integrations/api/client";
 import { format } from "date-fns";
 import { Users, Clock, CheckCircle2, Play, ArrowRight } from "lucide-react";
 
@@ -13,6 +14,7 @@ export default function QueuePage() {
   const navigate = useNavigate();
   const { data: queue, isLoading } = useTodayQueue();
   const updateStatus = useUpdateAppointmentStatus();
+  const [loadingTxFor, setLoadingTxFor] = useState<string | null>(null);
 
   const waiting = queue?.waiting ?? [];
   const inProgress = queue?.in_progress ?? [];
@@ -20,6 +22,27 @@ export default function QueuePage() {
 
   const handleStatusChange = (id: string, status: string) => {
     updateStatus.mutate({ id, status });
+  };
+
+  // Find pending transaction for an appointment and navigate to POS with it
+  const handleCheckout = async (appointmentId: string, patientId: string) => {
+    setLoadingTxFor(appointmentId);
+    try {
+      // Fetch all today's transactions and find by appointment_id
+      const data = await apiClient.get<{ data: any[] }>(`/transactions?limit=100`);
+      const tx = data.data?.find((t: any) => t.appointment_id === appointmentId);
+      if (tx) {
+        navigate("/pos", { state: { transactionId: tx.id, patientId } });
+      } else {
+        // No draft transaction, go to POS with just patientId
+        navigate("/pos", { state: { patientId } });
+      }
+    } catch (e) {
+      console.error("Failed to find transaction:", e);
+      navigate("/pos", { state: { patientId } });
+    } finally {
+      setLoadingTxFor(null);
+    }
   };
 
   if (isLoading) {
@@ -140,9 +163,9 @@ export default function QueuePage() {
                 onStatusChange={handleStatusChange}
                 actions={[
                   {
-                    label: "Buat Transaksi",
+                    label: loadingTxFor === apt.id ? "Loading..." : "Buat Transaksi",
                     icon: ArrowRight,
-                    onClick: () => navigate("/pos"),
+                    onClick: () => handleCheckout(apt.id, apt.patient_id),
                     variant: "default",
                   },
                   {

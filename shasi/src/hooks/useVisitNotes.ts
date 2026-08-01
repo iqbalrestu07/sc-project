@@ -159,3 +159,22 @@ export function useAddTransactionItem() {
     },
   });
 }
+
+// ─── Fetch transaction by appointment_id (for queue → POS flow) ───────────
+
+export function useTransactionByAppointment(appointmentId: string | undefined) {
+  return useQuery({
+    queryKey: ["transaction-by-appointment", appointmentId],
+    queryFn: async () => {
+      if (!appointmentId) return null;
+      // List all transactions and find by appointment_id
+      // Backend doesn't have a dedicated endpoint, so we filter client-side
+      const data = await apiClient.get<{ data: any[] }>(
+        `${API_ENDPOINTS.TRANSACTIONS.LIST}?limit=100`
+      );
+      const tx = (data.data || []).find((t) => t.appointment_id === appointmentId);
+      return tx || null;
+    },
+    enabled: !!appointmentId,
+  });
+}
