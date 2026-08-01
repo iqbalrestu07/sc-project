@@ -199,21 +199,6 @@ export default function PatientDetail() {
                 </CardContent>
               </Card>
 
-              {/* Medical Conditions */}
-              <Card className="shadow-clinic">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-primary" />
-                    Medical Conditions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    {patient.medical_conditions || "No medical conditions recorded."}
-                  </p>
-                </CardContent>
-              </Card>
-
               {/* Notes */}
               {patient.notes && (
                 <Card className="shadow-clinic">
@@ -339,7 +324,7 @@ export default function PatientDetail() {
             </TabsContent>
 
             <TabsContent value="history" className="mt-4">
-              {visits.length === 0 ? (
+              {visits.length === 0 && visitNotes.length === 0 ? (
                 <Card className="shadow-clinic">
                   <CardContent className="py-12 text-center">
                     <p className="text-muted-foreground">No visit history found.</p>
@@ -347,34 +332,77 @@ export default function PatientDetail() {
                 </Card>
               ) : (
                 <div className="space-y-3">
-                  {visits.map((visit) => (
-                    <Card key={visit.id} className="shadow-clinic">
-                      <CardContent className="py-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="space-y-1">
-                            <p className="font-medium text-sm">{visit.service_name || "—"}</p>
-                            {visit.doctor_name && (
-                              <p className="text-xs text-muted-foreground">Dr. {visit.doctor_name}</p>
-                            )}
-                            {visit.therapist_name && (
-                              <p className="text-xs text-muted-foreground">Therapist: {visit.therapist_name}</p>
-                            )}
-                            {visit.notes && (
-                              <p className="text-xs text-muted-foreground italic">{visit.notes}</p>
-                            )}
+                  {/* Merge appointments + visit notes into a single timeline */}
+                  {(() => {
+                    type TimelineItem = {
+                      id: string;
+                      date: string;
+                      type: "appointment" | "visit_note";
+                      title: string;
+                      subtitle?: string;
+                      notes?: string;
+                      status?: string;
+                      hasMedicalRecord?: boolean;
+                    };
+
+                    const timeline: TimelineItem[] = [
+                      ...visits.map((v: any) => ({
+                        id: v.id,
+                        date: v.scheduled_at,
+                        type: "appointment" as const,
+                        title: v.service_name || "—",
+                        subtitle: [v.doctor_name ? `Dr. ${v.doctor_name}` : null, v.therapist_name ? `Therapist: ${v.therapist_name}` : null].filter(Boolean).join(" · ") || undefined,
+                        notes: v.notes,
+                        status: v.status,
+                        hasMedicalRecord: visitNotes.some((vn: any) => vn.appointment_id === v.id),
+                      })),
+                      ...visitNotes
+                        .filter((vn: any) => !vn.appointment_id || !visits.some((v: any) => v.id === vn.appointment_id))
+                        .map((vn: any) => ({
+                          id: vn.id,
+                          date: vn.visit_date,
+                          type: "visit_note" as const,
+                          title: vn.treatment_performed || vn.diagnosis || "Kunjungan (walk-in)",
+                          subtitle: vn.doctor_name ? `Dokter: ${vn.doctor_name}` : undefined,
+                          notes: vn.diagnosis || vn.follow_up_notes,
+                          status: "completed",
+                          hasMedicalRecord: true,
+                        })),
+                    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                    return timeline.map((item) => (
+                      <Card key={`${item.type}-${item.id}`} className="shadow-clinic">
+                        <CardContent className="py-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-1 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-sm">{item.title}</p>
+                                {item.hasMedicalRecord && (
+                                  <FileText className="h-3.5 w-3.5 text-primary" />
+                                )}
+                              </div>
+                              {item.subtitle && (
+                                <p className="text-xs text-muted-foreground">{item.subtitle}</p>
+                              )}
+                              {item.notes && (
+                                <p className="text-xs text-muted-foreground italic">{item.notes}</p>
+                              )}
+                            </div>
+                            <div className="text-right shrink-0">
+                              {item.status && (
+                                <Badge variant={item.status === "completed" ? "default" : "secondary"} className="capitalize text-xs mb-1">
+                                  {item.status}
+                                </Badge>
+                              )}
+                              <p className="text-xs text-muted-foreground">
+                                {item.date ? format(new Date(item.date), "dd MMM yyyy, HH:mm") : "—"}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-right shrink-0">
-                            <Badge variant={visit.status === "completed" ? "default" : "secondary"} className="capitalize text-xs mb-1">
-                              {visit.status}
-                            </Badge>
-                            <p className="text-xs text-muted-foreground">
-                              {visit.scheduled_at ? format(new Date(visit.scheduled_at), "dd MMM yyyy, HH:mm") : "—"}
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    ));
+                  })()}
                 </div>
               )}
             </TabsContent>

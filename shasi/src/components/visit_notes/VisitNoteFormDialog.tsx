@@ -38,6 +38,10 @@ interface VisitNoteFormDialogProps {
   onOpenChange: (open: boolean) => void;
   patientId: string;
   visitNote?: VisitNoteWithDetails | null;
+  /** Pre-fill treatment_performed from appointment/transaction services */
+  prefillTreatment?: string | null;
+  /** Pre-fill appointment_id to link visit note with appointment */
+  prefillAppointmentId?: string | null;
 }
 
 export function VisitNoteFormDialog({
@@ -45,6 +49,8 @@ export function VisitNoteFormDialog({
   onOpenChange,
   patientId,
   visitNote,
+  prefillTreatment,
+  prefillAppointmentId,
 }: VisitNoteFormDialogProps) {
   const { createMutation, updateMutation } = useVisitNotes();
   const isEditing = !!visitNote;
@@ -74,19 +80,21 @@ export function VisitNoteFormDialog({
           : "",
       });
     } else {
+      // New visit note — pre-fill treatment_performed from appointment/transaction
       form.reset({
         diagnosis: "",
         patient_condition_before: "",
-        treatment_performed: "",
+        treatment_performed: prefillTreatment || "",
         treatment_outcome: "",
         follow_up_notes: "",
         next_visit_recommended: "",
       });
     }
-  }, [visitNote, form]);
+  }, [visitNote, prefillTreatment, form]);
 
   const onSubmit = async (values: FormValues) => {
     const input = {
+      appointment_id: prefillAppointmentId || null,
       diagnosis: values.diagnosis || null,
       patient_condition_before: values.patient_condition_before || null,
       treatment_performed: values.treatment_performed || null,

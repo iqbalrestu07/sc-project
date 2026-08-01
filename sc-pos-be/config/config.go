@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 )
 
 type Config struct {
@@ -26,8 +27,9 @@ type DatabaseConfig struct {
 }
 
 type JWTConfig struct {
-	SecretKey   string
-	ExpiryHours int
+	SecretKey          string
+	ExpiryHours        int
+	RefreshExpiryHours int
 }
 
 func Load() *Config {
@@ -45,8 +47,9 @@ func Load() *Config {
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
 		JWT: JWTConfig{
-			SecretKey:   getEnv("JWT_SECRET_KEY", "your-secret-key-change-in-production"),
-			ExpiryHours: 24,
+			SecretKey:          getEnv("JWT_SECRET_KEY", "your-secret-key-change-in-production"),
+			ExpiryHours:        getEnvInt("JWT_EXPIRY_HOURS", 24),
+			RefreshExpiryHours: getEnvInt("JWT_REFRESH_EXPIRY_HOURS", 168),
 		},
 	}
 }
@@ -66,6 +69,15 @@ func (c *DatabaseConfig) DSN() string {
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil {
+			return parsed
+		}
 	}
 	return defaultValue
 }

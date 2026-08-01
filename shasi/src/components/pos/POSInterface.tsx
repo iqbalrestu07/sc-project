@@ -132,6 +132,9 @@ export function POSInterface({ initialTransactionId, initialPatientId }: POSInte
     isLoading: pendingGroupsLoading,
   } = useConsumableGroups(pendingService?.itemId ?? null);
 
+  const patients = accumulatedPatients;
+  const services = servicesQuery.data?.data ?? [];
+
   // Pre-fill cart from transaction draft (walk-in flow).
   // Loads transaction + items by ID and populates the cart + patient selection.
   const [draftTransactionId, setDraftTransactionId] = useState<string | null>(null);
@@ -185,9 +188,6 @@ export function POSInterface({ initialTransactionId, initialPatientId }: POSInte
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftTransactionId, services, products]);
-
-  const patients = accumulatedPatients;
-  const services = servicesQuery.data?.data ?? [];
 
   const filteredServices = services.filter((s) =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase())

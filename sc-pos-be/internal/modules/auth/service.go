@@ -16,6 +16,20 @@ var ErrInvalidCredentials = errors.New("invalid email or password")
 var ErrEmailAlreadyUsed = errors.New("email already registered")
 var ErrInvalidRole = errors.New("invalid role: must be admin, doctor, therapist, or cashier")
 
+// Token expiry hours — set via SetTokenExpiry() from main.go using config.
+var tokenExpiryHours = 24
+var refreshExpiryHours = 168
+
+// SetTokenExpiry configures access/refresh token expiry from env.
+func SetTokenExpiry(access, refresh int) {
+	if access > 0 {
+		tokenExpiryHours = access
+	}
+	if refresh > 0 {
+		refreshExpiryHours = refresh
+	}
+}
+
 // Service is the public contract for authentication business logic.
 type Service interface {
 	Login(email, password string) (*AuthPayload, error)
@@ -189,12 +203,12 @@ func (s *service) Refresh(refreshToken string) (*AuthPayload, error) {
 }
 
 func (s *service) issueTokens(user models.User, orgs []models.OrganizationWithRole) (*AuthPayload, error) {
-	accessToken, err := backendauth.GenerateToken(user.ID, user.Email, user.Role, 24)
+	accessToken, err := backendauth.GenerateToken(user.ID, user.Email, user.Role, tokenExpiryHours)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := backendauth.GenerateToken(user.ID, user.Email, user.Role, 24*7)
+	refreshToken, err := backendauth.GenerateToken(user.ID, user.Email, user.Role, refreshExpiryHours)
 	if err != nil {
 		return nil, err
 	}
@@ -214,11 +228,11 @@ func (s *service) issueTokens(user models.User, orgs []models.OrganizationWithRo
 }
 
 func generateAccessToken(user models.User) string {
-	token, _ := backendauth.GenerateToken(user.ID, user.Email, user.Role, 24)
+	token, _ := backendauth.GenerateToken(user.ID, user.Email, user.Role, tokenExpiryHours)
 	return token
 }
 
 func generateRefreshToken(user models.User) string {
-	token, _ := backendauth.GenerateToken(user.ID, user.Email, user.Role, 24*7)
+	token, _ := backendauth.GenerateToken(user.ID, user.Email, user.Role, refreshExpiryHours)
 	return token
 }

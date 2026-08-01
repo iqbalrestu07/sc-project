@@ -234,13 +234,13 @@ function QueueCard({ appointment, onStatusChange, actions }: QueueCardProps) {
             {format(new Date(appointment.scheduled_at), "HH:mm")} WIB
           </p>
 
-          <div className="flex gap-2 pt-2">
+          <div className="flex flex-col gap-2 pt-2 border-t">
             {actions.map((action, i) => (
               <Button
                 key={i}
                 size="sm"
                 variant={action.variant}
-                className="gap-1 flex-1"
+                className="w-full gap-1.5 h-9 text-xs"
                 onClick={() => {
                   if (action.status) {
                     onStatusChange(appointment.id, action.status);
@@ -249,7 +249,7 @@ function QueueCard({ appointment, onStatusChange, actions }: QueueCardProps) {
                   }
                 }}
               >
-                <action.icon className="h-3 w-3" />
+                <action.icon className="h-3.5 w-3.5" />
                 {action.label}
               </Button>
             ))}

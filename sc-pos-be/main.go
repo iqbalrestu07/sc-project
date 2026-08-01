@@ -10,6 +10,7 @@ import (
 	"github.com/sc-pos/backend/internal/auth"
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/modules/appointment"
+	authmodule "github.com/sc-pos/backend/internal/modules/auth"
 	"github.com/sc-pos/backend/internal/modules/whatsapp"
 	"github.com/sc-pos/backend/internal/routes"
 )
@@ -23,6 +24,9 @@ func main() {
 
 	// Initialize JWT secret
 	auth.InitJWT(cfg.JWT.SecretKey)
+
+	// Configure token expiry from env (defaults: 24h access, 168h refresh)
+	authmodule.SetTokenExpiry(cfg.JWT.ExpiryHours, cfg.JWT.RefreshExpiryHours)
 
 	// Connect to database
 	if err := database.Connect(cfg.Database.DSN()); err != nil {
