@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Repository struct {
@@ -71,7 +71,7 @@ func (r *Repository) ListGroups(serviceID, orgID string) ([]models.ServiceConsum
 }
 
 func (r *Repository) CreateGroup(g *models.ServiceConsumableGroup, orgID, userByID string) error {
-	g.ID = uuid.New().String()
+	g.ID = utils.NewUUID()
 	g.CreatedAt = time.Now()
 	g.UpdatedAt = time.Now()
 	_, err := r.db.Exec(`
@@ -159,7 +159,7 @@ func (r *Repository) listGroupItems(groupID, orgID string) ([]models.ServiceCons
 }
 
 func (r *Repository) AddGroupItem(it *models.ServiceConsumableGroupItem, orgID, userByID string) error {
-	it.ID = uuid.New().String()
+	it.ID = utils.NewUUID()
 	it.CreatedAt = time.Now()
 	_, err := r.db.Exec(`
 		INSERT INTO service_consumable_group_items

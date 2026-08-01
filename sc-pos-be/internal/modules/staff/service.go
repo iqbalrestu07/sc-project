@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 var ErrNotFound = errors.New("staff not found")
@@ -53,7 +53,7 @@ func (s *service) GetByUserID(userID string) (*models.Staff, error) {
 
 func (s *service) Create(req models.Staff, userID, orgID string) (*models.Staff, error) {
 	now := time.Now()
-	req.ID = uuid.New().String()
+	req.ID = utils.NewUUID()
 	req.CreatedAt = now
 	req.UpdatedAt = now
 	req.IsActive = true

@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	backendauth "github.com/sc-pos/backend/internal/auth"
 	"github.com/sc-pos/backend/internal/middleware"
 	"github.com/sc-pos/backend/internal/models"
 	"github.com/sc-pos/backend/internal/modules/organization"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 var ErrInvalidCredentials = errors.New("invalid email or password")
@@ -82,7 +82,7 @@ func (s *service) Register(email, password, orgName, fullName string) (*AuthPayl
 
 	now := time.Now()
 	user := models.User{
-		ID:        uuid.New().String(),
+		ID:        utils.NewUUID(),
 		Email:     email,
 		Password:  hashedPassword,
 		Role:      middleware.RoleAdmin, // first user of new org is always admin
@@ -141,7 +141,7 @@ func (s *service) AdminRegister(email, password, role string) (*AuthPayload, err
 
 	now := time.Now()
 	user := models.User{
-		ID:        uuid.New().String(),
+		ID:        utils.NewUUID(),
 		Email:     email,
 		Password:  hashedPassword,
 		Role:      role,

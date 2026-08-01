@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Repository struct {
@@ -155,7 +155,7 @@ func (r *Repository) AddMember(orgID, userID, role, addedBy string) error {
 		INSERT INTO organization_members (id, org_id, user_id, role, is_active, joined_at, created_at, updated_at, created_by)
 		VALUES ($1, $2, $3, $4, true, $5, $5, $5, $6)
 		ON CONFLICT (org_id, user_id) DO UPDATE SET role = $4, is_active = true, updated_at = $5, updated_by = $6`
-	_, err := r.db.Exec(query, uuid.New().String(), orgID, userID, role, now, nullableString(addedBy))
+	_, err := r.db.Exec(query, utils.NewUUID(), orgID, userID, role, now, nullableString(addedBy))
 	if err != nil {
 		return fmt.Errorf("failed to add member: %w", err)
 	}
@@ -256,7 +256,7 @@ func (r *Repository) GenerateUniqueSlug(name string) (string, error) {
 		}
 		slug = fmt.Sprintf("%s-%d", base, i)
 	}
-	return fmt.Sprintf("%s-%s", base, uuid.New().String()[:8]), nil
+	return fmt.Sprintf("%s-%s", base, utils.NewUUID()[:8]), nil
 }
 
 func slugify(s string) string {

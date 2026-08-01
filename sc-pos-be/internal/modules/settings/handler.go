@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/models"
 	orgModule "github.com/sc-pos/backend/internal/modules/organization"
 	"github.com/sc-pos/backend/internal/utils"
@@ -112,7 +111,7 @@ func (h *Handler) UploadLogo(c *gin.Context) {
 	if ext == "" {
 		ext = ".png"
 	}
-	filename := fmt.Sprintf("%d-%s%s", time.Now().UnixMilli(), uuid.New().String()[:8], ext)
+	filename := fmt.Sprintf("%d-%s%s", time.Now().UnixMilli(), utils.NewUUID()[:8], ext)
 	dest := filepath.Join(uploadDir, filename)
 
 	out, err := os.Create(dest)

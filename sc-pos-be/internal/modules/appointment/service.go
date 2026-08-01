@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/models"
 	"github.com/sc-pos/backend/internal/utils"
 )
@@ -49,7 +48,7 @@ func (s *service) Get(id, orgID string) (*AppointmentWithRelations, error) {
 
 func (s *service) Create(req models.Appointment, userID *string, orgID string) (*AppointmentWithRelations, error) {
 	now := time.Now()
-	req.ID = uuid.New().String()
+	req.ID = utils.NewUUID()
 	req.CreatedBy = userID
 	req.CreatedAt = now
 	req.UpdatedAt = now

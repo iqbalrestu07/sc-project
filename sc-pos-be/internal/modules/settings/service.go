@@ -3,8 +3,8 @@ package settings
 import (
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 // Service is the public interface for the settings module business logic.
@@ -81,7 +81,7 @@ func defaultClinicSettings() *models.ClinicSettings {
 	enabled := true
 	reminderHours := 24
 	return &models.ClinicSettings{
-		ID:                      uuid.New().String(),
+		ID:                      utils.NewUUID(),
 		ClinicName:              &clinicName,
 		TaxRate:                 &taxRate,
 		TaxInclusive:            &taxInclusive,

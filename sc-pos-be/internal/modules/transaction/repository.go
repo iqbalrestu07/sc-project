@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
 	"github.com/sc-pos/backend/internal/modules/whatsapp"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Repository struct {
@@ -385,7 +385,7 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) erro
 			// Record stock movement for audit trail
 			refType := "transaction"
 			reason := "usage"
-			movID := uuid.New().String()
+			movID := utils.NewUUID()
 			negQty := -row.quantity // store as negative so direction is explicit
 			if _, err := tx.Exec(`
 				INSERT INTO stock_movements
@@ -434,7 +434,7 @@ func (r *Repository) MarkPaidEffects(transactionID, userByID, orgID string) erro
 				}(orgID, prodName, currStock, minStock)
 			}
 
-			movID := uuid.New().String()
+			movID := utils.NewUUID()
 			negRequired := -required
 			if _, err := tx.Exec(`
 				INSERT INTO stock_movements
@@ -539,7 +539,7 @@ func (r *Repository) insertCommission(tx *sql.Tx, staffID, staffRole, reason, tr
 			status, organization_id, created_by, created_at, updated_at
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, uuid.New().String(), staffID, staffRole, transactionID, itemID, baseAmount,
+	`, utils.NewUUID(), staffID, staffRole, transactionID, itemID, baseAmount,
 		commissionType, commissionValue, amount, reason,
 		nullableString(orgID), nullableString(createdBy))
 	if err != nil {
@@ -619,7 +619,7 @@ func scanTransactionItem(scanner txScanner) (TransactionItemWithRelations, error
 }
 
 func nextTransactionCode(now time.Time) string {
-	return fmt.Sprintf("TRX-%s-%s", now.Format("20060102"), uuid.New().String()[:8])
+	return fmt.Sprintf("TRX-%s-%s", now.Format("20060102"), utils.NewUUID()[:8])
 }
 
 func checkRows(result sql.Result) error {

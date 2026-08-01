@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/models"
 	"github.com/sc-pos/backend/internal/modules/whatsapp"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 var ErrNotFound = errors.New("transaction not found")
@@ -50,7 +50,7 @@ func (s *service) Get(id, orgID string) (*TransactionWithRelations, error) {
 
 func (s *service) Create(req CreateRequest, userID *string, orgID string) (*TransactionWithRelations, error) {
 	now := time.Now()
-	req.Transaction.ID = uuid.New().String()
+	req.Transaction.ID = utils.NewUUID()
 	req.Transaction.TransactionCode = nextTransactionCode(now)
 	req.Transaction.CreatedBy = userID
 	req.Transaction.CreatedAt = now
@@ -60,7 +60,7 @@ func (s *service) Create(req CreateRequest, userID *string, orgID string) (*Tran
 	}
 	// Set up items: assign IDs, resolve types, and compute item-level totals
 	for i := range req.Items {
-		req.Items[i].ID = uuid.New().String()
+		req.Items[i].ID = utils.NewUUID()
 		req.Items[i].TransactionID = req.Transaction.ID
 		req.Items[i].CreatedBy = userID
 		req.Items[i].CreatedAt = now

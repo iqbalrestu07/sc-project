@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/database"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Repository struct {
@@ -86,7 +86,7 @@ func (r *Repository) UpsertPage(pageID, orgID string, data interface{}, userID s
 		VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		ON CONFLICT (page_id, organization_id)
 		DO UPDATE SET data = EXCLUDED.data, updated_by = $5, updated_at = CURRENT_TIMESTAMP
-	`, uuid.New().String(), pageID, string(payload), orgID, nullableString(userID))
+	`, utils.NewUUID(), pageID, string(payload), orgID, nullableString(userID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to upsert cms page: %w", err)
 	}

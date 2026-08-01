@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/middleware"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 var (
@@ -48,7 +48,7 @@ func (s *service) CreateOrg(name, description, createdBy string) (*models.Organi
 
 	now := time.Now()
 	org := &models.Organization{
-		ID:          uuid.New().String(),
+		ID:          utils.NewUUID(),
 		Name:        name,
 		Slug:        slug,
 		Description: description,

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 var ErrNotFound = errors.New("patient not found")
@@ -59,8 +59,8 @@ func (s *service) Get(id, orgID string) (*models.Patient, error) {
 
 func (s *service) Create(req models.Patient, userID, orgID string) (*models.Patient, error) {
 	now := time.Now()
-	req.ID = uuid.New().String()
-	req.PatientCode = "PAT-" + strings.ToUpper(uuid.New().String()[:8])
+	req.ID = utils.NewUUID()
+	req.PatientCode = "PAT-" + strings.ToUpper(utils.NewUUID()[:8])
 	req.IsActive = true
 	req.CreatedBy = &userID
 	req.CreatedAt = now
@@ -82,8 +82,8 @@ func (s *service) Create(req models.Patient, userID, orgID string) (*models.Pati
 // Returns (true, nil) if a new patient was created, (false, nil) if updated.
 func (s *service) Upsert(req models.Patient, userID, orgID string) (bool, error) {
 	now := time.Now()
-	req.ID = uuid.New().String()
-	req.PatientCode = "PAT-" + strings.ToUpper(uuid.New().String()[:8])
+	req.ID = utils.NewUUID()
+	req.PatientCode = "PAT-" + strings.ToUpper(utils.NewUUID()[:8])
 	req.IsActive = true
 	if userID != "" {
 		req.CreatedBy = &userID
@@ -102,8 +102,8 @@ func (s *service) Upsert(req models.Patient, userID, orgID string) (bool, error)
 // Used by bulk import to wrap all upserts in 1 transaction (1 WAL fsync at COMMIT).
 func (s *service) UpsertTx(tx *sql.Tx, req models.Patient, userID, orgID string) (bool, error) {
 	now := time.Now()
-	req.ID = uuid.New().String()
-	req.PatientCode = "PAT-" + strings.ToUpper(uuid.New().String()[:8])
+	req.ID = utils.NewUUID()
+	req.PatientCode = "PAT-" + strings.ToUpper(utils.NewUUID()[:8])
 	req.IsActive = true
 	if userID != "" {
 		req.CreatedBy = &userID
@@ -124,8 +124,8 @@ func (s *service) BatchUpsertTx(tx *sql.Tx, reqs []models.Patient, userID, orgID
 	now := time.Now()
 	ptrs := make([]*models.Patient, 0, len(reqs))
 	for i := range reqs {
-		reqs[i].ID = uuid.New().String()
-		reqs[i].PatientCode = "PAT-" + strings.ToUpper(uuid.New().String()[:8])
+		reqs[i].ID = utils.NewUUID()
+		reqs[i].PatientCode = "PAT-" + strings.ToUpper(utils.NewUUID()[:8])
 		reqs[i].IsActive = true
 		if userID != "" {
 			reqs[i].CreatedBy = &userID

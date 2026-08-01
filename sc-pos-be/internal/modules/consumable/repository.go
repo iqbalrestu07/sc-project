@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Repository struct {
@@ -73,7 +73,7 @@ func (r *Repository) ListByService(serviceID, orgID string) ([]ConsumableWithPro
 
 func (r *Repository) Upsert(c *models.ServiceConsumable, orgID, userByID string) error {
 	if c.ID == "" {
-		c.ID = uuid.New().String()
+		c.ID = utils.NewUUID()
 	}
 	c.CreatedAt = time.Now()
 	_, err := r.db.Exec(`

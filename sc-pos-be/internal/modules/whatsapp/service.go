@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/models"
 	"github.com/sc-pos/backend/internal/modules/settings"
+	"github.com/sc-pos/backend/internal/utils"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"google.golang.org/protobuf/proto"
@@ -318,7 +318,7 @@ func (s *service) GetDevices(orgID string) ([]WhatsappDevice, error) {
 func (s *service) GetLoginQR(ctx context.Context, orgID, deviceName string) (<-chan string, error) {
 	return s.clientManager.StartNewSession(ctx, func(newJid string) {
 		d := &WhatsappDevice{
-			ID:             uuid.New().String(),
+			ID:             utils.NewUUID(),
 			OrganizationID: orgID,
 			Name:           deviceName,
 			JID:            newJid,

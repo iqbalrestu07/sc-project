@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Repository interface {
@@ -117,7 +117,7 @@ func (r *repository) GetConversationByCustomer(orgID, platform, identifier strin
 
 func (r *repository) CreateConversation(conv *models.OmniConversation) error {
 	if conv.ID == "" {
-		conv.ID = uuid.New().String()
+		conv.ID = utils.NewUUID()
 	}
 	now := time.Now()
 	if conv.CreatedAt.IsZero() {
@@ -199,7 +199,7 @@ func (r *repository) GetMessages(convID string, limit, offset int) ([]models.Omn
 
 func (r *repository) SaveMessage(msg *models.OmniMessage) error {
 	if msg.ID == "" {
-		msg.ID = uuid.New().String()
+		msg.ID = utils.NewUUID()
 	}
 	if msg.Timestamp.IsZero() {
 		msg.Timestamp = time.Now()

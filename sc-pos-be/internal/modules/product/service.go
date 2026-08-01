@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 var ErrNotFound = errors.New("product not found")
@@ -67,7 +67,7 @@ func (s *service) GetByNames(names []string, orgID string) (map[string]*models.P
 
 func (s *service) Create(req models.Product, orgID, userID string) (*models.Product, error) {
 	now := time.Now()
-	req.ID = uuid.New().String()
+	req.ID = utils.NewUUID()
 	req.CreatedAt = now
 	req.UpdatedAt = now
 	req.IsActive = true
@@ -85,7 +85,7 @@ func (s *service) Create(req models.Product, orgID, userID string) (*models.Prod
 // Returns (true, nil) if created, (false, nil) if updated.
 func (s *service) Upsert(req models.Product, orgID, userID string) (bool, error) {
 	now := time.Now()
-	req.ID = uuid.New().String()
+	req.ID = utils.NewUUID()
 	req.IsActive = true
 	if userID != "" {
 		req.CreatedBy = &userID
@@ -99,7 +99,7 @@ func (s *service) Upsert(req models.Product, orgID, userID string) (bool, error)
 // UpsertTx is like Upsert but runs within an existing transaction.
 func (s *service) UpsertTx(tx *sql.Tx, req models.Product, orgID, userID string) (bool, error) {
 	now := time.Now()
-	req.ID = uuid.New().String()
+	req.ID = utils.NewUUID()
 	req.IsActive = true
 	if userID != "" {
 		req.CreatedBy = &userID
@@ -116,7 +116,7 @@ func (s *service) BatchUpsertTx(tx *sql.Tx, reqs []models.Product, orgID, userID
 	now := time.Now()
 	ptrs := make([]*models.Product, 0, len(reqs))
 	for i := range reqs {
-		reqs[i].ID = uuid.New().String()
+		reqs[i].ID = utils.NewUUID()
 		reqs[i].IsActive = true
 		if userID != "" {
 			reqs[i].CreatedBy = &userID
@@ -179,7 +179,7 @@ func (s *service) ListCategories(orgID string) ([]models.ProductCategory, error)
 
 func (s *service) CreateCategory(req models.ProductCategory, orgID, userID string) (*models.ProductCategory, error) {
 	now := time.Now()
-	req.ID = uuid.New().String()
+	req.ID = utils.NewUUID()
 	req.IsActive = true
 	req.CreatedAt = now
 	req.UpdatedAt = now

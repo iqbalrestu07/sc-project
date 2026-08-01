@@ -230,8 +230,103 @@ func RunMigrations() error {
 		return fmt.Errorf("failed to add unique indexes for upsert: %w", err)
 	}
 
+	// ---------------------------------------------------------------------------
+	// 13) Migrate VARCHAR(36) ID columns to native UUID type.
+	//     Older schemas used VARCHAR(36) for all UUID columns. The native UUID
+	//     type is 16 bytes (vs 37 bytes for VARCHAR), gives better index
+	//     performance, and enables gen_random_uuid() defaults.
+	//
+	//     This migration is idempotent: it only converts columns that are still
+	//     VARCHAR(36). If the column is already UUID, the USING clause is skipped.
+	//
+	//     Strategy:
+	//       1. Save all FK constraint definitions to a temp table
+	//       2. Drop all FK constraints (so we can alter column types)
+	//       3. Convert all VARCHAR(36) columns to UUID
+	//       4. Recreate FK constraints from the saved definitions
+	// ---------------------------------------------------------------------------
+	if _, err := DB.Exec(migrateVarcharToUUID); err != nil {
+		return fmt.Errorf("failed to migrate VARCHAR(36) to UUID: %w", err)
+	}
+
 	return nil
 }
+
+// migrateVarcharToUUID converts all VARCHAR(36) columns to native UUID type.
+//
+// This is a dynamic migration that:
+//  1. Saves all foreign key constraints to a temp table
+//  2. Drops all FK constraints (so columns can be altered)
+//  3. Finds all VARCHAR(36) columns and converts them to UUID
+//  4. Recreates all FK constraints from the saved definitions
+//
+// It is idempotent — if columns are already UUID, nothing happens.
+const migrateVarcharToUUID = `
+DO $$
+DECLARE
+    col_record RECORD;
+    fk_record RECORD;
+    fk_count INTEGER;
+BEGIN
+    -- Step 0: Check if there are any VARCHAR(36) columns left to convert.
+    SELECT COUNT(*) INTO fk_count
+    FROM information_schema.columns
+    WHERE data_type = 'character varying' AND character_maximum_length = 36
+      AND table_schema = 'public';
+
+    IF fk_count = 0 THEN
+        -- Already migrated, nothing to do.
+        RETURN;
+    END IF;
+
+    -- Step 1: Save all FK constraint definitions to a temp table.
+    -- We store the constraint name, source table, and the full ALTER TABLE
+    -- statement needed to recreate it.
+    CREATE TEMP TABLE IF NOT EXISTS _saved_fks AS
+    SELECT
+        con.conname AS constraint_name,
+        cl.relname AS table_name,
+        pg_get_constraintdef(con.oid) AS constraint_def
+    FROM pg_constraint con
+    JOIN pg_class cl ON cl.oid = con.conrelid
+    WHERE con.contype = 'f'
+      AND cl.relnamespace = 'public'::regnamespace;
+
+    -- Step 2: Drop all FK constraints.
+    FOR fk_record IN SELECT * FROM _saved_fks LOOP
+        EXECUTE format('ALTER TABLE %I DROP CONSTRAINT IF EXISTS %I',
+                        fk_record.table_name, fk_record.constraint_name);
+    END LOOP;
+
+    -- Step 3: Convert all VARCHAR(36) columns to UUID.
+    -- We use USING column::uuid to cast the existing string data.
+    -- This works because all existing IDs are valid UUID strings.
+    FOR col_record IN
+        SELECT table_name, column_name
+        FROM information_schema.columns
+        WHERE data_type = 'character varying'
+          AND character_maximum_length = 36
+          AND table_schema = 'public'
+        ORDER BY table_name, column_name
+    LOOP
+        EXECUTE format('ALTER TABLE %I ALTER COLUMN %I TYPE UUID USING %I::uuid',
+                        col_record.table_name,
+                        col_record.column_name,
+                        col_record.column_name);
+    END LOOP;
+
+    -- Step 4: Recreate all FK constraints.
+    FOR fk_record IN SELECT * FROM _saved_fks LOOP
+        EXECUTE format('ALTER TABLE %I ADD CONSTRAINT %I %s',
+                        fk_record.table_name,
+                        fk_record.constraint_name,
+                        fk_record.constraint_def);
+    END LOOP;
+
+    -- Cleanup temp table.
+    DROP TABLE IF EXISTS _saved_fks;
+END $$;
+`
 
 const createSchema = `
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -239,7 +334,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- ── Auth / identity ───────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS users (
-	id VARCHAR(36) PRIMARY KEY,
+	id UUID PRIMARY KEY,
 	email VARCHAR(255) UNIQUE NOT NULL,
 	password VARCHAR(255) NOT NULL,
 	role VARCHAR(50) NOT NULL,
@@ -252,28 +347,28 @@ CREATE TABLE IF NOT EXISTS users (
 -- ── SaaS multi-tenant / RBAC ──────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS organizations (
-	id VARCHAR(36) PRIMARY KEY,
+	id UUID PRIMARY KEY,
 	name VARCHAR(255) NOT NULL,
 	slug VARCHAR(100) UNIQUE NOT NULL,
 	description TEXT,
 	logo_url TEXT,
 	is_active BOOLEAN DEFAULT true,
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS organization_members (
-	id VARCHAR(36) PRIMARY KEY,
-	org_id VARCHAR(36) NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-	user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	id UUID PRIMARY KEY,
+	org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+	user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 	role VARCHAR(50) NOT NULL DEFAULT 'cashier',
 	is_active BOOLEAN DEFAULT true,
 	joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -289,18 +384,18 @@ CREATE TABLE IF NOT EXISTS permissions (
 );
 
 CREATE TABLE IF NOT EXISTS role_permissions (
-	id VARCHAR(36) PRIMARY KEY,
+	id UUID PRIMARY KEY,
 	role VARCHAR(50) NOT NULL,
 	permission_id VARCHAR(100) NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
 	UNIQUE(role, permission_id)
 );
 
 CREATE TABLE IF NOT EXISTS user_permissions (
-	id VARCHAR(36) PRIMARY KEY,
-	user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-	org_id VARCHAR(36) NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+	id UUID PRIMARY KEY,
+	user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
 	permission_id VARCHAR(100) NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
-	granted_by VARCHAR(36) REFERENCES users(id),
+	granted_by UUID REFERENCES users(id),
 	granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	UNIQUE(user_id, org_id, permission_id)
 );
@@ -308,22 +403,22 @@ CREATE TABLE IF NOT EXISTS user_permissions (
 -- ── Service catalog ───────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS service_categories (
-	id VARCHAR(36) PRIMARY KEY,
+	id UUID PRIMARY KEY,
 	name VARCHAR(255) NOT NULL,
 	description TEXT,
 	is_active BOOLEAN DEFAULT true,
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS services (
-	id VARCHAR(36) PRIMARY KEY,
+	id UUID PRIMARY KEY,
 	name VARCHAR(255) NOT NULL,
-	category_id VARCHAR(36) REFERENCES service_categories(id),
+	category_id UUID REFERENCES service_categories(id),
 	description TEXT,
 	duration_minutes INTEGER DEFAULT 30,
 	base_price DECIMAL(10, 2) NOT NULL,
@@ -333,9 +428,9 @@ CREATE TABLE IF NOT EXISTS services (
 	therapist_commission_value DECIMAL(10, 2),
 	requires_doctor BOOLEAN DEFAULT false,
 	is_active BOOLEAN DEFAULT true,
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -344,20 +439,20 @@ CREATE TABLE IF NOT EXISTS services (
 -- ── Product catalog ───────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS product_categories (
-	id VARCHAR(36) PRIMARY KEY,
+	id UUID PRIMARY KEY,
 	name VARCHAR(100) NOT NULL,
 	description TEXT,
 	is_active BOOLEAN DEFAULT true,
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS products (
-	id VARCHAR(36) PRIMARY KEY,
+	id UUID PRIMARY KEY,
 	name VARCHAR(255) NOT NULL,
 	category VARCHAR(100),
 	sku VARCHAR(100) UNIQUE,
@@ -369,9 +464,9 @@ CREATE TABLE IF NOT EXISTS products (
 	unit VARCHAR(50),
 	expiry_date DATE,
 	is_active BOOLEAN DEFAULT true,
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -380,24 +475,24 @@ CREATE TABLE IF NOT EXISTS products (
 -- ── Staff and patients ──────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS staff (
-	id VARCHAR(36) PRIMARY KEY,
-	user_id VARCHAR(36) UNIQUE REFERENCES users(id),
+	id UUID PRIMARY KEY,
+	user_id UUID UNIQUE REFERENCES users(id),
 	full_name VARCHAR(255) NOT NULL,
 	role VARCHAR(50) NOT NULL,
 	phone VARCHAR(20),
 	email VARCHAR(255),
 	specialization VARCHAR(255),
 	is_active BOOLEAN DEFAULT true,
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS patients (
-	id VARCHAR(36) PRIMARY KEY,
+	id UUID PRIMARY KEY,
 	patient_code VARCHAR(50) UNIQUE NOT NULL,
 	full_name VARCHAR(255) NOT NULL,
 	photo_url TEXT,
@@ -414,9 +509,9 @@ CREATE TABLE IF NOT EXISTS patients (
 	tags TEXT[],
 	is_active BOOLEAN DEFAULT true,
 	reminder_opt_in BOOLEAN DEFAULT true,
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -425,28 +520,28 @@ CREATE TABLE IF NOT EXISTS patients (
 -- ── Appointments and transactions ─────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS appointments (
-	id VARCHAR(36) PRIMARY KEY,
-	patient_id VARCHAR(36) NOT NULL REFERENCES patients(id),
-	service_id VARCHAR(36) NOT NULL REFERENCES services(id),
-	doctor_id VARCHAR(36) REFERENCES staff(id),
-	therapist_id VARCHAR(36) REFERENCES staff(id),
+	id UUID PRIMARY KEY,
+	patient_id UUID NOT NULL REFERENCES patients(id),
+	service_id UUID NOT NULL REFERENCES services(id),
+	doctor_id UUID REFERENCES staff(id),
+	therapist_id UUID REFERENCES staff(id),
 	scheduled_at TIMESTAMP NOT NULL,
 	duration_minutes INTEGER,
 	status VARCHAR(50) DEFAULT 'scheduled',
 	notes TEXT,
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
-	id VARCHAR(36) PRIMARY KEY,
+	id UUID PRIMARY KEY,
 	transaction_code VARCHAR(50) UNIQUE NOT NULL,
-	appointment_id VARCHAR(36) REFERENCES appointments(id),
-	patient_id VARCHAR(36) REFERENCES patients(id),
+	appointment_id UUID REFERENCES appointments(id),
+	patient_id UUID REFERENCES patients(id),
 	subtotal DECIMAL(10, 2) NOT NULL DEFAULT 0,
 	discount_amount DECIMAL(10, 2),
 	discount_type VARCHAR(50),
@@ -456,48 +551,48 @@ CREATE TABLE IF NOT EXISTS transactions (
 	payment_status VARCHAR(50) DEFAULT 'pending',
 	notes TEXT,
 	paid_at TIMESTAMP,
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS transaction_items (
-	id VARCHAR(36) PRIMARY KEY,
-	transaction_id VARCHAR(36) NOT NULL REFERENCES transactions(id),
+	id UUID PRIMARY KEY,
+	transaction_id UUID NOT NULL REFERENCES transactions(id),
 	item_type VARCHAR(50) NOT NULL DEFAULT 'service',
-	service_id VARCHAR(36) REFERENCES services(id),
-	product_id VARCHAR(36) REFERENCES products(id),
+	service_id UUID REFERENCES services(id),
+	product_id UUID REFERENCES products(id),
 	quantity INTEGER DEFAULT 1,
 	unit_price DECIMAL(10, 2) NOT NULL,
 	discount_amount DECIMAL(10, 2),
 	discount_type VARCHAR(50),
 	total_price DECIMAL(10, 2) NOT NULL,
-	doctor_id VARCHAR(36) REFERENCES staff(id),
-	therapist_id VARCHAR(36) REFERENCES staff(id),
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	doctor_id UUID REFERENCES staff(id),
+	therapist_id UUID REFERENCES staff(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS commissions (
-	id VARCHAR(36) PRIMARY KEY,
-	staff_id VARCHAR(36) NOT NULL REFERENCES staff(id),
+	id UUID PRIMARY KEY,
+	staff_id UUID NOT NULL REFERENCES staff(id),
 	staff_role VARCHAR(50) NOT NULL,
-	transaction_id VARCHAR(36) NOT NULL REFERENCES transactions(id),
-	transaction_item_id VARCHAR(36) NOT NULL REFERENCES transaction_items(id),
+	transaction_id UUID NOT NULL REFERENCES transactions(id),
+	transaction_item_id UUID NOT NULL REFERENCES transaction_items(id),
 	base_amount DECIMAL(10, 2) NOT NULL,
 	commission_type VARCHAR(20) NOT NULL,
 	commission_value DECIMAL(10, 2) NOT NULL,
 	commission_amount DECIMAL(10, 2) NOT NULL,
 	status VARCHAR(50) DEFAULT 'pending',
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -506,7 +601,7 @@ CREATE TABLE IF NOT EXISTS commissions (
 -- ── Settings and CMS ────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS clinic_settings (
-	id VARCHAR(36) PRIMARY KEY,
+	id UUID PRIMARY KEY,
 	clinic_name VARCHAR(255),
 	address TEXT,
 	phone VARCHAR(20),
@@ -524,9 +619,9 @@ CREATE TABLE IF NOT EXISTS clinic_settings (
 	invoice_header_title VARCHAR(255),
 	invoice_header_description TEXT,
 	invoice_footer_text TEXT,
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -534,12 +629,12 @@ CREATE TABLE IF NOT EXISTS clinic_settings (
 );
 
 CREATE TABLE IF NOT EXISTS cms_pages (
-	id VARCHAR(36) PRIMARY KEY,
+	id UUID PRIMARY KEY,
 	page_id VARCHAR(100) NOT NULL,
 	data JSONB NOT NULL DEFAULT '{}'::jsonb,
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -549,27 +644,27 @@ CREATE TABLE IF NOT EXISTS cms_pages (
 -- ── Inventory and service consumables ─────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS stock_movements (
-	id VARCHAR(36) PRIMARY KEY,
-	product_id VARCHAR(36) NOT NULL REFERENCES products(id),
+	id UUID PRIMARY KEY,
+	product_id UUID NOT NULL REFERENCES products(id),
 	movement_type VARCHAR(20) NOT NULL,
 	quantity INTEGER NOT NULL,
 	reason VARCHAR(255),
-	reference_id VARCHAR(36),
+	reference_id UUID,
 	reference_type VARCHAR(50),
 	notes TEXT,
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS service_consumables (
-	id VARCHAR(36) PRIMARY KEY,
-	service_id VARCHAR(36) NOT NULL REFERENCES services(id),
-	product_id VARCHAR(36) NOT NULL REFERENCES products(id),
+	id UUID PRIMARY KEY,
+	service_id UUID NOT NULL REFERENCES services(id),
+	product_id UUID NOT NULL REFERENCES products(id),
 	quantity_used DECIMAL(10, 3) NOT NULL DEFAULT 1,
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
-	updated_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
+	updated_by UUID REFERENCES users(id),
 	deleted_at TIMESTAMP,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -665,17 +760,17 @@ CREATE INDEX IF NOT EXISTS idx_products_consumable ON products(is_consumable) WH
 // records of when and why consumable products were used / dispensed.
 const addConsumableUsageLogs = `
 CREATE TABLE IF NOT EXISTS consumable_usage_logs (
-	id VARCHAR(36) PRIMARY KEY,
-	product_id VARCHAR(36) NOT NULL REFERENCES products(id),
+	id UUID PRIMARY KEY,
+	product_id UUID NOT NULL REFERENCES products(id),
 	quantity DECIMAL(10,3) NOT NULL,
 	usage_purpose VARCHAR(100) NOT NULL,
-	reference_id VARCHAR(36),
+	reference_id UUID,
 	reference_type VARCHAR(50),
 	patient_name VARCHAR(255),
 	service_name VARCHAR(255),
 	notes TEXT,
-	organization_id VARCHAR(36) REFERENCES organizations(id),
-	created_by VARCHAR(36) REFERENCES users(id),
+	organization_id UUID REFERENCES organizations(id),
+	created_by UUID REFERENCES users(id),
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_consumable_usage_product ON consumable_usage_logs(product_id);
@@ -692,13 +787,13 @@ INSERT INTO permissions (id, resource, action, description) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO role_permissions (id, role, permission_id) VALUES
-	(gen_random_uuid()::varchar, 'admin',     'consumables:read'),
-	(gen_random_uuid()::varchar, 'admin',     'consumables:write'),
-	(gen_random_uuid()::varchar, 'doctor',    'consumables:read'),
-	(gen_random_uuid()::varchar, 'doctor',    'consumables:write'),
-	(gen_random_uuid()::varchar, 'therapist', 'consumables:read'),
-	(gen_random_uuid()::varchar, 'therapist', 'consumables:write'),
-	(gen_random_uuid()::varchar, 'cashier',   'consumables:read')
+	(gen_random_uuid(), 'admin',     'consumables:read'),
+	(gen_random_uuid(), 'admin',     'consumables:write'),
+	(gen_random_uuid(), 'doctor',    'consumables:read'),
+	(gen_random_uuid(), 'doctor',    'consumables:write'),
+	(gen_random_uuid(), 'therapist', 'consumables:read'),
+	(gen_random_uuid(), 'therapist', 'consumables:write'),
+	(gen_random_uuid(), 'cashier',   'consumables:read')
 ON CONFLICT (role, permission_id) DO NOTHING;
 `
 
@@ -752,74 +847,74 @@ ON CONFLICT (id) DO NOTHING;
 const seedRolePermissions = `
 INSERT INTO role_permissions (id, role, permission_id) VALUES
 	-- admin: all permissions
-	(gen_random_uuid()::varchar, 'admin', 'patients:read'),
-	(gen_random_uuid()::varchar, 'admin', 'patients:write'),
-	(gen_random_uuid()::varchar, 'admin', 'patients:delete'),
-	(gen_random_uuid()::varchar, 'admin', 'appointments:read'),
-	(gen_random_uuid()::varchar, 'admin', 'appointments:write'),
-	(gen_random_uuid()::varchar, 'admin', 'appointments:delete'),
-	(gen_random_uuid()::varchar, 'admin', 'services:read'),
-	(gen_random_uuid()::varchar, 'admin', 'services:write'),
-	(gen_random_uuid()::varchar, 'admin', 'services:delete'),
-	(gen_random_uuid()::varchar, 'admin', 'products:read'),
-	(gen_random_uuid()::varchar, 'admin', 'products:write'),
-	(gen_random_uuid()::varchar, 'admin', 'products:delete'),
-	(gen_random_uuid()::varchar, 'admin', 'categories:read'),
-	(gen_random_uuid()::varchar, 'admin', 'categories:write'),
-	(gen_random_uuid()::varchar, 'admin', 'categories:delete'),
-	(gen_random_uuid()::varchar, 'admin', 'transactions:read'),
-	(gen_random_uuid()::varchar, 'admin', 'transactions:write'),
-	(gen_random_uuid()::varchar, 'admin', 'transactions:delete'),
-	(gen_random_uuid()::varchar, 'admin', 'commissions:read'),
-	(gen_random_uuid()::varchar, 'admin', 'commissions:write'),
-	(gen_random_uuid()::varchar, 'admin', 'staff:read'),
-	(gen_random_uuid()::varchar, 'admin', 'staff:write'),
-	(gen_random_uuid()::varchar, 'admin', 'staff:delete'),
-	(gen_random_uuid()::varchar, 'admin', 'reports:read'),
-	(gen_random_uuid()::varchar, 'admin', 'settings:read'),
-	(gen_random_uuid()::varchar, 'admin', 'settings:write'),
-	(gen_random_uuid()::varchar, 'admin', 'cms:read'),
-	(gen_random_uuid()::varchar, 'admin', 'cms:write'),
-	(gen_random_uuid()::varchar, 'admin', 'rbac:read'),
-	(gen_random_uuid()::varchar, 'admin', 'rbac:write'),
-	(gen_random_uuid()::varchar, 'admin', 'organization:read'),
-	(gen_random_uuid()::varchar, 'admin', 'organization:write'),
-	(gen_random_uuid()::varchar, 'admin', 'organization:delete'),
+	(gen_random_uuid(), 'admin', 'patients:read'),
+	(gen_random_uuid(), 'admin', 'patients:write'),
+	(gen_random_uuid(), 'admin', 'patients:delete'),
+	(gen_random_uuid(), 'admin', 'appointments:read'),
+	(gen_random_uuid(), 'admin', 'appointments:write'),
+	(gen_random_uuid(), 'admin', 'appointments:delete'),
+	(gen_random_uuid(), 'admin', 'services:read'),
+	(gen_random_uuid(), 'admin', 'services:write'),
+	(gen_random_uuid(), 'admin', 'services:delete'),
+	(gen_random_uuid(), 'admin', 'products:read'),
+	(gen_random_uuid(), 'admin', 'products:write'),
+	(gen_random_uuid(), 'admin', 'products:delete'),
+	(gen_random_uuid(), 'admin', 'categories:read'),
+	(gen_random_uuid(), 'admin', 'categories:write'),
+	(gen_random_uuid(), 'admin', 'categories:delete'),
+	(gen_random_uuid(), 'admin', 'transactions:read'),
+	(gen_random_uuid(), 'admin', 'transactions:write'),
+	(gen_random_uuid(), 'admin', 'transactions:delete'),
+	(gen_random_uuid(), 'admin', 'commissions:read'),
+	(gen_random_uuid(), 'admin', 'commissions:write'),
+	(gen_random_uuid(), 'admin', 'staff:read'),
+	(gen_random_uuid(), 'admin', 'staff:write'),
+	(gen_random_uuid(), 'admin', 'staff:delete'),
+	(gen_random_uuid(), 'admin', 'reports:read'),
+	(gen_random_uuid(), 'admin', 'settings:read'),
+	(gen_random_uuid(), 'admin', 'settings:write'),
+	(gen_random_uuid(), 'admin', 'cms:read'),
+	(gen_random_uuid(), 'admin', 'cms:write'),
+	(gen_random_uuid(), 'admin', 'rbac:read'),
+	(gen_random_uuid(), 'admin', 'rbac:write'),
+	(gen_random_uuid(), 'admin', 'organization:read'),
+	(gen_random_uuid(), 'admin', 'organization:write'),
+	(gen_random_uuid(), 'admin', 'organization:delete'),
 	-- doctor
-	(gen_random_uuid()::varchar, 'doctor', 'patients:read'),
-	(gen_random_uuid()::varchar, 'doctor', 'patients:write'),
-	(gen_random_uuid()::varchar, 'doctor', 'appointments:read'),
-	(gen_random_uuid()::varchar, 'doctor', 'appointments:write'),
-	(gen_random_uuid()::varchar, 'doctor', 'services:read'),
-	(gen_random_uuid()::varchar, 'doctor', 'products:read'),
-	(gen_random_uuid()::varchar, 'doctor', 'transactions:read'),
-	(gen_random_uuid()::varchar, 'doctor', 'commissions:read'),
-	(gen_random_uuid()::varchar, 'doctor', 'reports:read'),
+	(gen_random_uuid(), 'doctor', 'patients:read'),
+	(gen_random_uuid(), 'doctor', 'patients:write'),
+	(gen_random_uuid(), 'doctor', 'appointments:read'),
+	(gen_random_uuid(), 'doctor', 'appointments:write'),
+	(gen_random_uuid(), 'doctor', 'services:read'),
+	(gen_random_uuid(), 'doctor', 'products:read'),
+	(gen_random_uuid(), 'doctor', 'transactions:read'),
+	(gen_random_uuid(), 'doctor', 'commissions:read'),
+	(gen_random_uuid(), 'doctor', 'reports:read'),
 	-- therapist
-	(gen_random_uuid()::varchar, 'therapist', 'patients:read'),
-	(gen_random_uuid()::varchar, 'therapist', 'appointments:read'),
-	(gen_random_uuid()::varchar, 'therapist', 'services:read'),
-	(gen_random_uuid()::varchar, 'therapist', 'products:read'),
-	(gen_random_uuid()::varchar, 'therapist', 'transactions:read'),
-	(gen_random_uuid()::varchar, 'therapist', 'commissions:read'),
+	(gen_random_uuid(), 'therapist', 'patients:read'),
+	(gen_random_uuid(), 'therapist', 'appointments:read'),
+	(gen_random_uuid(), 'therapist', 'services:read'),
+	(gen_random_uuid(), 'therapist', 'products:read'),
+	(gen_random_uuid(), 'therapist', 'transactions:read'),
+	(gen_random_uuid(), 'therapist', 'commissions:read'),
 	-- cashier
-	(gen_random_uuid()::varchar, 'cashier', 'patients:read'),
-	(gen_random_uuid()::varchar, 'cashier', 'patients:write'),
-	(gen_random_uuid()::varchar, 'cashier', 'appointments:read'),
-	(gen_random_uuid()::varchar, 'cashier', 'appointments:write'),
-	(gen_random_uuid()::varchar, 'cashier', 'transactions:read'),
-	(gen_random_uuid()::varchar, 'cashier', 'transactions:write'),
-	(gen_random_uuid()::varchar, 'cashier', 'services:read'),
-	(gen_random_uuid()::varchar, 'cashier', 'products:read'),
-	(gen_random_uuid()::varchar, 'cashier', 'categories:read'),
-	(gen_random_uuid()::varchar, 'cashier', 'reports:read')
+	(gen_random_uuid(), 'cashier', 'patients:read'),
+	(gen_random_uuid(), 'cashier', 'patients:write'),
+	(gen_random_uuid(), 'cashier', 'appointments:read'),
+	(gen_random_uuid(), 'cashier', 'appointments:write'),
+	(gen_random_uuid(), 'cashier', 'transactions:read'),
+	(gen_random_uuid(), 'cashier', 'transactions:write'),
+	(gen_random_uuid(), 'cashier', 'services:read'),
+	(gen_random_uuid(), 'cashier', 'products:read'),
+	(gen_random_uuid(), 'cashier', 'categories:read'),
+	(gen_random_uuid(), 'cashier', 'reports:read')
 ON CONFLICT (role, permission_id) DO NOTHING;
 `
 
 const addWhatsappTables = `
 CREATE TABLE IF NOT EXISTS clinic_whatsapp_devices (
-    id VARCHAR(36) PRIMARY KEY,
-    organization_id VARCHAR(36) REFERENCES organizations(id),
+    id UUID PRIMARY KEY,
+    organization_id UUID REFERENCES organizations(id),
     name VARCHAR(100) NOT NULL,
     jid VARCHAR(100) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -827,10 +922,10 @@ CREATE TABLE IF NOT EXISTS clinic_whatsapp_devices (
 );
 
 CREATE TABLE IF NOT EXISTS whatsapp_templates (
-    id VARCHAR(36) PRIMARY KEY,
+    id UUID PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     content TEXT NOT NULL,
-    organization_id VARCHAR(36) NOT NULL REFERENCES organizations(id),
+    organization_id UUID NOT NULL REFERENCES organizations(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -853,13 +948,13 @@ CREATE INDEX IF NOT EXISTS idx_whatsapp_templates_org ON whatsapp_templates(orga
 // product was consumed for a service item.
 const addServiceConsumableGroups = `
 CREATE TABLE IF NOT EXISTS service_consumable_groups (
-    id              VARCHAR(36) PRIMARY KEY,
-    service_id      VARCHAR(36) NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+    id              UUID PRIMARY KEY,
+    service_id      UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
     name            VARCHAR(255) NOT NULL,
     quantity_used   DECIMAL(10,3) NOT NULL DEFAULT 1,
-    organization_id VARCHAR(36) REFERENCES organizations(id),
-    created_by      VARCHAR(36) REFERENCES users(id),
-    updated_by      VARCHAR(36) REFERENCES users(id),
+    organization_id UUID REFERENCES organizations(id),
+    created_by      UUID REFERENCES users(id),
+    updated_by      UUID REFERENCES users(id),
     deleted_at      TIMESTAMP,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -869,12 +964,12 @@ CREATE INDEX IF NOT EXISTS idx_scg_org        ON service_consumable_groups(organ
 CREATE INDEX IF NOT EXISTS idx_scg_active     ON service_consumable_groups(service_id) WHERE deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS service_consumable_group_items (
-    id              VARCHAR(36) PRIMARY KEY,
-    group_id        VARCHAR(36) NOT NULL REFERENCES service_consumable_groups(id) ON DELETE CASCADE,
-    product_id      VARCHAR(36) NOT NULL REFERENCES products(id),
+    id              UUID PRIMARY KEY,
+    group_id        UUID NOT NULL REFERENCES service_consumable_groups(id) ON DELETE CASCADE,
+    product_id      UUID NOT NULL REFERENCES products(id),
     priority        INT NOT NULL DEFAULT 0,
-    organization_id VARCHAR(36) REFERENCES organizations(id),
-    created_by      VARCHAR(36) REFERENCES users(id),
+    organization_id UUID REFERENCES organizations(id),
+    created_by      UUID REFERENCES users(id),
     deleted_at      TIMESTAMP,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (group_id, product_id)
@@ -885,7 +980,7 @@ CREATE INDEX IF NOT EXISTS idx_scgi_active    ON service_consumable_group_items(
 
 -- Track which specific consumable product was used for a service item
 ALTER TABLE transaction_items
-    ADD COLUMN IF NOT EXISTS selected_consumable_product_id VARCHAR(36) REFERENCES products(id);
+    ADD COLUMN IF NOT EXISTS selected_consumable_product_id UUID REFERENCES products(id);
 `
 
 const migrateCmsPagesTenantUnique = `
@@ -915,8 +1010,8 @@ END $$;
 
 const addOmnichannelTables = `
 CREATE TABLE IF NOT EXISTS omni_conversations (
-    id VARCHAR(36) PRIMARY KEY,
-    organization_id VARCHAR(36) NOT NULL REFERENCES organizations(id),
+    id UUID PRIMARY KEY,
+    organization_id UUID NOT NULL REFERENCES organizations(id),
     platform VARCHAR(50) NOT NULL,
     device_id VARCHAR(100),
     customer_identifier VARCHAR(255) NOT NULL,
@@ -932,14 +1027,14 @@ CREATE TABLE IF NOT EXISTS omni_conversations (
 CREATE INDEX IF NOT EXISTS idx_omni_conversations_org ON omni_conversations(organization_id);
 
 CREATE TABLE IF NOT EXISTS omni_messages (
-    id VARCHAR(36) PRIMARY KEY,
-    conversation_id VARCHAR(36) NOT NULL REFERENCES omni_conversations(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    conversation_id UUID NOT NULL REFERENCES omni_conversations(id) ON DELETE CASCADE,
     direction VARCHAR(20) NOT NULL,
     status VARCHAR(50) DEFAULT 'sent',
     content_type VARCHAR(50) DEFAULT 'text',
     content TEXT,
     media_url TEXT,
-    sender_user_id VARCHAR(36) REFERENCES users(id),
+    sender_user_id UUID REFERENCES users(id),
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_omni_messages_conv ON omni_messages(conversation_id);

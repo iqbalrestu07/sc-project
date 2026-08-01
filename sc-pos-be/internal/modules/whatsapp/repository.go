@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/database"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Repository struct{}
@@ -19,7 +19,7 @@ func NewRepository() *Repository {
 func (r *Repository) GetTemplates(orgID string) ([]Template, error) {
 	query := `SELECT id, name, content, organization_id, created_at, updated_at 
 	          FROM whatsapp_templates WHERE organization_id = $1 ORDER BY created_at DESC`
-	
+
 	rows, err := database.DB.Query(query, orgID)
 	if err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func (r *Repository) GetTemplates(orgID string) ([]Template, error) {
 func (r *Repository) GetTemplateByID(id, orgID string) (*Template, error) {
 	query := `SELECT id, name, content, organization_id, created_at, updated_at 
 	          FROM whatsapp_templates WHERE id = $1 AND organization_id = $2`
-	
+
 	var t Template
 	err := database.DB.QueryRow(query, id, orgID).Scan(
 		&t.ID, &t.Name, &t.Content, &t.OrganizationID, &t.CreatedAt, &t.UpdatedAt,
@@ -55,14 +55,14 @@ func (r *Repository) GetTemplateByID(id, orgID string) (*Template, error) {
 }
 
 func (r *Repository) CreateTemplate(t *Template) error {
-	t.ID = uuid.New().String()
+	t.ID = utils.NewUUID()
 	now := time.Now()
 	t.CreatedAt = now
 	t.UpdatedAt = now
 
 	query := `INSERT INTO whatsapp_templates (id, name, content, organization_id, created_at, updated_at) 
 	          VALUES ($1, $2, $3, $4, $5, $6)`
-	
+
 	_, err := database.DB.Exec(query, t.ID, t.Name, t.Content, t.OrganizationID, t.CreatedAt, t.UpdatedAt)
 	return err
 }
@@ -104,7 +104,7 @@ func (r *Repository) GetDeviceJID(orgID, deviceID string) (string, error) {
 	// If deviceID is empty, try to get the first device (for legacy fallback)
 	var query string
 	var args []interface{}
-	
+
 	if deviceID == "" {
 		query = `SELECT jid FROM clinic_whatsapp_devices WHERE organization_id = $1 ORDER BY created_at ASC LIMIT 1`
 		args = []interface{}{orgID}
@@ -112,7 +112,7 @@ func (r *Repository) GetDeviceJID(orgID, deviceID string) (string, error) {
 		query = `SELECT jid FROM clinic_whatsapp_devices WHERE organization_id = $1 AND id = $2`
 		args = []interface{}{orgID, deviceID}
 	}
-	
+
 	var jid string
 	err := database.DB.QueryRow(query, args...).Scan(&jid)
 	if err != nil {

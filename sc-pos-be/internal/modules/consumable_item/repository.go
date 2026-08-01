@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
 	"github.com/sc-pos/backend/internal/modules/whatsapp"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Repository struct {
@@ -22,8 +22,8 @@ func NewRepository() *Repository {
 // ConsumableUsageLogWithProduct enriches the base log with product details.
 type ConsumableUsageLogWithProduct struct {
 	models.ConsumableUsageLog
-	ProductName string  `json:"product_name"`
-	ProductUnit string  `json:"product_unit"`
+	ProductName  string `json:"product_name"`
+	ProductUnit  string `json:"product_unit"`
 	CurrentStock int    `json:"current_stock"`
 }
 
@@ -81,7 +81,7 @@ func (r *Repository) CreateUsageLog(log *models.ConsumableUsageLog, orgID string
 	}
 	defer tx.Rollback()
 
-	log.ID = uuid.New().String()
+	log.ID = utils.NewUUID()
 	log.CreatedAt = time.Now()
 
 	orgVal := nullableString(orgID)
@@ -121,7 +121,7 @@ func (r *Repository) CreateUsageLog(log *models.ConsumableUsageLog, orgID string
 	}
 
 	// Mirror the usage as a stock_movements record (type: out) for unified audit trail
-	movementID := uuid.New().String()
+	movementID := utils.NewUUID()
 	reason := log.UsagePurpose
 	if _, err := tx.Exec(`
 		INSERT INTO stock_movements (
@@ -200,13 +200,27 @@ func (r *Repository) ListUsageLogs(params ListParams) ([]ConsumableUsageLogWithP
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan usage log: %w", err)
 		}
-		if refID.Valid      { l.ReferenceID   = &refID.String }
-		if refType.Valid    { l.ReferenceType  = &refType.String }
-		if patientName.Valid { l.PatientName   = &patientName.String }
-		if serviceName.Valid { l.ServiceName   = &serviceName.String }
-		if notes.Valid      { l.Notes          = &notes.String }
-		if orgID.Valid      { l.OrganizationID = &orgID.String }
-		if createdBy.Valid  { l.CreatedBy      = &createdBy.String }
+		if refID.Valid {
+			l.ReferenceID = &refID.String
+		}
+		if refType.Valid {
+			l.ReferenceType = &refType.String
+		}
+		if patientName.Valid {
+			l.PatientName = &patientName.String
+		}
+		if serviceName.Valid {
+			l.ServiceName = &serviceName.String
+		}
+		if notes.Valid {
+			l.Notes = &notes.String
+		}
+		if orgID.Valid {
+			l.OrganizationID = &orgID.String
+		}
+		if createdBy.Valid {
+			l.CreatedBy = &createdBy.String
+		}
 		logs = append(logs, l)
 	}
 	if err := rows.Err(); err != nil {

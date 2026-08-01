@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Repository struct {
@@ -93,7 +93,7 @@ func (r *Repository) SetRolePermissions(role string, permissionIDs []string) err
 	for _, permID := range permissionIDs {
 		if _, err := tx.Exec(
 			`INSERT INTO role_permissions (id, role, permission_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-			uuid.New().String(), role, permID,
+			utils.NewUUID(), role, permID,
 		); err != nil {
 			return fmt.Errorf("failed to insert role permission %s: %w", permID, err)
 		}
@@ -135,7 +135,7 @@ func (r *Repository) GrantUserPermission(userID, orgID, permissionID, grantedBy 
 		INSERT INTO user_permissions (id, user_id, org_id, permission_id, granted_by, granted_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (user_id, org_id, permission_id) DO NOTHING`
-	_, err := r.db.Exec(query, uuid.New().String(), userID, orgID, permissionID, grantedBy, time.Now())
+	_, err := r.db.Exec(query, utils.NewUUID(), userID, orgID, permissionID, grantedBy, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to grant user permission: %w", err)
 	}

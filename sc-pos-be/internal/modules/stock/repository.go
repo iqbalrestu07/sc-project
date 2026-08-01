@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
 	"github.com/sc-pos/backend/internal/modules/whatsapp"
+	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Repository struct {
@@ -127,7 +127,7 @@ func (r *Repository) Create(m *models.StockMovement, orgID string) error {
 	}
 	defer tx.Rollback()
 
-	m.ID = uuid.New().String()
+	m.ID = utils.NewUUID()
 	m.CreatedAt = time.Now()
 
 	if _, err := tx.Exec(`
