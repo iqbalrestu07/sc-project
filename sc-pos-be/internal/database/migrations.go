@@ -261,8 +261,48 @@ func RunMigrations() error {
 		return fmt.Errorf("failed to add UUID defaults: %w", err)
 	}
 
+	// ---------------------------------------------------------------------------
+	// 15) Visit notes table (medical records per visit).
+	//     Captures pre-treatment diagnosis, post-treatment outcome, and
+	//     follow-up recommendations. Independent of appointments — walk-in
+	//     patients can have visit notes too.
+	// ---------------------------------------------------------------------------
+	if _, err := DB.Exec(createVisitNotesTable); err != nil {
+		return fmt.Errorf("failed to create visit_notes table: %w", err)
+	}
+
 	return nil
 }
+
+// createVisitNotesTable creates the visit_notes table for medical records.
+// Idempotent (CREATE TABLE IF NOT EXISTS).
+const createVisitNotesTable = `
+CREATE TABLE IF NOT EXISTS visit_notes (
+	id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	patient_id               UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+	appointment_id           UUID REFERENCES appointments(id) ON DELETE SET NULL,
+	visit_date               TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	diagnosis                TEXT,
+	patient_condition_before TEXT,
+	treatment_performed      TEXT,
+	treatment_outcome        TEXT,
+	follow_up_notes          TEXT,
+	next_visit_recommended   TIMESTAMP,
+	doctor_id                UUID REFERENCES staff(id),
+	organization_id          UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+	created_by               UUID REFERENCES users(id),
+	updated_by               UUID REFERENCES users(id),
+	deleted_at               TIMESTAMP,
+	created_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_visit_notes_patient ON visit_notes(patient_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_visit_notes_org     ON visit_notes(organization_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_visit_notes_date    ON visit_notes(visit_date DESC) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_visit_notes_doctor  ON visit_notes(doctor_id) WHERE deleted_at IS NULL AND doctor_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_visit_notes_appt    ON visit_notes(appointment_id) WHERE appointment_id IS NOT NULL;
+`
 
 // addUuidDefaults adds DEFAULT gen_random_uuid() to all UUID primary key
 // columns that don't already have a default. This is a safety net so INSERTs

@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Calendar, Sparkles, Package, Tag,
   ShoppingCart, DollarSign, UserCog, Settings, Menu, X, LogOut,
   ChevronLeft, Globe, MessageCircle, Shield, Building2, ChevronDown,
-  FolderOpen, ClipboardList, FlaskConical, FileUp,
+  FolderOpen, ClipboardList, FlaskConical, FileUp, ListOrdered,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useClinicSettings } from "@/hooks/useClinicSettings";
@@ -45,6 +45,10 @@ const NAV_STRUCTURE: NavEntry[] = [
   {
     kind: "item",
     item: { to: "/appointments", icon: Calendar, label: "Appointments", permission: "appointments:read" },
+  },
+  {
+    kind: "item",
+    item: { to: "/queue", icon: ListOrdered, label: "Antrian Hari Ini", permission: "appointments:read" },
   },
   {
     kind: "item",

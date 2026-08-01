@@ -20,6 +20,7 @@ type Service interface {
 	Update(id, orgID, userID string, req models.Transaction, sendWhatsApp *bool) (*TransactionWithRelations, error)
 	Delete(id, orgID, userID string) error
 	Items(id string) ([]TransactionItemWithRelations, error)
+	AddItem(transactionID string, item models.TransactionItem, userID *string, orgID string) (*TransactionWithRelations, error)
 }
 
 type service struct {
@@ -202,6 +203,52 @@ func (s *service) Delete(id, orgID, userID string) error {
 
 func (s *service) Items(id string) ([]TransactionItemWithRelations, error) {
 	return s.repo.Items(id)
+}
+
+// AddItem adds a single item to an existing transaction and recalculates totals.
+// If the transaction is already paid, commissions and stock effects are generated
+// for the new item.
+func (s *service) AddItem(transactionID string, item models.TransactionItem, userID *string, orgID string) (*TransactionWithRelations, error) {
+	// Verify transaction exists
+	current, err := s.Get(transactionID, orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	item.ID = utils.NewUUID()
+	item.CreatedAt = now
+	if item.ItemType == "" {
+		item.ItemType = "service"
+	}
+	if item.Quantity == 0 {
+		item.Quantity = 1
+	}
+	// Calculate total if not provided
+	if item.TotalPrice == 0 {
+		item.TotalPrice = item.UnitPrice * float64(item.Quantity)
+		if item.DiscountAmount != nil {
+			item.TotalPrice -= *item.DiscountAmount
+		}
+	}
+
+	updated, err := s.repo.AddItem(transactionID, orgID, item)
+	if err != nil {
+		return nil, err
+	}
+
+	// If transaction is already paid, generate commission + stock effects for new item
+	if current.PaymentStatus == "paid" {
+		uid := ""
+		if userID != nil {
+			uid = *userID
+		}
+		if err := s.repo.MarkPaidEffects(transactionID, uid, orgID); err != nil {
+			// Don't fail the whole request — item was added, effects can be retried
+		}
+	}
+
+	return updated, nil
 }
 
 func (s *service) sendWhatsappInvoice(tx *TransactionWithRelations, orgID string) {

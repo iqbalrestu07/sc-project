@@ -25,6 +25,16 @@ export const API_ENDPOINTS = {
         SEARCH: "/patients/search",
         VISITS: (id: string) => `/patients/${id}/visits`,
         TRANSACTIONS: (id: string) => `/patients/${id}/transactions`,
+        VISIT_NOTES: (id: string) => `/patients/${id}/visit-notes`,
+    },
+
+    // Visit Notes (medical records per visit)
+    VISIT_NOTES: {
+        LIST: (patientId: string) => `/patients/${patientId}/visit-notes`,
+        CREATE: (patientId: string) => `/patients/${patientId}/visit-notes`,
+        DETAIL: (id: string) => `/visit-notes/${id}`,
+        UPDATE: (id: string) => `/visit-notes/${id}`,
+        DELETE: (id: string) => `/visit-notes/${id}`,
     },
 
     // Services
@@ -62,6 +72,8 @@ export const API_ENDPOINTS = {
         DELETE: (id: string) => `/appointments/${id}`,
         CALENDAR: "/appointments/calendar",
         AVAILABLE_SLOTS: "/appointments/available-slots",
+        TODAY_QUEUE: "/appointments/today",
+        UPDATE_STATUS: (id: string) => `/appointments/${id}/status`,
     },
 
     // Transactions
@@ -72,6 +84,7 @@ export const API_ENDPOINTS = {
         UPDATE: (id: string) => `/transactions/${id}`,
         DELETE: (id: string) => `/transactions/${id}`,
         ITEMS: (id: string) => `/transactions/${id}/items`,
+        ADD_ITEM: (id: string) => `/transactions/${id}/items`,
     },
 
     // Staff

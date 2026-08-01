@@ -60,7 +60,8 @@ export function AppointmentFormDialog({
   defaultDate,
 }: AppointmentFormDialogProps) {
   const { createAppointment, updateAppointment } = useAppointments();
-  const patientsQuery = usePatients();
+  const [patientSearch, setPatientSearch] = useState("");
+  const patientsQuery = usePatients(patientSearch || undefined);
   const servicesQuery = useServices();
   const { doctors, therapists } = useStaff();
   const isEditing = !!appointment;
@@ -164,6 +165,12 @@ export function AppointmentFormDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Patient *</FormLabel>
+                  <Input
+                    placeholder="Search patient by name or phone..."
+                    value={patientSearch}
+                    onChange={(e) => setPatientSearch(e.target.value)}
+                    className="mb-2"
+                  />
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -171,9 +178,15 @@ export function AppointmentFormDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      {patients.length === 0 && (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          {patientSearch ? "No patients found" : "Type to search..."}
+                        </div>
+                      )}
                       {patients.map((patient) => (
                         <SelectItem key={patient.id} value={patient.id}>
                           {patient.full_name} ({patient.patient_code})
+                          {patient.phone && ` — ${patient.phone}`}
                         </SelectItem>
                       ))}
                     </SelectContent>

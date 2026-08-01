@@ -23,7 +23,7 @@ func NewModule() *Handler {
 
 func (h *Handler) List(c *gin.Context) {
 	orgID := c.GetString("org_id")
-	
+
 	page := utils.ParseIntQuery(c, "page", 1)
 	limit := utils.ParseIntQuery(c, "limit", 50)
 
@@ -98,6 +98,26 @@ func (h *Handler) Items(c *gin.Context) {
 		return
 	}
 	utils.SuccessResponse(c, http.StatusOK, items)
+}
+
+// AddItem handles POST /transactions/:id/items
+// Adds a single item to an existing transaction and recalculates totals.
+func (h *Handler) AddItem(c *gin.Context) {
+	orgID := c.GetString("org_id")
+	userID := getUserID(c)
+
+	var item models.TransactionItem
+	if err := c.ShouldBindJSON(&item); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	updated, err := h.service.AddItem(c.Param("id"), item, userID, orgID)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	utils.SuccessResponseWithMessage(c, http.StatusCreated, "Item added to transaction", updated)
 }
 
 func (h *Handler) handleError(c *gin.Context, err error) {

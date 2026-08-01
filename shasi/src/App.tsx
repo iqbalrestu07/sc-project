@@ -20,6 +20,7 @@ import Dashboard from "./pages/Dashboard";
 import Patients from "./pages/Patients";
 import PatientDetail from "./pages/PatientDetail";
 import Appointments from "./pages/Appointments";
+import Queue from "./pages/Queue";
 import Services from "./pages/Services";
 import Products from "./pages/Products";
 import POS from "./pages/POS";
@@ -90,6 +91,12 @@ function AppRoutes() {
       <Route path="/appointments" element={
         <ProtectedRoute requirePermission="appointments:read">
           <MainLayout onSignOut={signOut}><Appointments /></MainLayout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/queue" element={
+        <ProtectedRoute requirePermission="appointments:read">
+          <MainLayout onSignOut={signOut}><Queue /></MainLayout>
         </ProtectedRoute>
       } />
 

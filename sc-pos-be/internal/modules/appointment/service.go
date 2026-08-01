@@ -17,6 +17,7 @@ type Service interface {
 	Get(id, orgID string) (*AppointmentWithRelations, error)
 	Create(req models.Appointment, userID *string, orgID string) (*AppointmentWithRelations, error)
 	Update(id, orgID, userID string, req models.Appointment) (*AppointmentWithRelations, error)
+	UpdateStatus(id, status, orgID, userID string) (*AppointmentWithRelations, error)
 	Delete(id, orgID, userID string) error
 }
 
@@ -114,4 +115,16 @@ func (s *service) Delete(id, orgID, userID string) error {
 		return err
 	}
 	return nil
+}
+
+// UpdateStatus updates only the status field of an appointment.
+// Used by the queue page to move patients between antrian → dilayani → selesai.
+func (s *service) UpdateStatus(id, status, orgID, userID string) (*AppointmentWithRelations, error) {
+	if err := s.repo.UpdateStatus(id, status, orgID, userID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return s.Get(id, orgID)
 }

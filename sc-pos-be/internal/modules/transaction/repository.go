@@ -211,6 +211,61 @@ func (r *Repository) Update(id, orgID, userByID string, updates models.Transacti
 	return checkRows(result)
 }
 
+// AddItem inserts a single transaction_item and recalculates the transaction subtotal/total.
+// Returns the updated transaction.
+func (r *Repository) AddItem(transactionID, orgID string, item models.TransactionItem) (*TransactionWithRelations, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	commEligible := item.CommissionEligible
+	if commEligible == nil {
+		t := true
+		commEligible = &t
+	}
+
+	if _, err := tx.Exec(`
+		INSERT INTO transaction_items (
+			id, transaction_id, item_type, service_id, product_id, quantity,
+			unit_price, discount_amount, discount_type, total_price,
+			doctor_id, therapist_id, commission_eligible, commission_notes,
+			selected_consumable_product_id,
+			created_at, created_by, organization_id
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+	`, item.ID, transactionID, item.ItemType, item.ServiceID, item.ProductID,
+		item.Quantity, item.UnitPrice, item.DiscountAmount, item.DiscountType, item.TotalPrice,
+		item.DoctorID, item.TherapistID, commEligible, item.CommissionNotes,
+		item.SelectedConsumableProductID,
+		item.CreatedAt, item.CreatedBy, orgID); err != nil {
+		return nil, fmt.Errorf("failed to add transaction item: %w", err)
+	}
+
+	// Recalculate subtotal = sum of all item totals
+	if _, err := tx.Exec(`
+		UPDATE transactions
+		SET subtotal = (
+			SELECT COALESCE(SUM(total_price), 0) FROM transaction_items
+			WHERE transaction_id = $1 AND deleted_at IS NULL
+		),
+		total_amount = (
+			SELECT COALESCE(SUM(total_price), 0) FROM transaction_items
+			WHERE transaction_id = $1 AND deleted_at IS NULL
+		) - COALESCE(discount_amount, 0) + COALESCE(tax_amount, 0),
+		updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1
+	`, transactionID); err != nil {
+		return nil, fmt.Errorf("failed to recalculate transaction totals: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit: %w", err)
+	}
+	return r.Get(transactionID, orgID)
+}
+
 func (r *Repository) Delete(id, orgID, userByID string) error {
 	result, err := r.db.Exec(`
 		UPDATE transactions

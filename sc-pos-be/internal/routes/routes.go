@@ -22,6 +22,7 @@ import (
 	"github.com/sc-pos/backend/internal/modules/staff"
 	"github.com/sc-pos/backend/internal/modules/stock"
 	"github.com/sc-pos/backend/internal/modules/transaction"
+	"github.com/sc-pos/backend/internal/modules/visit_note"
 	"github.com/sc-pos/backend/internal/modules/whatsapp"
 )
 
@@ -98,6 +99,11 @@ func SetupRoutes(router *gin.Engine) {
 		patient.RegisterRoutes(protectedAPI,
 			canReadPatients, canWritePatients, canDeletePatients,
 		)
+
+		// ── Visit Notes (medical records per visit) ──────────────────────
+		visitNoteCanRead := middleware.RequirePermission("patients:read")
+		visitNoteCanWrite := middleware.RequirePermission("patients:write")
+		visit_note.RegisterRoutes(protectedAPI, visitNoteCanRead, visitNoteCanWrite, canDeletePatients)
 
 		// ── Services ─────────────────────────────────────────────────────
 		serviceModule.RegisterRoutes(protectedAPI,

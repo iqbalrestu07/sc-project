@@ -19,8 +19,10 @@ import {
   User
 } from "lucide-react";
 import { usePatient, usePatientVisits, usePatientTransactions } from "@/hooks/usePatients";
+import { usePatientVisitNotes, useVisitNotes } from "@/hooks/useVisitNotes";
 import { PatientFormDialog } from "@/components/patients";
 import { TransactionDetailDialog } from "@/components/transactions/TransactionDetailDialog";
+import { VisitNoteFormDialog } from "@/components/visit_notes/VisitNoteFormDialog";
 import { useState } from "react";
 
 export default function PatientDetail() {
@@ -29,7 +31,11 @@ export default function PatientDetail() {
   const { data: patient, isLoading } = usePatient(id);
   const { data: visits = [] } = usePatientVisits(id);
   const { data: patientTransactions = [] } = usePatientTransactions(id);
+  const { data: visitNotes = [] } = usePatientVisitNotes(id);
+  const { deleteMutation } = useVisitNotes();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isVisitNoteFormOpen, setIsVisitNoteFormOpen] = useState(false);
+  const [editingVisitNote, setEditingVisitNote] = useState<any>(null);
   const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
 
   const getInitials = (name: string) => {
@@ -170,8 +176,9 @@ export default function PatientDetail() {
         {/* Details Section */}
         <div className="lg:col-span-2 space-y-6">
           <Tabs defaultValue="medical" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="medical">Medical Info</TabsTrigger>
+              <TabsTrigger value="records">Medical Records</TabsTrigger>
               <TabsTrigger value="history">Visit History</TabsTrigger>
               <TabsTrigger value="transactions">Transactions</TabsTrigger>
             </TabsList>
@@ -222,6 +229,112 @@ export default function PatientDetail() {
                     </p>
                   </CardContent>
                 </Card>
+              )}
+            </TabsContent>
+
+            {/* Medical Records (Visit Notes) */}
+            <TabsContent value="records" className="mt-4 space-y-4">
+              <div className="flex justify-end">
+                <Button
+                  className="gap-2"
+                  onClick={() => {
+                    setEditingVisitNote(null);
+                    setIsVisitNoteFormOpen(true);
+                  }}
+                >
+                  <FileText className="h-4 w-4" />
+                  Tambah Rekam Medis
+                </Button>
+              </div>
+              {visitNotes.length === 0 ? (
+                <Card className="shadow-clinic">
+                  <CardContent className="py-12 text-center">
+                    <p className="text-muted-foreground">Belum ada rekam medis.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {visitNotes.map((note: any) => (
+                    <Card key={note.id} className="shadow-clinic">
+                      <CardContent className="py-4">
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div className="space-y-1">
+                            <p className="font-medium text-sm">
+                              {format(new Date(note.visit_date), "dd MMM yyyy, HH:mm")}
+                            </p>
+                            {note.doctor_name && (
+                              <p className="text-xs text-muted-foreground">
+                                Dokter: {note.doctor_name}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditingVisitNote(note);
+                                setIsVisitNoteFormOpen(true);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive"
+                              onClick={() => {
+                                if (confirm("Hapus rekam medis ini?")) {
+                                  deleteMutation.mutate(note.id);
+                                }
+                              }}
+                            >
+                              Hapus
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          {note.diagnosis && (
+                            <div>
+                              <span className="font-medium text-muted-foreground">Diagnosa: </span>
+                              <span>{note.diagnosis}</span>
+                            </div>
+                          )}
+                          {note.patient_condition_before && (
+                            <div>
+                              <span className="font-medium text-muted-foreground">Kondisi Sebelum: </span>
+                              <span>{note.patient_condition_before}</span>
+                            </div>
+                          )}
+                          {note.treatment_performed && (
+                            <div>
+                              <span className="font-medium text-muted-foreground">Tindakan: </span>
+                              <span>{note.treatment_performed}</span>
+                            </div>
+                          )}
+                          {note.treatment_outcome && (
+                            <div>
+                              <span className="font-medium text-muted-foreground">Hasil: </span>
+                              <span>{note.treatment_outcome}</span>
+                            </div>
+                          )}
+                          {note.follow_up_notes && (
+                            <div>
+                              <span className="font-medium text-muted-foreground">Follow-up: </span>
+                              <span>{note.follow_up_notes}</span>
+                            </div>
+                          )}
+                          {note.next_visit_recommended && (
+                            <div className="pt-2 border-t">
+                              <span className="font-medium text-primary">Rekomendasi kunjungan berikutnya: </span>
+                              <span>{format(new Date(note.next_visit_recommended), "dd MMM yyyy")}</span>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               )}
             </TabsContent>
 
@@ -331,6 +444,13 @@ export default function PatientDetail() {
         open={isFormOpen}
         onOpenChange={setIsFormOpen}
         patient={patient}
+      />
+
+      <VisitNoteFormDialog
+        open={isVisitNoteFormOpen}
+        onOpenChange={setIsVisitNoteFormOpen}
+        patientId={id!}
+        visitNote={editingVisitNote}
       />
     </div>
   );

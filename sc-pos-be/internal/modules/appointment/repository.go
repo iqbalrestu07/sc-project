@@ -193,6 +193,31 @@ func (r *Repository) Delete(id, orgID, userByID string) error {
 	return checkRows(result)
 }
 
+// UpdateStatus updates only the status of an appointment.
+// This is used by the queue page to move patients between states
+// (scheduled → in_progress → completed) without sending the full appointment body.
+func (r *Repository) UpdateStatus(id, status, orgID, userID string) error {
+	var orgVal interface{}
+	if orgID != "" {
+		orgVal = orgID
+	}
+	var userVal interface{}
+	if userID != "" {
+		userVal = userID
+	}
+	result, err := r.db.Exec(`
+		UPDATE appointments
+		SET status = $3, updated_by = $4, updated_at = NOW()
+		WHERE id = $1
+		  AND (organization_id = $2 OR ($2::text = '' AND organization_id IS NULL))
+		  AND deleted_at IS NULL
+	`, id, orgVal, status, userVal)
+	if err != nil {
+		return fmt.Errorf("failed to update appointment status: %w", err)
+	}
+	return checkRows(result)
+}
+
 type appointmentScanner interface {
 	Scan(dest ...interface{}) error
 }

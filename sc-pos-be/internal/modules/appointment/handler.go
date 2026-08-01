@@ -108,6 +108,77 @@ func (h *Handler) Delete(c *gin.Context) {
 	utils.SuccessResponseWithMessage(c, http.StatusOK, "Appointment deleted successfully", nil)
 }
 
+// UpdateStatus handles PATCH /appointments/:id/status
+// Used by the queue page to move patients between antrian → dilayani → selesai.
+func (h *Handler) UpdateStatus(c *gin.Context) {
+	orgID := c.GetString("org_id")
+	userID := c.GetString("user_id")
+
+	var body struct {
+		Status string `json:"status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "status is required")
+		return
+	}
+
+	appointment, err := h.service.UpdateStatus(c.Param("id"), body.Status, orgID, userID)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	utils.SuccessResponseWithMessage(c, http.StatusOK, "Appointment status updated", appointment)
+}
+
+// TodayQueue handles GET /appointments/today
+// Returns today's appointments grouped by queue status:
+//   - waiting:     scheduled + confirmed (dalam antrian)
+//   - in_progress: in_progress (sedang dilayani)
+//   - completed:   completed (selesai, siap bayar)
+func (h *Handler) TodayQueue(c *gin.Context) {
+	orgID := c.GetString("org_id")
+
+	// Get today's range in Jakarta time
+	jakarta, _ := time.LoadLocation("Asia/Jakarta")
+	now := time.Now().In(jakarta)
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, jakarta)
+	endOfDay := startOfDay.Add(24 * time.Hour)
+
+	appointments, err := h.service.List(orgID, &startOfDay, &endOfDay)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Group by status
+	type QueueGroup struct {
+		Waiting    []AppointmentWithRelations `json:"waiting"`
+		InProgress []AppointmentWithRelations `json:"in_progress"`
+		Completed  []AppointmentWithRelations `json:"completed"`
+		Other      []AppointmentWithRelations `json:"other"`
+	}
+	groups := QueueGroup{
+		Waiting:    []AppointmentWithRelations{},
+		InProgress: []AppointmentWithRelations{},
+		Completed:  []AppointmentWithRelations{},
+		Other:      []AppointmentWithRelations{},
+	}
+	for _, a := range appointments {
+		switch a.Status {
+		case "scheduled", "confirmed":
+			groups.Waiting = append(groups.Waiting, a)
+		case "in_progress":
+			groups.InProgress = append(groups.InProgress, a)
+		case "completed":
+			groups.Completed = append(groups.Completed, a)
+		default:
+			groups.Other = append(groups.Other, a)
+		}
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, groups)
+}
+
 func (h *Handler) handleError(c *gin.Context, err error) {
 	if errors.Is(err, ErrNotFound) {
 		utils.ErrorResponse(c, http.StatusNotFound, err.Error())
