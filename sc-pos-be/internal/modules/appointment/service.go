@@ -19,6 +19,7 @@ type Service interface {
 	Update(id, orgID, userID string, req models.Appointment) (*AppointmentWithRelations, error)
 	UpdateStatus(id, status, orgID, userID string) (*AppointmentWithRelations, error)
 	Delete(id, orgID, userID string) error
+	GetServicesByAppointment(appointmentID string) ([]string, error)
 }
 
 type service struct {
@@ -115,6 +116,10 @@ func (s *service) Delete(id, orgID, userID string) error {
 		return err
 	}
 	return nil
+}
+
+func (s *service) GetServicesByAppointment(appointmentID string) ([]string, error) {
+	return s.repo.GetServicesByAppointment(appointmentID)
 }
 
 // UpdateStatus updates only the status field of an appointment.

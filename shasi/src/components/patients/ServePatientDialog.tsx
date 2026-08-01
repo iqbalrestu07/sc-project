@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -22,7 +23,8 @@ import { useStaff } from "@/hooks/useStaff";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useAppointments } from "@/hooks/useAppointments";
 import type { Patient } from "@/types/patient";
-import { Stethoscope, ShoppingBag, ArrowRight, Plus, X, Trash2 } from "lucide-react";
+import { useVisitNotes } from "@/hooks/useVisitNotes";
+import { Stethoscope, ShoppingBag, ArrowRight, Plus, X, Trash2, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 interface ServePatientDialogProps {
@@ -46,12 +48,17 @@ export function ServePatientDialog({
 }: ServePatientDialogProps) {
   const navigate = useNavigate();
   const servicesQuery = useServices();
+  const { createMutation: createVisitNote } = useVisitNotes();
   const { doctors, therapists } = useStaff();
   const { createTransaction } = useTransactions();
   const { createAppointment } = useAppointments();
-  const [mode, setMode] = useState<"choose" | "tindakan">("choose");
+  const [mode, setMode] = useState<"choose" | "tindakan" | "rekam_medis">("choose");
   const [selectedServices, setSelectedServices] = useState<SelectedService[]>([]);
   const [newServiceId, setNewServiceId] = useState("");
+  // Rekam medis fields
+  const [diagnosis, setDiagnosis] = useState("");
+  const [patientCondition, setPatientCondition] = useState("");
+  const [createdAppointmentId, setCreatedAppointmentId] = useState<string | null>(null);
 
   const services = servicesQuery.data?.data ?? [];
 
@@ -61,6 +68,9 @@ export function ServePatientDialog({
       setMode("choose");
       setSelectedServices([]);
       setNewServiceId("");
+      setDiagnosis("");
+      setPatientCondition("");
+      setCreatedAppointmentId(null);
     }
   };
 
@@ -157,12 +167,39 @@ export function ServePatientDialog({
         })),
       });
 
+      setCreatedAppointmentId(appointment.id);
       toast.success(`${selectedServices.length} layanan ditambahkan ke antrian`);
-      handleClose(false);
-      navigate("/queue");
+      // Go to rekam medis step (optional — user can skip)
+      setMode("rekam_medis");
     } catch (error) {
       // Error handled in mutation
     }
+  };
+
+  const handleSaveVisitNote = async () => {
+    if (!patient || !createdAppointmentId) {
+      // Skip — just go to queue
+      handleClose(false);
+      navigate("/queue");
+      return;
+    }
+
+    try {
+      const treatmentText = selectedServices.map((s) => s.name).join(", ");
+      await createVisitNote.mutateAsync({
+        patientId: patient.id,
+        input: {
+          appointment_id: createdAppointmentId,
+          diagnosis: diagnosis || null,
+          patient_condition_before: patientCondition || null,
+          treatment_performed: treatmentText,
+        },
+      });
+    } catch (e) {
+      console.error("Failed to save visit note:", e);
+    }
+    handleClose(false);
+    navigate("/queue");
   };
 
   if (!patient) return null;
@@ -340,6 +377,79 @@ export function ServePatientDialog({
                 {createTransaction.isPending || createAppointment.isPending
                   ? "Memproses..."
                   : `Masukkan ke Antrian (${selectedServices.length})`}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {mode === "rekam_medis" && (
+          <div className="space-y-4 py-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <FileText className="h-4 w-4 text-primary" />
+              <span>
+                Pasien sudah masuk antrian. Isi rekam medis (opsional) atau
+                lewati.
+              </span>
+            </div>
+
+            {/* Summary of selected services */}
+            <div className="rounded-lg bg-muted/50 p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-1">
+                Tindakan:
+              </p>
+              <p className="text-sm font-medium">
+                {selectedServices.map((s) => s.name).join(", ")}
+              </p>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Diagnosa
+              </label>
+              <Textarea
+                placeholder="Diagnosa pasien..."
+                value={diagnosis}
+                onChange={(e) => setDiagnosis(e.target.value)}
+                rows={2}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Kondisi Pasien Sebelum Tindakan
+              </label>
+              <Textarea
+                placeholder="Kondisi pasien saat datang..."
+                value={patientCondition}
+                onChange={(e) => setPatientCondition(e.target.value)}
+                rows={2}
+              />
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Tindakan yang dilakukan akan terisi otomatis. Hasil tindakan
+              dan follow-up bisa diisi nanti dari halaman detail pasien.
+            </p>
+
+            <div className="flex justify-between gap-2 pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  handleClose(false);
+                  navigate("/queue");
+                }}
+              >
+                Lewati
+              </Button>
+              <Button
+                type="button"
+                onClick={handleSaveVisitNote}
+                disabled={createVisitNote.isPending}
+              >
+                {createVisitNote.isPending
+                  ? "Menyimpan..."
+                  : "Simpan Rekam Medis & Lanjut"}
               </Button>
             </div>
           </div>

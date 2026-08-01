@@ -150,29 +150,44 @@ func (h *Handler) TodayQueue(c *gin.Context) {
 		return
 	}
 
-	// Group by status
+	// Group by status and enrich with all services from linked transaction
+	type QueueItem struct {
+		AppointmentWithRelations
+		AllServices []string `json:"all_services"` // all service names from linked transaction
+	}
 	type QueueGroup struct {
-		Waiting    []AppointmentWithRelations `json:"waiting"`
-		InProgress []AppointmentWithRelations `json:"in_progress"`
-		Completed  []AppointmentWithRelations `json:"completed"`
-		Other      []AppointmentWithRelations `json:"other"`
+		Waiting    []QueueItem `json:"waiting"`
+		InProgress []QueueItem `json:"in_progress"`
+		Completed  []QueueItem `json:"completed"`
+		Other      []QueueItem `json:"other"`
 	}
 	groups := QueueGroup{
-		Waiting:    []AppointmentWithRelations{},
-		InProgress: []AppointmentWithRelations{},
-		Completed:  []AppointmentWithRelations{},
-		Other:      []AppointmentWithRelations{},
+		Waiting:    []QueueItem{},
+		InProgress: []QueueItem{},
+		Completed:  []QueueItem{},
+		Other:      []QueueItem{},
 	}
 	for _, a := range appointments {
+		// Fetch all service names from the transaction linked to this appointment
+		svcNames, _ := h.service.GetServicesByAppointment(a.ID)
+		item := QueueItem{
+			AppointmentWithRelations: a,
+			AllServices:              svcNames,
+		}
+		// If no transaction services found, fall back to appointment's own service
+		if len(item.AllServices) == 0 && a.Service != nil {
+			item.AllServices = []string{a.Service.Name}
+		}
+
 		switch a.Status {
 		case "scheduled", "confirmed":
-			groups.Waiting = append(groups.Waiting, a)
+			groups.Waiting = append(groups.Waiting, item)
 		case "in_progress":
-			groups.InProgress = append(groups.InProgress, a)
+			groups.InProgress = append(groups.InProgress, item)
 		case "completed":
-			groups.Completed = append(groups.Completed, a)
+			groups.Completed = append(groups.Completed, item)
 		default:
-			groups.Other = append(groups.Other, a)
+			groups.Other = append(groups.Other, item)
 		}
 	}
 

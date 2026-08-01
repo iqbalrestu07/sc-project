@@ -3,6 +3,7 @@ package transaction
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sc-pos/backend/internal/database"
@@ -674,7 +675,9 @@ func scanTransactionItem(scanner txScanner) (TransactionItemWithRelations, error
 }
 
 func nextTransactionCode(now time.Time) string {
-	return fmt.Sprintf("TRX-%s-%s", now.Format("20060102"), utils.NewUUID()[:8])
+	// Use full UUIDv7 prefix (26 chars) to avoid collisions.
+	// UUIDv7 is time-sortable, so transaction codes are naturally ordered by creation time.
+	return fmt.Sprintf("TRX-%s-%s", now.Format("20060102"), strings.ReplaceAll(utils.NewUUID(), "-", "")[:12])
 }
 
 func checkRows(result sql.Result) error {

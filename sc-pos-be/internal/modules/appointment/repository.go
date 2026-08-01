@@ -46,6 +46,40 @@ func NewRepository() *Repository {
 	return &Repository{db: database.DB}
 }
 
+// GetServicesByAppointment returns all service names from the transaction
+// linked to an appointment. Used by the queue page to show all selected
+// services (not just the first one stored in appointments.service_id).
+func (r *Repository) GetServicesByAppointment(appointmentID string) ([]string, error) {
+	rows, err := r.db.Query(`
+		SELECT svc.name
+		FROM transaction_items ti
+		JOIN transactions t ON t.id = ti.transaction_id
+		JOIN services svc ON svc.id = ti.service_id
+		WHERE t.appointment_id = $1
+		  AND ti.service_id IS NOT NULL
+		  AND ti.deleted_at IS NULL
+		  AND t.deleted_at IS NULL
+		ORDER BY svc.name
+	`, appointmentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	if names == nil {
+		names = []string{}
+	}
+	return names, nil
+}
+
 func (r *Repository) List(orgID string, start, end *time.Time) ([]AppointmentWithRelations, error) {
 	query := `
 		SELECT a.id, a.patient_id, a.service_id, a.doctor_id, a.therapist_id,

@@ -253,9 +253,17 @@ function QueueCard({ appointment, onStatusChange, actions }: QueueCardProps) {
             </Badge>
           </div>
 
-          <p className="text-sm font-medium text-primary">
-            {appointment.service?.name || "—"}
-          </p>
+          {/* Show all services from linked transaction, or fall back to appointment service */}
+          {(appointment.all_services?.length > 0
+            ? appointment.all_services
+            : appointment.service?.name
+              ? [appointment.service.name]
+              : []
+          ).map((svcName: string, idx: number) => (
+            <div key={idx} className="flex items-center gap-1.5">
+              <span className="text-sm font-medium text-primary">{svcName}</span>
+            </div>
+          ))}
 
           {appointment.doctor && (
             <p className="text-xs text-muted-foreground">

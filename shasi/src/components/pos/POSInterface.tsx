@@ -88,7 +88,7 @@ export function POSInterface({ initialTransactionId, initialPatientId }: POSInte
   const [discountType, setDiscountType] = useState<"fixed" | "percentage">("fixed");
   const [showPrintPrompt, setShowPrintPrompt] = useState(false);
   const [completedTransaction, setCompletedTransaction] = useState<TransactionWithRelations | null>(null);
-  const [sendWhatsApp, setSendWhatsApp] = useState(true);
+  const [sendWhatsApp, setSendWhatsApp] = useState(false);
 
   // Consumable selection dialog state.
   // nonce changes every time a new service is added, ensuring useEffect fires even for repeated additions.
