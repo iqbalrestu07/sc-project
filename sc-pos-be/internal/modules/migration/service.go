@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"database/sql"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sc-pos/backend/internal/database"
 	"github.com/sc-pos/backend/internal/models"
 	"github.com/sc-pos/backend/internal/modules/patient"
 	"github.com/sc-pos/backend/internal/modules/product"
@@ -182,66 +184,78 @@ func (s *service) ImportCatalogExcel(file io.Reader, filename, orgID, userID str
 	// ON CONFLICT upsert: each row is 1 DB round-trip (no pre-fetch needed).
 	// The unique index (organization_id, LOWER(name)) handles duplicate
 	// detection atomically inside PostgreSQL.
+	//
+	// All rows are wrapped in a single transaction so PostgreSQL only fsyncs
+	// WAL once at COMMIT instead of per-statement.
+	//
+	// Streaming: reader.Read() processes 1 row at a time — memory is constant
+	// regardless of file size. GC runs every batchSize rows.
 	result := &ImportResult{}
 	rowNum := 1
 	processedInBatch := 0
 
-	for {
-		row, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			result.Failed++
-			result.Errors = append(result.Errors, fmt.Sprintf("row %d: read error: %v", rowNum+1, err))
+	err = database.WithTx(func(tx *sql.Tx) error {
+		for {
+			row, err := reader.Read()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				result.Failed++
+				result.Errors = append(result.Errors, fmt.Sprintf("row %d: read error: %v", rowNum+1, err))
+				rowNum++
+				continue
+			}
 			rowNum++
-			continue
-		}
-		rowNum++
-		if len(row) == 0 || allEmpty(row) {
-			continue
-		}
+			if len(row) == 0 || allEmpty(row) {
+				continue
+			}
 
-		name := strings.TrimSpace(getCell(row, idx.name))
-		if name == "" {
-			result.Failed++
-			result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, ErrMissingName))
-			continue
+			name := strings.TrimSpace(getCell(row, idx.name))
+			if name == "" {
+				result.Failed++
+				result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, ErrMissingName))
+				continue
+			}
+
+			jenis := strings.TrimSpace(strings.ToLower(getCell(row, idx.jenis)))
+			price, err := parsePrice(getCell(row, idx.harga))
+			if err != nil {
+				result.Failed++
+				result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, err))
+				continue
+			}
+
+			commission, _ := parsePrice(getCell(row, idx.komisi))
+			modal, _ := parsePrice(getCell(row, idx.modal))
+			hargaTambahan, _ := parsePrice(getCell(row, idx.hargaTambahan))
+			komisiTambahan, _ := parsePrice(getCell(row, idx.komisiTambahan))
+
+			var created bool
+			var upsertErr error
+			switch jenis {
+			case "product":
+				created, upsertErr = s.upsertProductTx(tx, name, price, modal, false, orgID, userID)
+			case "tindakan":
+				created, upsertErr = s.upsertServiceTx(tx, name, price, commission, hargaTambahan, komisiTambahan, orgID, userID)
+			case "barang habis pakai":
+				created, upsertErr = s.upsertProductTx(tx, name, price, modal, true, orgID, userID)
+			default:
+				upsertErr = ErrInvalidRowType
+			}
+
+			result.track(created, upsertErr, fmt.Sprintf("row %d (%s)", rowNum, name))
+
+			processedInBatch++
+			if processedInBatch >= batchSize {
+				runtime.GC()
+				processedInBatch = 0
+			}
 		}
-
-		jenis := strings.TrimSpace(strings.ToLower(getCell(row, idx.jenis)))
-		price, err := parsePrice(getCell(row, idx.harga))
-		if err != nil {
-			result.Failed++
-			result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, err))
-			continue
-		}
-
-		commission, _ := parsePrice(getCell(row, idx.komisi))
-		modal, _ := parsePrice(getCell(row, idx.modal))
-		hargaTambahan, _ := parsePrice(getCell(row, idx.hargaTambahan))
-		komisiTambahan, _ := parsePrice(getCell(row, idx.komisiTambahan))
-
-		var created bool
-		var upsertErr error
-		switch jenis {
-		case "product":
-			created, upsertErr = s.upsertProductONCONFLICT(name, price, modal, false, orgID, userID)
-		case "tindakan":
-			created, upsertErr = s.upsertServiceONCONFLICT(name, price, commission, hargaTambahan, komisiTambahan, orgID, userID)
-		case "barang habis pakai":
-			created, upsertErr = s.upsertProductONCONFLICT(name, price, modal, true, orgID, userID)
-		default:
-			upsertErr = ErrInvalidRowType
-		}
-
-		result.track(created, upsertErr, fmt.Sprintf("row %d (%s)", rowNum, name))
-
-		processedInBatch++
-		if processedInBatch >= batchSize {
-			runtime.GC()
-			processedInBatch = 0
-		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return result, nil
@@ -249,7 +263,7 @@ func (s *service) ImportCatalogExcel(file io.Reader, filename, orgID, userID str
 
 // ─── ON CONFLICT upsert variants (1 DB round-trip per row, no pre-fetch) ────
 
-func (s *service) upsertProductONCONFLICT(name string, price, purchasePrice float64, isConsumable bool, orgID, userID string) (bool, error) {
+func (s *service) upsertProductTx(tx *sql.Tx, name string, price, purchasePrice float64, isConsumable bool, orgID, userID string) (bool, error) {
 	req := models.Product{
 		Name:         name,
 		SellingPrice: &price,
@@ -259,10 +273,10 @@ func (s *service) upsertProductONCONFLICT(name string, price, purchasePrice floa
 	if purchasePrice > 0 {
 		req.PurchasePrice = &purchasePrice
 	}
-	return s.productSvc.Upsert(req, orgID, userID)
+	return s.productSvc.UpsertTx(tx, req, orgID, userID)
 }
 
-func (s *service) upsertServiceONCONFLICT(name string, price, commission, hargaTambahan, komisiTambahan float64, orgID, userID string) (bool, error) {
+func (s *service) upsertServiceTx(tx *sql.Tx, name string, price, commission, hargaTambahan, komisiTambahan float64, orgID, userID string) (bool, error) {
 	req := models.Service{
 		Name:                     name,
 		BasePrice:                price,
@@ -283,7 +297,7 @@ func (s *service) upsertServiceONCONFLICT(name string, price, commission, hargaT
 		req.TherapistOfferingCommissionType = &offType
 		req.TherapistOfferingCommissionValue = &komisiTambahan
 	}
-	return s.serviceSvc.Upsert(req, orgID, userID)
+	return s.serviceSvc.UpsertTx(tx, req, orgID, userID)
 }
 
 type headerIndex struct {
@@ -344,57 +358,70 @@ func (s *service) ImportPatientsExcel(file io.Reader, filename, orgID, userID st
 	// ON CONFLICT upsert: each row is 1 DB round-trip (no pre-fetch needed).
 	// The unique index (organization_id, LOWER(full_name), COALESCE(phone,''))
 	// handles duplicate detection atomically inside PostgreSQL.
+	//
+	// All rows are wrapped in a single transaction so PostgreSQL only fsyncs
+	// WAL once at COMMIT instead of per-statement. This is critical on a
+	// 1GB RAM server with high-latency SSH tunnel (179ms RTT).
+	//
+	// Streaming: reader.Read() processes 1 row at a time — memory is constant
+	// regardless of file size. GC runs every batchSize rows.
 	result := &ImportResult{}
 	rowNum := 1
 	processedInBatch := 0
 
-	for {
-		row, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			result.Failed++
-			result.Errors = append(result.Errors, fmt.Sprintf("row %d: read error: %v", rowNum+1, err))
+	err = database.WithTx(func(tx *sql.Tx) error {
+		for {
+			row, err := reader.Read()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				result.Failed++
+				result.Errors = append(result.Errors, fmt.Sprintf("row %d: read error: %v", rowNum+1, err))
+				rowNum++
+				continue
+			}
 			rowNum++
-			continue
-		}
-		rowNum++
-		if len(row) == 0 || allEmpty(row) {
-			continue
-		}
+			if len(row) == 0 || allEmpty(row) {
+				continue
+			}
 
-		name := strings.TrimSpace(getCell(row, idx.name))
-		if name == "" {
-			result.Failed++
-			result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, ErrMissingName))
-			continue
-		}
+			name := strings.TrimSpace(getCell(row, idx.name))
+			if name == "" {
+				result.Failed++
+				result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, ErrMissingName))
+				continue
+			}
 
-		phone := strings.TrimSpace(getCell(row, idx.phone))
-		address := strings.TrimSpace(getCell(row, idx.address))
+			phone := strings.TrimSpace(getCell(row, idx.phone))
+			address := strings.TrimSpace(getCell(row, idx.address))
 
-		req := models.Patient{
-			FullName: name,
-		}
-		if phone != "" {
-			phoneVal := phone
-			req.Phone = &phoneVal
-			req.WhatsApp = &phoneVal
-		}
-		if address != "" {
-			addrVal := address
-			req.Address = &addrVal
-		}
+			req := models.Patient{
+				FullName: name,
+			}
+			if phone != "" {
+				phoneVal := phone
+				req.Phone = &phoneVal
+				req.WhatsApp = &phoneVal
+			}
+			if address != "" {
+				addrVal := address
+				req.Address = &addrVal
+			}
 
-		created, upsertErr := s.patientSvc.Upsert(req, userID, orgID)
-		result.track(created, upsertErr, fmt.Sprintf("row %d (%s)", rowNum, name))
+			created, upsertErr := s.patientSvc.UpsertTx(tx, req, userID, orgID)
+			result.track(created, upsertErr, fmt.Sprintf("row %d (%s)", rowNum, name))
 
-		processedInBatch++
-		if processedInBatch >= batchSize {
-			runtime.GC()
-			processedInBatch = 0
+			processedInBatch++
+			if processedInBatch >= batchSize {
+				runtime.GC()
+				processedInBatch = 0
+			}
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return result, nil

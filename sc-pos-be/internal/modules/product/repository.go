@@ -216,10 +216,13 @@ func (r *Repository) Create(product *models.Product, orgID string) error {
 	return nil
 }
 
-// Upsert inserts a new product or updates an existing one based on the unique
-// index (organization_id, LOWER(name)). Uses ON CONFLICT DO UPDATE — 1 round-trip.
-// Returns true if inserted, false if updated.
-func (r *Repository) Upsert(product *models.Product, orgID, userID string) (bool, error) {
+// upserter is the minimal interface needed to run the upsert query.
+// Both *sql.DB and *sql.Tx satisfy this.
+type upserter interface {
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+func upsertProduct(exec upserter, product *models.Product, orgID, userID string) (bool, error) {
 	var createdByVal interface{}
 	if product.CreatedBy != nil && *product.CreatedBy != "" {
 		createdByVal = *product.CreatedBy
@@ -258,7 +261,7 @@ func (r *Repository) Upsert(product *models.Product, orgID, userID string) (bool
 		RETURNING (xmax = 0) AS inserted
 	`
 	var inserted bool
-	err := r.db.QueryRow(query,
+	err := exec.QueryRow(query,
 		product.ID, product.Name, product.Category, product.Sku, product.Supplier,
 		product.PurchasePrice, product.SellingPrice, product.CurrentStock,
 		product.MinimumStock, product.Unit, product.ExpiryDate, product.IsActive,
@@ -273,6 +276,18 @@ func (r *Repository) Upsert(product *models.Product, orgID, userID string) (bool
 		return false, fmt.Errorf("failed to upsert product: %w", err)
 	}
 	return inserted, nil
+}
+
+// Upsert inserts a new product or updates an existing one based on the unique
+// index (organization_id, LOWER(name)). Uses ON CONFLICT DO UPDATE — 1 round-trip.
+// Returns true if inserted, false if updated.
+func (r *Repository) Upsert(product *models.Product, orgID, userID string) (bool, error) {
+	return upsertProduct(r.db, product, orgID, userID)
+}
+
+// UpsertTx is like Upsert but runs within an existing transaction.
+func (r *Repository) UpsertTx(tx *sql.Tx, product *models.Product, orgID, userID string) (bool, error) {
+	return upsertProduct(tx, product, orgID, userID)
 }
 
 func (r *Repository) Update(id string, product *models.Product, orgID string) error {

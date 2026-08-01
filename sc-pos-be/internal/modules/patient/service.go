@@ -21,6 +21,7 @@ type Service interface {
 	Create(req models.Patient, userID, orgID string) (*models.Patient, error)
 	Update(id string, req models.Patient, userID, orgID string) (*models.Patient, error)
 	Upsert(req models.Patient, userID, orgID string) (bool, error)
+	UpsertTx(tx *sql.Tx, req models.Patient, userID, orgID string) (bool, error)
 	Delete(id, orgID, userID string) error
 	GetVisits(patientID string) ([]VisitSummary, error)
 	GetTransactions(patientID string) ([]TransactionSummary, error)
@@ -94,6 +95,26 @@ func (s *service) Upsert(req models.Patient, userID, orgID string) (bool, error)
 	}
 
 	return s.repo.Upsert(&req, orgID, userID)
+}
+
+// UpsertTx is like Upsert but runs within an existing transaction.
+// Used by bulk import to wrap all upserts in 1 transaction (1 WAL fsync at COMMIT).
+func (s *service) UpsertTx(tx *sql.Tx, req models.Patient, userID, orgID string) (bool, error) {
+	now := time.Now()
+	req.ID = uuid.New().String()
+	req.PatientCode = "PAT-" + strings.ToUpper(uuid.New().String()[:8])
+	req.IsActive = true
+	if userID != "" {
+		req.CreatedBy = &userID
+	}
+	req.CreatedAt = now
+	req.UpdatedAt = now
+
+	if req.Tags == nil {
+		req.Tags = []string{}
+	}
+
+	return s.repo.UpsertTx(tx, &req, orgID, userID)
 }
 
 func (s *service) Update(id string, req models.Patient, userID, orgID string) (*models.Patient, error) {

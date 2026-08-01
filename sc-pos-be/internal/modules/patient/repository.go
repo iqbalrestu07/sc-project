@@ -142,11 +142,16 @@ func (r *Repository) Create(patient *models.Patient, orgID string) error {
 	return nil
 }
 
-// Upsert inserts a new patient or updates an existing one based on the unique
-// index (organization_id, LOWER(full_name), COALESCE(phone, ”)).
-// Uses PostgreSQL ON CONFLICT DO UPDATE — 1 round-trip instead of 2 (SELECT + INSERT/UPDATE).
-// Returns true if a new row was inserted, false if an existing row was updated.
-func (r *Repository) Upsert(patient *models.Patient, orgID, userID string) (bool, error) {
+// upserter is the minimal interface needed to run the upsert query.
+// Both *sql.DB and *sql.Tx satisfy this, so we can run upserts inside a
+// transaction without changing the query logic.
+type upserter interface {
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+// upsertPatient runs the actual ON CONFLICT DO UPDATE query against the
+// given executor (either *sql.DB or *sql.Tx).
+func upsertPatient(exec upserter, patient *models.Patient, orgID, userID string) (bool, error) {
 	if patient.CreatedBy == nil || *patient.CreatedBy == "" {
 		if userID != "" {
 			patient.CreatedBy = &userID
@@ -178,7 +183,7 @@ func (r *Repository) Upsert(patient *models.Patient, orgID, userID string) (bool
 		RETURNING (xmax = 0) AS inserted
 	`
 	var inserted bool
-	err := r.db.QueryRow(query,
+	err := exec.QueryRow(query,
 		patient.ID, patient.PatientCode, patient.FullName, patient.PhotoURL,
 		patient.DateOfBirth, patient.Gender, patient.Phone, patient.WhatsApp,
 		patient.Email, patient.Address, patient.AllergyHistory,
@@ -191,6 +196,20 @@ func (r *Repository) Upsert(patient *models.Patient, orgID, userID string) (bool
 		return false, fmt.Errorf("failed to upsert patient: %w", err)
 	}
 	return inserted, nil
+}
+
+// Upsert inserts a new patient or updates an existing one based on the unique
+// index (organization_id, LOWER(full_name), COALESCE(phone, ”)).
+// Uses PostgreSQL ON CONFLICT DO UPDATE — 1 round-trip instead of 2 (SELECT + INSERT/UPDATE).
+// Returns true if a new row was inserted, false if an existing row was updated.
+func (r *Repository) Upsert(patient *models.Patient, orgID, userID string) (bool, error) {
+	return upsertPatient(r.db, patient, orgID, userID)
+}
+
+// UpsertTx is like Upsert but runs within an existing transaction.
+// This allows bulk import to wrap all upserts in 1 transaction (1 WAL fsync at COMMIT).
+func (r *Repository) UpsertTx(tx *sql.Tx, patient *models.Patient, orgID, userID string) (bool, error) {
+	return upsertPatient(tx, patient, orgID, userID)
 }
 
 func (r *Repository) Update(id string, patient *models.Patient, orgID string) error {

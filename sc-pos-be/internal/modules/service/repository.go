@@ -212,10 +212,13 @@ func (r *Repository) Create(service *models.Service, orgID string) error {
 	return nil
 }
 
-// Upsert inserts a new service or updates an existing one based on the unique
-// index (organization_id, LOWER(name)). Uses ON CONFLICT DO UPDATE — 1 round-trip.
-// Returns true if inserted, false if updated.
-func (r *Repository) Upsert(service *models.Service, orgID, userID string) (bool, error) {
+// upserter is the minimal interface needed to run the upsert query.
+// Both *sql.DB and *sql.Tx satisfy this.
+type upserter interface {
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+func upsertService(exec upserter, service *models.Service, orgID, userID string) (bool, error) {
 	var createdByVal interface{}
 	if service.CreatedBy != nil && *service.CreatedBy != "" {
 		createdByVal = *service.CreatedBy
@@ -257,7 +260,7 @@ func (r *Repository) Upsert(service *models.Service, orgID, userID string) (bool
 		RETURNING (xmax = 0) AS inserted
 	`
 	var inserted bool
-	err := r.db.QueryRow(query,
+	err := exec.QueryRow(query,
 		service.ID, service.Name, service.CategoryID, service.Description,
 		service.DurationMinutes, service.BasePrice,
 		service.DoctorCommissionType, service.DoctorCommissionValue,
@@ -272,6 +275,18 @@ func (r *Repository) Upsert(service *models.Service, orgID, userID string) (bool
 		return false, fmt.Errorf("failed to upsert service: %w", err)
 	}
 	return inserted, nil
+}
+
+// Upsert inserts a new service or updates an existing one based on the unique
+// index (organization_id, LOWER(name)). Uses ON CONFLICT DO UPDATE — 1 round-trip.
+// Returns true if inserted, false if updated.
+func (r *Repository) Upsert(service *models.Service, orgID, userID string) (bool, error) {
+	return upsertService(r.db, service, orgID, userID)
+}
+
+// UpsertTx is like Upsert but runs within an existing transaction.
+func (r *Repository) UpsertTx(tx *sql.Tx, service *models.Service, orgID, userID string) (bool, error) {
+	return upsertService(tx, service, orgID, userID)
 }
 
 func (r *Repository) Update(id string, service *models.Service, orgID string) error {

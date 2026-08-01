@@ -21,6 +21,7 @@ type Service interface {
 	Create(req models.Product, orgID, userID string) (*models.Product, error)
 	Update(id string, req models.Product, orgID, userID string) (*models.Product, error)
 	Upsert(req models.Product, orgID, userID string) (bool, error)
+	UpsertTx(tx *sql.Tx, req models.Product, orgID, userID string) (bool, error)
 	UpsertByName(req models.Product, orgID, userID string) (*models.Product, error)
 	Delete(id, orgID, userID string) error
 	ListCategories(orgID string) ([]models.ProductCategory, error)
@@ -92,6 +93,20 @@ func (s *service) Upsert(req models.Product, orgID, userID string) (bool, error)
 	req.UpdatedAt = now
 	applyProductDefaults(&req)
 	return s.repo.Upsert(&req, orgID, userID)
+}
+
+// UpsertTx is like Upsert but runs within an existing transaction.
+func (s *service) UpsertTx(tx *sql.Tx, req models.Product, orgID, userID string) (bool, error) {
+	now := time.Now()
+	req.ID = uuid.New().String()
+	req.IsActive = true
+	if userID != "" {
+		req.CreatedBy = &userID
+	}
+	req.CreatedAt = now
+	req.UpdatedAt = now
+	applyProductDefaults(&req)
+	return s.repo.UpsertTx(tx, &req, orgID, userID)
 }
 
 func (s *service) Update(id string, req models.Product, orgID, userID string) (*models.Product, error) {
