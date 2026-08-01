@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { UserPlus, Search, Users } from "lucide-react";
 import { usePatients } from "@/hooks/usePatients";
 import { PatientFormDialog, PatientList } from "@/components/patients";
+import { ServePatientDialog } from "@/components/patients/ServePatientDialog";
 import { Patient } from "@/types/patient";
 import { useDebounce } from "@/hooks/useDebounce";
 
@@ -15,6 +16,7 @@ export default function Patients() {
   const limit = 20; // 20 per page for better performance
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [servingPatient, setServingPatient] = useState<Patient | null>(null);
   
   const debouncedSearch = useDebounce(searchQuery, 300);
   const { data, isLoading } = usePatients(debouncedSearch, page, limit);
@@ -24,6 +26,10 @@ export default function Patients() {
   const handleEdit = (patient: Patient) => {
     setEditingPatient(patient);
     setIsFormOpen(true);
+  };
+
+  const handleServe = (patient: Patient) => {
+    setServingPatient(patient);
   };
 
   const handleCloseForm = (open: boolean) => {
@@ -70,7 +76,7 @@ export default function Patients() {
       {/* Patient List or Empty State */}
       {patients.length > 0 ? (
         <div className="space-y-4">
-          <PatientList patients={patients} onEdit={handleEdit} isLoading={isLoading} />
+          <PatientList patients={patients} onEdit={handleEdit} onServe={handleServe} isLoading={isLoading} />
           <div className="flex items-center justify-between">
             <Button
               variant="outline"
@@ -121,6 +127,15 @@ export default function Patients() {
         open={isFormOpen} 
         onOpenChange={handleCloseForm}
         patient={editingPatient}
+      />
+
+      {/* Serve Patient Dialog (walk-in to queue) */}
+      <ServePatientDialog
+        open={!!servingPatient}
+        onOpenChange={(open) => {
+          if (!open) setServingPatient(null);
+        }}
+        patient={servingPatient}
       />
     </div>
   );

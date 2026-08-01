@@ -28,17 +28,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MoreHorizontal, Eye, Pencil, Trash2, Phone } from "lucide-react";
+import { MoreHorizontal, Eye, Pencil, Trash2, Phone, Stethoscope } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useDeletePatient } from "@/hooks/usePatients";
 
 interface PatientListProps {
   patients: Patient[];
   onEdit: (patient: Patient) => void;
+  onServe?: (patient: Patient) => void;
   isLoading?: boolean;
 }
 
-export function PatientList({ patients, onEdit, isLoading }: PatientListProps) {
+export function PatientList({ patients, onEdit, onServe, isLoading }: PatientListProps) {
   const navigate = useNavigate();
   const deletePatient = useDeletePatient();
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
@@ -160,6 +161,12 @@ export function PatientList({ patients, onEdit, isLoading }: PatientListProps) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        {onServe && (
+                          <DropdownMenuItem onClick={() => onServe(patient)}>
+                            <Stethoscope className="h-4 w-4 mr-2" />
+                            Layani Pasien
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onClick={() => navigate(`/patients/${patient.id}`)}>
                           <Eye className="h-4 w-4 mr-2" />
                           View Details
