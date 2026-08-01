@@ -1,24 +1,51 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useTodayQueue, useUpdateAppointmentStatus } from "@/hooks/useVisitNotes";
 import { apiClient } from "@/integrations/api/client";
 import { format } from "date-fns";
-import { Users, Clock, CheckCircle2, Play, ArrowRight } from "lucide-react";
+import { Users, Clock, CheckCircle2, Play, ArrowRight, CheckCircle } from "lucide-react";
 
 export default function QueuePage() {
   const navigate = useNavigate();
   const { data: queue, isLoading } = useTodayQueue();
   const updateStatus = useUpdateAppointmentStatus();
   const [loadingTxFor, setLoadingTxFor] = useState<string | null>(null);
+  // Map of appointment_id → transaction payment status
+  const [paidAppointments, setPaidAppointments] = useState<Set<string>>(new Set());
 
   const waiting = queue?.waiting ?? [];
   const inProgress = queue?.in_progress ?? [];
   const completed = queue?.completed ?? [];
+
+  // Fetch today's transactions to check which appointments are already paid
+  useEffect(() => {
+    if (completed.length === 0) return;
+    (async () => {
+      try {
+        const data = await apiClient.get<{ data: any[] }>(`/transactions?limit=100`);
+        const paid = new Set<string>();
+        for (const tx of data.data || []) {
+          if (tx.payment_status === "paid" && tx.appointment_id) {
+            paid.add(tx.appointment_id);
+          }
+        }
+        setPaidAppointments(paid);
+      } catch (e) {
+        console.error("Failed to fetch transaction status:", e);
+      }
+    })();
+  }, [completed.length]);
 
   const handleStatusChange = (id: string, status: string) => {
     updateStatus.mutate({ id, status });
@@ -156,27 +183,36 @@ export default function QueuePage() {
               </CardContent>
             </Card>
           ) : (
-            completed.map((apt: any) => (
-              <QueueCard
-                key={apt.id}
-                appointment={apt}
-                onStatusChange={handleStatusChange}
-                actions={[
-                  {
-                    label: loadingTxFor === apt.id ? "Loading..." : "Buat Transaksi",
-                    icon: ArrowRight,
-                    onClick: () => handleCheckout(apt.id, apt.patient_id),
-                    variant: "default",
-                  },
-                  {
-                    label: "Lihat Detail",
-                    icon: ArrowRight,
-                    onClick: () => navigate(`/patients/${apt.patient_id}`),
-                    variant: "outline",
-                  },
-                ]}
-              />
-            ))
+            completed.map((apt: any) => {
+              const isPaid = paidAppointments.has(apt.id);
+              return (
+                <QueueCard
+                  key={apt.id}
+                  appointment={apt}
+                  onStatusChange={handleStatusChange}
+                  actions={[
+                    {
+                      label: isPaid
+                        ? "Transaksi Selesai"
+                        : loadingTxFor === apt.id
+                          ? "Loading..."
+                          : "Buat Transaksi",
+                      icon: isPaid ? CheckCircle : ArrowRight,
+                      onClick: isPaid ? undefined : () => handleCheckout(apt.id, apt.patient_id),
+                      variant: isPaid ? "outline" : "default",
+                      disabled: isPaid,
+                      tooltip: isPaid ? "Transaksi telah selesai dilakukan" : undefined,
+                    },
+                    {
+                      label: "Lihat Detail",
+                      icon: ArrowRight,
+                      onClick: () => navigate(`/patients/${apt.patient_id}`),
+                      variant: "outline",
+                    },
+                  ]}
+                />
+              );
+            })
           )}
         </div>
       </div>
@@ -193,6 +229,8 @@ interface QueueCardProps {
     status?: string;
     onClick?: () => void;
     variant: "default" | "outline";
+    disabled?: boolean;
+    tooltip?: string;
   }>;
 }
 
@@ -235,24 +273,41 @@ function QueueCard({ appointment, onStatusChange, actions }: QueueCardProps) {
           </p>
 
           <div className="flex flex-col gap-2 pt-2 border-t">
-            {actions.map((action, i) => (
-              <Button
-                key={i}
-                size="sm"
-                variant={action.variant}
-                className="w-full gap-1.5 h-9 text-xs"
-                onClick={() => {
-                  if (action.status) {
-                    onStatusChange(appointment.id, action.status);
-                  } else if (action.onClick) {
-                    action.onClick();
-                  }
-                }}
-              >
-                <action.icon className="h-3.5 w-3.5" />
-                {action.label}
-              </Button>
-            ))}
+            {actions.map((action, i) => {
+              const btn = (
+                <Button
+                  key={i}
+                  size="sm"
+                  variant={action.variant}
+                  className="w-full gap-1.5 h-9 text-xs"
+                  disabled={action.disabled}
+                  onClick={() => {
+                    if (action.status) {
+                      onStatusChange(appointment.id, action.status);
+                    } else if (action.onClick) {
+                      action.onClick();
+                    }
+                  }}
+                >
+                  <action.icon className="h-3.5 w-3.5" />
+                  {action.label}
+                </Button>
+              );
+              return action.tooltip ? (
+                <TooltipProvider key={i}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="w-full">{btn}</div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{action.tooltip}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                btn
+              );
+            })}
           </div>
         </div>
       </CardContent>

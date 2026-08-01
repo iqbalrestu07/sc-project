@@ -48,6 +48,7 @@ import { useStaff } from "@/hooks/useStaff";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useClinicSettings } from "@/hooks/useClinicSettings";
 import { useConsumableGroups } from "@/hooks/useConsumableGroups";
+import { apiClient } from "@/integrations/api/client";
 import type { CartItem, PaymentMethod, TransactionWithRelations } from "@/types/transaction";
 import { PAYMENT_METHODS } from "@/types/transaction";
 import { toast } from "sonner";
@@ -380,52 +381,92 @@ export function POSInterface({ initialTransactionId, initialPatientId }: POSInte
     }
 
     try {
-      const transaction = await createTransaction.mutateAsync({
-        transaction: {
-          patient_id: selectedPatientId,
-          appointment_id: null,
-          subtotal,
-          discount_amount: discount > 0 ? discount : null,
-          discount_type: discount > 0 ? discountType : null,
-          total_amount: total,
-          tax_amount: 0,
-          payment_method: null,
-          payment_status: "pending",
-          notes: null,
-          created_by: null,
-        },
-        items: cart.map((item) => ({
-          item_type: item.type,
-          service_id: item.type === "service" ? item.itemId : null,
-          product_id: item.type === "product" ? item.itemId : null,
-          doctor_id: item.doctorId || null,
-          therapist_id: item.therapistId || null,
-          quantity: item.quantity,
-          unit_price: item.unitPrice,
-          discount_amount: item.discountAmount && item.discountAmount > 0 ? item.discountAmount : null,
-          discount_type: item.discountAmount && item.discountAmount > 0 ? (item.discountType ?? "fixed") : null,
-          total_price: itemTotal(item),
-          // Only pass for service items; product items never earn commission.
-          commission_eligible: item.type === "service" ? (item.commissionEligible ?? true) : undefined,
-          commission_notes: item.commissionNotes || null,
-          // Selected consumable product (for service items with consumable groups)
-          selected_consumable_product_id: item.selectedConsumableProductId || null,
-        })),
-      });
+      let transactionId: string;
 
-      // Process payment immediately
+      if (draftTransactionId) {
+        // Walk-in flow: transaction draft already exists with items.
+        // Add any NEW items (e.g. extra products added in POS) to the existing transaction.
+        // Then update payment status to "paid".
+        transactionId = draftTransactionId;
+
+        // Fetch existing items to know what's already in the transaction
+        const existingTx = await fetchTransactionDetail(draftTransactionId);
+        const existingItemKeys = new Set(
+          (existingTx.items || []).map((it: any) =>
+            `${it.item_type}-${it.service_id || it.product_id}`
+          )
+        );
+
+        // Add only items that weren't in the original draft
+        for (const item of cart) {
+          const key = `${item.type}-${item.itemId}`;
+          if (!existingItemKeys.has(key)) {
+            await apiClient.post(`/transactions/${draftTransactionId}/items`, {
+              item_type: item.type,
+              service_id: item.type === "service" ? item.itemId : null,
+              product_id: item.type === "product" ? item.itemId : null,
+              doctor_id: item.doctorId || null,
+              therapist_id: item.therapistId || null,
+              quantity: item.quantity,
+              unit_price: item.unitPrice,
+              discount_amount: item.discountAmount && item.discountAmount > 0 ? item.discountAmount : null,
+              discount_type: item.discountAmount && item.discountAmount > 0 ? (item.discountType ?? "fixed") : null,
+              total_price: itemTotal(item),
+              commission_eligible: item.type === "service" ? (item.commissionEligible ?? true) : undefined,
+              commission_notes: item.commissionNotes || null,
+              selected_consumable_product_id: item.selectedConsumableProductId || null,
+            });
+          }
+        }
+      } else {
+        // Normal flow: create new transaction with all cart items
+        const transaction = await createTransaction.mutateAsync({
+          transaction: {
+            patient_id: selectedPatientId,
+            appointment_id: null,
+            subtotal,
+            discount_amount: discount > 0 ? discount : null,
+            discount_type: discount > 0 ? discountType : null,
+            total_amount: total,
+            tax_amount: 0,
+            payment_method: null,
+            payment_status: "pending",
+            notes: null,
+            created_by: null,
+          },
+          items: cart.map((item) => ({
+            item_type: item.type,
+            service_id: item.type === "service" ? item.itemId : null,
+            product_id: item.type === "product" ? item.itemId : null,
+            doctor_id: item.doctorId || null,
+            therapist_id: item.therapistId || null,
+            quantity: item.quantity,
+            unit_price: item.unitPrice,
+            discount_amount: item.discountAmount && item.discountAmount > 0 ? item.discountAmount : null,
+            discount_type: item.discountAmount && item.discountAmount > 0 ? (item.discountType ?? "fixed") : null,
+            total_price: itemTotal(item),
+            commission_eligible: item.type === "service" ? (item.commissionEligible ?? true) : undefined,
+            commission_notes: item.commissionNotes || null,
+            selected_consumable_product_id: item.selectedConsumableProductId || null,
+          })),
+        });
+        transactionId = transaction.id;
+      }
+
+      // Process payment — update transaction to "paid"
       const paidTransaction = await updatePaymentStatus.mutateAsync({
-        id: transaction.id,
+        id: transactionId,
         payment_status: "paid",
         payment_method: paymentMethod,
         send_whatsapp: sendWhatsApp,
       });
 
-      // Clear cart
+      // Clear cart + draft
       setCart([]);
       setSelectedPatientId("");
       setDiscount(0);
       setDiscountType("fixed");
+      setDraftTransactionId(null);
 
       // Ask user whether to print receipt
       setCompletedTransaction(paidTransaction);
