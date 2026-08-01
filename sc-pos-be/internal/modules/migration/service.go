@@ -29,10 +29,17 @@ var (
 	ErrInvalidPrice         = errors.New("harga must be a valid number")
 )
 
-// batchSize is the number of rows processed before yielding to GC.
+// batchSize is the number of rows per SQL query (multi-row INSERT).
 // Tuned for a 1GB RAM server — small enough to keep memory footprint low,
-// large enough to avoid excessive GC pauses.
+// large enough to minimize round-trips over high-latency SSH tunnel.
 const batchSize = 50
+
+// chunkSize is the number of rows per transaction.
+// Each chunk is committed independently, so a failure in one chunk
+// doesn't roll back already-committed chunks. If a chunk fails, we
+// retry its rows individually to identify the bad ones.
+// 500 rows × ~500B = ~250KB per chunk buffer — safe for 1GB RAM.
+const chunkSize = 500
 
 // ImportResult reports the outcome of an Excel migration.
 type ImportResult struct {
@@ -181,150 +188,226 @@ func (s *service) ImportCatalogExcel(file io.Reader, filename, orgID, userID str
 		return nil, err
 	}
 
-	// Batch ON CONFLICT upsert: multiple rows per query to minimize round-trips.
-	// Catalog import mixes products and services, so we buffer rows and flush
-	// per-type when batchSize is reached or at end of file.
+	// Chunked transaction strategy (same as patient import):
+	// Rows are collected in chunks of chunkSize (500). Each chunk is committed
+	// in its own transaction. Within a chunk, products and services are sent
+	// as separate multi-row INSERT ... ON CONFLICT batches of batchSize (50).
 	//
-	// All batches are wrapped in a single transaction (1 WAL fsync at COMMIT).
+	// IMPORTANT: Before sending to PostgreSQL, we deduplicate rows within
+	// each chunk by conflict key (LOWER(name)). Without this, a multi-row
+	// INSERT with two rows that map to the same existing row raises
+	// "ON CONFLICT DO UPDATE command cannot affect row a second time".
+	//
+	// If a chunk still fails, retry per-row to identify bad rows.
+	//
+	// catalogItem holds a parsed row that can be either a product or service.
 	result := &ImportResult{}
 	rowNum := 1
-	var productBatch []models.Product
-	var serviceBatch []models.Service
 
-	flushBatches := func(tx *sql.Tx) error {
-		if len(productBatch) > 0 {
-			created, updated, err := s.productSvc.BatchUpsertTx(tx, productBatch, orgID, userID)
-			if err != nil {
-				// Fallback to per-row for granular error tracking
-				for _, req := range productBatch {
-					_, rowErr := s.productSvc.UpsertTx(tx, req, orgID, userID)
-					result.track(rowErr == nil, rowErr, req.Name)
+	type catalogItem struct {
+		isProduct bool
+		product   models.Product
+		service   models.Service
+	}
+	var chunk []catalogItem
+
+	flushChunk := func() {
+		if len(chunk) == 0 {
+			return
+		}
+
+		chunkStartRow := rowNum - len(chunk)
+
+		// Deduplicate by conflict key: (LOWER(name)).
+		// Products and services have separate unique indexes, so we dedup
+		// within each type. Last occurrence wins.
+		seenProduct := make(map[string]int)
+		seenService := make(map[string]int)
+		for i, item := range chunk {
+			if item.isProduct {
+				seenProduct[strings.ToLower(item.product.Name)] = i
+			} else {
+				seenService[strings.ToLower(item.service.Name)] = i
+			}
+		}
+		var deduped []catalogItem
+		for i, item := range chunk {
+			if item.isProduct {
+				if seenProduct[strings.ToLower(item.product.Name)] == i {
+					deduped = append(deduped, item)
 				}
 			} else {
-				result.Processed += created + updated
-				result.Created += created
-				result.Updated += updated
-			}
-			productBatch = productBatch[:0]
-		}
-		if len(serviceBatch) > 0 {
-			created, updated, err := s.serviceSvc.BatchUpsertTx(tx, serviceBatch, orgID, userID)
-			if err != nil {
-				for _, req := range serviceBatch {
-					_, rowErr := s.serviceSvc.UpsertTx(tx, req, orgID, userID)
-					result.track(rowErr == nil, rowErr, req.Name)
+				if seenService[strings.ToLower(item.service.Name)] == i {
+					deduped = append(deduped, item)
 				}
-			} else {
-				result.Processed += created + updated
-				result.Created += created
-				result.Updated += updated
 			}
-			serviceBatch = serviceBatch[:0]
 		}
-		return nil
+		chunk = deduped
+
+		// Split chunk into products and services
+		var products []models.Product
+		var services []models.Service
+		for _, item := range chunk {
+			if item.isProduct {
+				products = append(products, item.product)
+			} else {
+				services = append(services, item.service)
+			}
+		}
+
+		// Fast path: batch upsert in 1 transaction
+		var chunkCreated, chunkUpdated int
+		txErr := database.WithTx(func(tx *sql.Tx) error {
+			// Upsert products in batches of 50
+			for i := 0; i < len(products); i += batchSize {
+				end := i + batchSize
+				if end > len(products) {
+					end = len(products)
+				}
+				created, updated, err := s.productSvc.BatchUpsertTx(tx, products[i:end], orgID, userID)
+				if err != nil {
+					return err
+				}
+				chunkCreated += created
+				chunkUpdated += updated
+			}
+			// Upsert services in batches of 50
+			for i := 0; i < len(services); i += batchSize {
+				end := i + batchSize
+				if end > len(services) {
+					end = len(services)
+				}
+				created, updated, err := s.serviceSvc.BatchUpsertTx(tx, services[i:end], orgID, userID)
+				if err != nil {
+					return err
+				}
+				chunkCreated += created
+				chunkUpdated += updated
+			}
+			return nil
+		})
+
+		if txErr == nil {
+			result.Processed += chunkCreated + chunkUpdated
+			result.Created += chunkCreated
+			result.Updated += chunkUpdated
+			chunk = chunk[:0]
+			return
+		}
+
+		// Slow path: retry per-row to identify bad rows
+		for i, item := range chunk {
+			var created bool
+			var rowErr error
+			if item.isProduct {
+				created, rowErr = s.productSvc.Upsert(item.product, orgID, userID)
+			} else {
+				created, rowErr = s.serviceSvc.Upsert(item.service, orgID, userID)
+			}
+			name := item.product.Name
+			if !item.isProduct {
+				name = item.service.Name
+			}
+			result.track(created, rowErr, fmt.Sprintf("row %d (%s)", chunkStartRow+i, name))
+		}
+		chunk = chunk[:0]
 	}
 
-	err = database.WithTx(func(tx *sql.Tx) error {
-		for {
-			row, err := reader.Read()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				result.Failed++
-				result.Errors = append(result.Errors, fmt.Sprintf("row %d: read error: %v", rowNum+1, err))
-				rowNum++
-				continue
-			}
+	for {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("row %d: read error: %v", rowNum+1, err))
 			rowNum++
-			if len(row) == 0 || allEmpty(row) {
-				continue
-			}
-
-			name := strings.TrimSpace(getCell(row, idx.name))
-			if name == "" {
-				result.Failed++
-				result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, ErrMissingName))
-				continue
-			}
-
-			jenis := strings.TrimSpace(strings.ToLower(getCell(row, idx.jenis)))
-			price, err := parsePrice(getCell(row, idx.harga))
-			if err != nil {
-				result.Failed++
-				result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, err))
-				continue
-			}
-
-			commission, _ := parsePrice(getCell(row, idx.komisi))
-			modal, _ := parsePrice(getCell(row, idx.modal))
-			hargaTambahan, _ := parsePrice(getCell(row, idx.hargaTambahan))
-			komisiTambahan, _ := parsePrice(getCell(row, idx.komisiTambahan))
-
-			switch jenis {
-			case "product":
-				req := models.Product{
-					Name:         name,
-					SellingPrice: &price,
-					IsConsumable: false,
-					IsActive:     true,
-				}
-				if modal > 0 {
-					req.PurchasePrice = &modal
-				}
-				productBatch = append(productBatch, req)
-			case "barang habis pakai":
-				req := models.Product{
-					Name:         name,
-					SellingPrice: &price,
-					IsConsumable: true,
-					IsActive:     true,
-				}
-				if modal > 0 {
-					req.PurchasePrice = &modal
-				}
-				productBatch = append(productBatch, req)
-			case "tindakan":
-				req := models.Service{
-					Name:                     name,
-					BasePrice:                price,
-					DoctorCommissionType:     "fixed",
-					DoctorCommissionValue:    commission,
-					TherapistCommissionType:  "fixed",
-					TherapistCommissionValue: commission,
-					DurationMinutes:          30,
-					IsActive:                 true,
-				}
-				if hargaTambahan > 0 {
-					req.OfferingPrice = &hargaTambahan
-				}
-				if komisiTambahan > 0 {
-					offType := "fixed"
-					req.DoctorOfferingCommissionType = &offType
-					req.DoctorOfferingCommissionValue = &komisiTambahan
-					req.TherapistOfferingCommissionType = &offType
-					req.TherapistOfferingCommissionValue = &komisiTambahan
-				}
-				serviceBatch = append(serviceBatch, req)
-			default:
-				result.Failed++
-				result.Errors = append(result.Errors, fmt.Sprintf("row %d (%s): %v", rowNum, name, ErrInvalidRowType))
-				continue
-			}
-
-			// Flush when either batch is full
-			if len(productBatch) >= batchSize || len(serviceBatch) >= batchSize {
-				if e := flushBatches(tx); e != nil {
-					return e
-				}
-				runtime.GC()
-			}
+			continue
 		}
-		return flushBatches(tx) // flush remaining
-	})
-	if err != nil {
-		return nil, err
+		rowNum++
+		if len(row) == 0 || allEmpty(row) {
+			continue
+		}
+
+		name := strings.TrimSpace(getCell(row, idx.name))
+		if name == "" {
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, ErrMissingName))
+			continue
+		}
+
+		jenis := strings.TrimSpace(strings.ToLower(getCell(row, idx.jenis)))
+		price, err := parsePrice(getCell(row, idx.harga))
+		if err != nil {
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, err))
+			continue
+		}
+
+		commission, _ := parsePrice(getCell(row, idx.komisi))
+		modal, _ := parsePrice(getCell(row, idx.modal))
+		hargaTambahan, _ := parsePrice(getCell(row, idx.hargaTambahan))
+		komisiTambahan, _ := parsePrice(getCell(row, idx.komisiTambahan))
+
+		var item catalogItem
+		switch jenis {
+		case "product":
+			item.isProduct = true
+			item.product = models.Product{
+				Name:         name,
+				SellingPrice: &price,
+				IsConsumable: false,
+				IsActive:     true,
+			}
+			if modal > 0 {
+				item.product.PurchasePrice = &modal
+			}
+		case "barang habis pakai":
+			item.isProduct = true
+			item.product = models.Product{
+				Name:         name,
+				SellingPrice: &price,
+				IsConsumable: true,
+				IsActive:     true,
+			}
+			if modal > 0 {
+				item.product.PurchasePrice = &modal
+			}
+		case "tindakan":
+			item.isProduct = false
+			item.service = models.Service{
+				Name:                     name,
+				BasePrice:                price,
+				DoctorCommissionType:     "fixed",
+				DoctorCommissionValue:    commission,
+				TherapistCommissionType:  "fixed",
+				TherapistCommissionValue: commission,
+				DurationMinutes:          30,
+				IsActive:                 true,
+			}
+			if hargaTambahan > 0 {
+				item.service.OfferingPrice = &hargaTambahan
+			}
+			if komisiTambahan > 0 {
+				offType := "fixed"
+				item.service.DoctorOfferingCommissionType = &offType
+				item.service.DoctorOfferingCommissionValue = &komisiTambahan
+				item.service.TherapistOfferingCommissionType = &offType
+				item.service.TherapistOfferingCommissionValue = &komisiTambahan
+			}
+		default:
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("row %d (%s): %v", rowNum, name, ErrInvalidRowType))
+			continue
+		}
+
+		chunk = append(chunk, item)
+		if len(chunk) >= chunkSize {
+			flushChunk()
+			runtime.GC()
+		}
 	}
+	flushChunk() // flush remaining
 
 	return result, nil
 }
@@ -384,91 +467,145 @@ func (s *service) ImportPatientsExcel(file io.Reader, filename, orgID, userID st
 		return nil, err
 	}
 
-	// Batch ON CONFLICT upsert: multiple rows per query to minimize round-trips.
-	// With SSH tunnel latency of ~179ms, this is critical:
-	//   277 rows × 1 round-trip each = 277 round-trips = ~50 seconds
-	//   277 rows ÷ 50 per batch   = 6 round-trips   = ~1 second
+	// Chunked transaction strategy:
 	//
-	// All batches are wrapped in a single transaction (1 WAL fsync at COMMIT).
-	// Streaming: rows are collected in chunks of batchSize, then sent as 1 query.
+	// Rows are processed in chunks of chunkSize (500). Each chunk is committed
+	// in its own transaction, so a failure in one chunk doesn't roll back
+	// already-committed chunks. Within a chunk, rows are sent in batches of
+	// batchSize (50) as multi-row INSERT ... ON CONFLICT queries.
+	//
+	// IMPORTANT: Before sending to PostgreSQL, we deduplicate rows within
+	// each chunk by conflict key (LOWER(name), COALESCE(phone,'')). Without
+	// this, a multi-row INSERT with two rows that map to the same existing
+	// row raises "ON CONFLICT DO UPDATE command cannot affect row a second
+	// time" — which causes the entire batch to fail and triggers slow
+	// per-row retry.
+	//
+	// If a chunk's transaction still fails (e.g. other constraint), we retry
+	// each row individually to identify the bad rows.
+	//
+	// Memory: chunk buffer = 500 × ~500B = ~250KB (constant, GC'd after each chunk).
+	// Speed: 2000 rows = 4 chunks × 10 batches = 40 queries + 4 COMMITs = ~8 seconds.
 	result := &ImportResult{}
 	rowNum := 1
-	var batch []models.Patient
+	var chunk []models.Patient
 
-	flushBatch := func(tx *sql.Tx) error {
-		if len(batch) == 0 {
-			return nil
+	// flushChunk attempts to upsert all rows in the chunk in a single
+	// transaction. If the transaction fails, it retries per-row.
+	flushChunk := func() {
+		if len(chunk) == 0 {
+			return
 		}
-		created, updated, err := s.patientSvc.BatchUpsertTx(tx, batch, userID, orgID)
-		if err != nil {
-			// On batch error, fall back to per-row to get per-row error tracking
-			for _, req := range batch {
-				_, rowErr := s.patientSvc.UpsertTx(tx, req, userID, orgID)
-				result.track(rowErr == nil, rowErr, req.FullName)
+
+		chunkStartRow := rowNum - len(chunk)
+
+		// Deduplicate by conflict key: (LOWER(name), COALESCE(phone,'')).
+		// Last occurrence wins (later row overwrites earlier duplicate).
+		// This prevents "cannot affect row a second time" error in multi-row INSERT.
+		seen := make(map[string]int, len(chunk))
+		for i, req := range chunk {
+			key := strings.ToLower(req.FullName) + "\x00"
+			if req.Phone != nil && *req.Phone != "" {
+				key += *req.Phone
 			}
-			batch = batch[:0]
-			return nil
+			seen[key] = i // last occurrence wins
 		}
-		result.Processed += created + updated
-		result.Created += created
-		result.Updated += updated
-		batch = batch[:0]
-		return nil
-	}
+		var deduped []models.Patient
+		for i, req := range chunk {
+			key := strings.ToLower(req.FullName) + "\x00"
+			if req.Phone != nil && *req.Phone != "" {
+				key += *req.Phone
+			}
+			if seen[key] == i {
+				deduped = append(deduped, req)
+			}
+		}
+		chunk = deduped
 
-	err = database.WithTx(func(tx *sql.Tx) error {
-		for {
-			row, err := reader.Read()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				result.Failed++
-				result.Errors = append(result.Errors, fmt.Sprintf("row %d: read error: %v", rowNum+1, err))
-				rowNum++
-				continue
-			}
-			rowNum++
-			if len(row) == 0 || allEmpty(row) {
-				continue
-			}
-
-			name := strings.TrimSpace(getCell(row, idx.name))
-			if name == "" {
-				result.Failed++
-				result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, ErrMissingName))
-				continue
-			}
-
-			phone := strings.TrimSpace(getCell(row, idx.phone))
-			address := strings.TrimSpace(getCell(row, idx.address))
-
-			req := models.Patient{
-				FullName: name,
-			}
-			if phone != "" {
-				phoneVal := phone
-				req.Phone = &phoneVal
-				req.WhatsApp = &phoneVal
-			}
-			if address != "" {
-				addrVal := address
-				req.Address = &addrVal
-			}
-
-			batch = append(batch, req)
-			if len(batch) >= batchSize {
-				if e := flushBatch(tx); e != nil {
-					return e
+		// Fast path: batch upsert in 1 transaction
+		var chunkCreated, chunkUpdated int
+		txErr := database.WithTx(func(tx *sql.Tx) error {
+			for i := 0; i < len(chunk); i += batchSize {
+				end := i + batchSize
+				if end > len(chunk) {
+					end = len(chunk)
 				}
-				runtime.GC()
+				batch := chunk[i:end]
+				created, updated, err := s.patientSvc.BatchUpsertTx(tx, batch, userID, orgID)
+				if err != nil {
+					return err
+				}
+				chunkCreated += created
+				chunkUpdated += updated
 			}
+			return nil
+		})
+
+		if txErr == nil {
+			// Chunk succeeded — add to global result
+			result.Processed += chunkCreated + chunkUpdated
+			result.Created += chunkCreated
+			result.Updated += chunkUpdated
+			chunk = chunk[:0]
+			return
 		}
-		return flushBatch(tx) // flush remaining
-	})
-	if err != nil {
-		return nil, err
+
+		// Slow path: chunk failed, retry per-row to identify bad rows.
+		// Each row gets its own auto-commit transaction (via Upsert, not UpsertTx)
+		// so one bad row doesn't poison the rest.
+		for i, req := range chunk {
+			created, rowErr := s.patientSvc.Upsert(req, userID, orgID)
+			result.track(created, rowErr, fmt.Sprintf("row %d (%s)", chunkStartRow+i, req.FullName))
+		}
+		chunk = chunk[:0]
 	}
+
+	for {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("row %d: read error: %v", rowNum+1, err))
+			rowNum++
+			continue
+		}
+		rowNum++
+		if len(row) == 0 || allEmpty(row) {
+			continue
+		}
+
+		name := strings.TrimSpace(getCell(row, idx.name))
+		if name == "" {
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", rowNum, ErrMissingName))
+			continue
+		}
+
+		phone := strings.TrimSpace(getCell(row, idx.phone))
+		address := strings.TrimSpace(getCell(row, idx.address))
+
+		req := models.Patient{
+			FullName: name,
+		}
+		if phone != "" {
+			phoneVal := phone
+			req.Phone = &phoneVal
+			req.WhatsApp = &phoneVal
+		}
+		if address != "" {
+			addrVal := address
+			req.Address = &addrVal
+		}
+
+		chunk = append(chunk, req)
+		if len(chunk) >= chunkSize {
+			flushChunk()
+			runtime.GC()
+		}
+	}
+	flushChunk() // flush remaining
 
 	return result, nil
 }
