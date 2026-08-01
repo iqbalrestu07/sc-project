@@ -249,8 +249,49 @@ func RunMigrations() error {
 		return fmt.Errorf("failed to migrate VARCHAR(36) to UUID: %w", err)
 	}
 
+	// ---------------------------------------------------------------------------
+	// 14) Add DEFAULT gen_random_uuid() to all primary key UUID columns.
+	//     This is a safety net: if an INSERT omits the id field, PostgreSQL
+	//     generates a UUIDv4 automatically instead of failing with NOT NULL.
+	//     Normal application code always passes an explicit UUIDv7 from
+	//     utils.NewUUID(), so this default is only used as a fallback.
+	//     Idempotent: only sets default if the column doesn't already have one.
+	// ---------------------------------------------------------------------------
+	if _, err := DB.Exec(addUuidDefaults); err != nil {
+		return fmt.Errorf("failed to add UUID defaults: %w", err)
+	}
+
 	return nil
 }
+
+// addUuidDefaults adds DEFAULT gen_random_uuid() to all UUID primary key
+// columns that don't already have a default. This is a safety net so INSERTs
+// that omit the id field get a valid UUID instead of a NOT NULL violation.
+const addUuidDefaults = `
+DO $$
+DECLARE
+    pk_col RECORD;
+BEGIN
+    FOR pk_col IN
+        SELECT
+            cl.relname AS table_name,
+            att.attname AS column_name
+        FROM pg_index idx
+        JOIN pg_class cl ON cl.oid = idx.indrelid
+        JOIN pg_attribute att ON att.attrelid = cl.oid AND att.attnum = ANY(idx.indkey)
+        JOIN pg_namespace ns ON ns.oid = cl.relnamespace
+        WHERE idx.indisprimary = true
+          AND ns.nspname = 'public'
+          AND format_type(att.atttypid, att.atttypmod) = 'uuid'
+          AND att.atthasdef = false  -- only if no default exists yet
+    LOOP
+        EXECUTE format(
+            'ALTER TABLE %I ALTER COLUMN %I SET DEFAULT gen_random_uuid()',
+            pk_col.table_name, pk_col.column_name
+        );
+    END LOOP;
+END $$;
+`
 
 // migrateVarcharToUUID converts all VARCHAR(36) columns to native UUID type.
 //
@@ -334,7 +375,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- ── Auth / identity ───────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS users (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	email VARCHAR(255) UNIQUE NOT NULL,
 	password VARCHAR(255) NOT NULL,
 	role VARCHAR(50) NOT NULL,
@@ -347,7 +388,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- ── SaaS multi-tenant / RBAC ──────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS organizations (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	name VARCHAR(255) NOT NULL,
 	slug VARCHAR(100) UNIQUE NOT NULL,
 	description TEXT,
@@ -361,7 +402,7 @@ CREATE TABLE IF NOT EXISTS organizations (
 );
 
 CREATE TABLE IF NOT EXISTS organization_members (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
 	user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 	role VARCHAR(50) NOT NULL DEFAULT 'cashier',
@@ -384,14 +425,14 @@ CREATE TABLE IF NOT EXISTS permissions (
 );
 
 CREATE TABLE IF NOT EXISTS role_permissions (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	role VARCHAR(50) NOT NULL,
 	permission_id VARCHAR(100) NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
 	UNIQUE(role, permission_id)
 );
 
 CREATE TABLE IF NOT EXISTS user_permissions (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 	org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
 	permission_id VARCHAR(100) NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
@@ -403,7 +444,7 @@ CREATE TABLE IF NOT EXISTS user_permissions (
 -- ── Service catalog ───────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS service_categories (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	name VARCHAR(255) NOT NULL,
 	description TEXT,
 	is_active BOOLEAN DEFAULT true,
@@ -416,7 +457,7 @@ CREATE TABLE IF NOT EXISTS service_categories (
 );
 
 CREATE TABLE IF NOT EXISTS services (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	name VARCHAR(255) NOT NULL,
 	category_id UUID REFERENCES service_categories(id),
 	description TEXT,
@@ -439,7 +480,7 @@ CREATE TABLE IF NOT EXISTS services (
 -- ── Product catalog ───────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS product_categories (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	name VARCHAR(100) NOT NULL,
 	description TEXT,
 	is_active BOOLEAN DEFAULT true,
@@ -452,7 +493,7 @@ CREATE TABLE IF NOT EXISTS product_categories (
 );
 
 CREATE TABLE IF NOT EXISTS products (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	name VARCHAR(255) NOT NULL,
 	category VARCHAR(100),
 	sku VARCHAR(100) UNIQUE,
@@ -475,7 +516,7 @@ CREATE TABLE IF NOT EXISTS products (
 -- ── Staff and patients ──────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS staff (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	user_id UUID UNIQUE REFERENCES users(id),
 	full_name VARCHAR(255) NOT NULL,
 	role VARCHAR(50) NOT NULL,
@@ -492,7 +533,7 @@ CREATE TABLE IF NOT EXISTS staff (
 );
 
 CREATE TABLE IF NOT EXISTS patients (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	patient_code VARCHAR(50) UNIQUE NOT NULL,
 	full_name VARCHAR(255) NOT NULL,
 	photo_url TEXT,
@@ -520,7 +561,7 @@ CREATE TABLE IF NOT EXISTS patients (
 -- ── Appointments and transactions ─────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS appointments (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	patient_id UUID NOT NULL REFERENCES patients(id),
 	service_id UUID NOT NULL REFERENCES services(id),
 	doctor_id UUID REFERENCES staff(id),
@@ -538,7 +579,7 @@ CREATE TABLE IF NOT EXISTS appointments (
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	transaction_code VARCHAR(50) UNIQUE NOT NULL,
 	appointment_id UUID REFERENCES appointments(id),
 	patient_id UUID REFERENCES patients(id),
@@ -560,7 +601,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 
 CREATE TABLE IF NOT EXISTS transaction_items (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	transaction_id UUID NOT NULL REFERENCES transactions(id),
 	item_type VARCHAR(50) NOT NULL DEFAULT 'service',
 	service_id UUID REFERENCES services(id),
@@ -580,7 +621,7 @@ CREATE TABLE IF NOT EXISTS transaction_items (
 );
 
 CREATE TABLE IF NOT EXISTS commissions (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	staff_id UUID NOT NULL REFERENCES staff(id),
 	staff_role VARCHAR(50) NOT NULL,
 	transaction_id UUID NOT NULL REFERENCES transactions(id),
@@ -601,7 +642,7 @@ CREATE TABLE IF NOT EXISTS commissions (
 -- ── Settings and CMS ────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS clinic_settings (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	clinic_name VARCHAR(255),
 	address TEXT,
 	phone VARCHAR(20),
@@ -629,7 +670,7 @@ CREATE TABLE IF NOT EXISTS clinic_settings (
 );
 
 CREATE TABLE IF NOT EXISTS cms_pages (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	page_id VARCHAR(100) NOT NULL,
 	data JSONB NOT NULL DEFAULT '{}'::jsonb,
 	organization_id UUID REFERENCES organizations(id),
@@ -644,7 +685,7 @@ CREATE TABLE IF NOT EXISTS cms_pages (
 -- ── Inventory and service consumables ─────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS stock_movements (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	product_id UUID NOT NULL REFERENCES products(id),
 	movement_type VARCHAR(20) NOT NULL,
 	quantity INTEGER NOT NULL,
@@ -658,7 +699,7 @@ CREATE TABLE IF NOT EXISTS stock_movements (
 );
 
 CREATE TABLE IF NOT EXISTS service_consumables (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	service_id UUID NOT NULL REFERENCES services(id),
 	product_id UUID NOT NULL REFERENCES products(id),
 	quantity_used DECIMAL(10, 3) NOT NULL DEFAULT 1,
@@ -760,7 +801,7 @@ CREATE INDEX IF NOT EXISTS idx_products_consumable ON products(is_consumable) WH
 // records of when and why consumable products were used / dispensed.
 const addConsumableUsageLogs = `
 CREATE TABLE IF NOT EXISTS consumable_usage_logs (
-	id UUID PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	product_id UUID NOT NULL REFERENCES products(id),
 	quantity DECIMAL(10,3) NOT NULL,
 	usage_purpose VARCHAR(100) NOT NULL,
@@ -913,7 +954,7 @@ ON CONFLICT (role, permission_id) DO NOTHING;
 
 const addWhatsappTables = `
 CREATE TABLE IF NOT EXISTS clinic_whatsapp_devices (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID REFERENCES organizations(id),
     name VARCHAR(100) NOT NULL,
     jid VARCHAR(100) NOT NULL,
@@ -922,7 +963,7 @@ CREATE TABLE IF NOT EXISTS clinic_whatsapp_devices (
 );
 
 CREATE TABLE IF NOT EXISTS whatsapp_templates (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100) NOT NULL,
     content TEXT NOT NULL,
     organization_id UUID NOT NULL REFERENCES organizations(id),
@@ -1010,7 +1051,7 @@ END $$;
 
 const addOmnichannelTables = `
 CREATE TABLE IF NOT EXISTS omni_conversations (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id),
     platform VARCHAR(50) NOT NULL,
     device_id VARCHAR(100),
@@ -1027,7 +1068,7 @@ CREATE TABLE IF NOT EXISTS omni_conversations (
 CREATE INDEX IF NOT EXISTS idx_omni_conversations_org ON omni_conversations(organization_id);
 
 CREATE TABLE IF NOT EXISTS omni_messages (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id UUID NOT NULL REFERENCES omni_conversations(id) ON DELETE CASCADE,
     direction VARCHAR(20) NOT NULL,
     status VARCHAR(50) DEFAULT 'sent',
