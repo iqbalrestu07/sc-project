@@ -181,18 +181,48 @@ func (s *service) ImportCatalogExcel(file io.Reader, filename, orgID, userID str
 		return nil, err
 	}
 
-	// ON CONFLICT upsert: each row is 1 DB round-trip (no pre-fetch needed).
-	// The unique index (organization_id, LOWER(name)) handles duplicate
-	// detection atomically inside PostgreSQL.
+	// Batch ON CONFLICT upsert: multiple rows per query to minimize round-trips.
+	// Catalog import mixes products and services, so we buffer rows and flush
+	// per-type when batchSize is reached or at end of file.
 	//
-	// All rows are wrapped in a single transaction so PostgreSQL only fsyncs
-	// WAL once at COMMIT instead of per-statement.
-	//
-	// Streaming: reader.Read() processes 1 row at a time — memory is constant
-	// regardless of file size. GC runs every batchSize rows.
+	// All batches are wrapped in a single transaction (1 WAL fsync at COMMIT).
 	result := &ImportResult{}
 	rowNum := 1
-	processedInBatch := 0
+	var productBatch []models.Product
+	var serviceBatch []models.Service
+
+	flushBatches := func(tx *sql.Tx) error {
+		if len(productBatch) > 0 {
+			created, updated, err := s.productSvc.BatchUpsertTx(tx, productBatch, orgID, userID)
+			if err != nil {
+				// Fallback to per-row for granular error tracking
+				for _, req := range productBatch {
+					_, rowErr := s.productSvc.UpsertTx(tx, req, orgID, userID)
+					result.track(rowErr == nil, rowErr, req.Name)
+				}
+			} else {
+				result.Processed += created + updated
+				result.Created += created
+				result.Updated += updated
+			}
+			productBatch = productBatch[:0]
+		}
+		if len(serviceBatch) > 0 {
+			created, updated, err := s.serviceSvc.BatchUpsertTx(tx, serviceBatch, orgID, userID)
+			if err != nil {
+				for _, req := range serviceBatch {
+					_, rowErr := s.serviceSvc.UpsertTx(tx, req, orgID, userID)
+					result.track(rowErr == nil, rowErr, req.Name)
+				}
+			} else {
+				result.Processed += created + updated
+				result.Created += created
+				result.Updated += updated
+			}
+			serviceBatch = serviceBatch[:0]
+		}
+		return nil
+	}
 
 	err = database.WithTx(func(tx *sql.Tx) error {
 		for {
@@ -231,73 +261,72 @@ func (s *service) ImportCatalogExcel(file io.Reader, filename, orgID, userID str
 			hargaTambahan, _ := parsePrice(getCell(row, idx.hargaTambahan))
 			komisiTambahan, _ := parsePrice(getCell(row, idx.komisiTambahan))
 
-			var created bool
-			var upsertErr error
 			switch jenis {
 			case "product":
-				created, upsertErr = s.upsertProductTx(tx, name, price, modal, false, orgID, userID)
-			case "tindakan":
-				created, upsertErr = s.upsertServiceTx(tx, name, price, commission, hargaTambahan, komisiTambahan, orgID, userID)
+				req := models.Product{
+					Name:         name,
+					SellingPrice: &price,
+					IsConsumable: false,
+					IsActive:     true,
+				}
+				if modal > 0 {
+					req.PurchasePrice = &modal
+				}
+				productBatch = append(productBatch, req)
 			case "barang habis pakai":
-				created, upsertErr = s.upsertProductTx(tx, name, price, modal, true, orgID, userID)
+				req := models.Product{
+					Name:         name,
+					SellingPrice: &price,
+					IsConsumable: true,
+					IsActive:     true,
+				}
+				if modal > 0 {
+					req.PurchasePrice = &modal
+				}
+				productBatch = append(productBatch, req)
+			case "tindakan":
+				req := models.Service{
+					Name:                     name,
+					BasePrice:                price,
+					DoctorCommissionType:     "fixed",
+					DoctorCommissionValue:    commission,
+					TherapistCommissionType:  "fixed",
+					TherapistCommissionValue: commission,
+					DurationMinutes:          30,
+					IsActive:                 true,
+				}
+				if hargaTambahan > 0 {
+					req.OfferingPrice = &hargaTambahan
+				}
+				if komisiTambahan > 0 {
+					offType := "fixed"
+					req.DoctorOfferingCommissionType = &offType
+					req.DoctorOfferingCommissionValue = &komisiTambahan
+					req.TherapistOfferingCommissionType = &offType
+					req.TherapistOfferingCommissionValue = &komisiTambahan
+				}
+				serviceBatch = append(serviceBatch, req)
 			default:
-				upsertErr = ErrInvalidRowType
+				result.Failed++
+				result.Errors = append(result.Errors, fmt.Sprintf("row %d (%s): %v", rowNum, name, ErrInvalidRowType))
+				continue
 			}
 
-			result.track(created, upsertErr, fmt.Sprintf("row %d (%s)", rowNum, name))
-
-			processedInBatch++
-			if processedInBatch >= batchSize {
+			// Flush when either batch is full
+			if len(productBatch) >= batchSize || len(serviceBatch) >= batchSize {
+				if e := flushBatches(tx); e != nil {
+					return e
+				}
 				runtime.GC()
-				processedInBatch = 0
 			}
 		}
-		return nil
+		return flushBatches(tx) // flush remaining
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return result, nil
-}
-
-// ─── ON CONFLICT upsert variants (1 DB round-trip per row, no pre-fetch) ────
-
-func (s *service) upsertProductTx(tx *sql.Tx, name string, price, purchasePrice float64, isConsumable bool, orgID, userID string) (bool, error) {
-	req := models.Product{
-		Name:         name,
-		SellingPrice: &price,
-		IsConsumable: isConsumable,
-		IsActive:     true,
-	}
-	if purchasePrice > 0 {
-		req.PurchasePrice = &purchasePrice
-	}
-	return s.productSvc.UpsertTx(tx, req, orgID, userID)
-}
-
-func (s *service) upsertServiceTx(tx *sql.Tx, name string, price, commission, hargaTambahan, komisiTambahan float64, orgID, userID string) (bool, error) {
-	req := models.Service{
-		Name:                     name,
-		BasePrice:                price,
-		DoctorCommissionType:     "fixed",
-		DoctorCommissionValue:    commission,
-		TherapistCommissionType:  "fixed",
-		TherapistCommissionValue: commission,
-		DurationMinutes:          30,
-		IsActive:                 true,
-	}
-	if hargaTambahan > 0 {
-		req.OfferingPrice = &hargaTambahan
-	}
-	if komisiTambahan > 0 {
-		offType := "fixed"
-		req.DoctorOfferingCommissionType = &offType
-		req.DoctorOfferingCommissionValue = &komisiTambahan
-		req.TherapistOfferingCommissionType = &offType
-		req.TherapistOfferingCommissionValue = &komisiTambahan
-	}
-	return s.serviceSvc.UpsertTx(tx, req, orgID, userID)
 }
 
 type headerIndex struct {
@@ -355,19 +384,37 @@ func (s *service) ImportPatientsExcel(file io.Reader, filename, orgID, userID st
 		return nil, err
 	}
 
-	// ON CONFLICT upsert: each row is 1 DB round-trip (no pre-fetch needed).
-	// The unique index (organization_id, LOWER(full_name), COALESCE(phone,''))
-	// handles duplicate detection atomically inside PostgreSQL.
+	// Batch ON CONFLICT upsert: multiple rows per query to minimize round-trips.
+	// With SSH tunnel latency of ~179ms, this is critical:
+	//   277 rows × 1 round-trip each = 277 round-trips = ~50 seconds
+	//   277 rows ÷ 50 per batch   = 6 round-trips   = ~1 second
 	//
-	// All rows are wrapped in a single transaction so PostgreSQL only fsyncs
-	// WAL once at COMMIT instead of per-statement. This is critical on a
-	// 1GB RAM server with high-latency SSH tunnel (179ms RTT).
-	//
-	// Streaming: reader.Read() processes 1 row at a time — memory is constant
-	// regardless of file size. GC runs every batchSize rows.
+	// All batches are wrapped in a single transaction (1 WAL fsync at COMMIT).
+	// Streaming: rows are collected in chunks of batchSize, then sent as 1 query.
 	result := &ImportResult{}
 	rowNum := 1
-	processedInBatch := 0
+	var batch []models.Patient
+
+	flushBatch := func(tx *sql.Tx) error {
+		if len(batch) == 0 {
+			return nil
+		}
+		created, updated, err := s.patientSvc.BatchUpsertTx(tx, batch, userID, orgID)
+		if err != nil {
+			// On batch error, fall back to per-row to get per-row error tracking
+			for _, req := range batch {
+				_, rowErr := s.patientSvc.UpsertTx(tx, req, userID, orgID)
+				result.track(rowErr == nil, rowErr, req.FullName)
+			}
+			batch = batch[:0]
+			return nil
+		}
+		result.Processed += created + updated
+		result.Created += created
+		result.Updated += updated
+		batch = batch[:0]
+		return nil
+	}
 
 	err = database.WithTx(func(tx *sql.Tx) error {
 		for {
@@ -409,16 +456,15 @@ func (s *service) ImportPatientsExcel(file io.Reader, filename, orgID, userID st
 				req.Address = &addrVal
 			}
 
-			created, upsertErr := s.patientSvc.UpsertTx(tx, req, userID, orgID)
-			result.track(created, upsertErr, fmt.Sprintf("row %d (%s)", rowNum, name))
-
-			processedInBatch++
-			if processedInBatch >= batchSize {
+			batch = append(batch, req)
+			if len(batch) >= batchSize {
+				if e := flushBatch(tx); e != nil {
+					return e
+				}
 				runtime.GC()
-				processedInBatch = 0
 			}
 		}
-		return nil
+		return flushBatch(tx) // flush remaining
 	})
 	if err != nil {
 		return nil, err

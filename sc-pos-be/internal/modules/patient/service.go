@@ -22,6 +22,7 @@ type Service interface {
 	Update(id string, req models.Patient, userID, orgID string) (*models.Patient, error)
 	Upsert(req models.Patient, userID, orgID string) (bool, error)
 	UpsertTx(tx *sql.Tx, req models.Patient, userID, orgID string) (bool, error)
+	BatchUpsertTx(tx *sql.Tx, reqs []models.Patient, userID, orgID string) (int, int, error)
 	Delete(id, orgID, userID string) error
 	GetVisits(patientID string) ([]VisitSummary, error)
 	GetTransactions(patientID string) ([]TransactionSummary, error)
@@ -115,6 +116,28 @@ func (s *service) UpsertTx(tx *sql.Tx, req models.Patient, userID, orgID string)
 	}
 
 	return s.repo.UpsertTx(tx, &req, orgID, userID)
+}
+
+// BatchUpsertTx inserts/updates multiple patients in a single query.
+// Returns (createdCount, updatedCount, error).
+func (s *service) BatchUpsertTx(tx *sql.Tx, reqs []models.Patient, userID, orgID string) (int, int, error) {
+	now := time.Now()
+	ptrs := make([]*models.Patient, 0, len(reqs))
+	for i := range reqs {
+		reqs[i].ID = uuid.New().String()
+		reqs[i].PatientCode = "PAT-" + strings.ToUpper(uuid.New().String()[:8])
+		reqs[i].IsActive = true
+		if userID != "" {
+			reqs[i].CreatedBy = &userID
+		}
+		reqs[i].CreatedAt = now
+		reqs[i].UpdatedAt = now
+		if reqs[i].Tags == nil {
+			reqs[i].Tags = []string{}
+		}
+		ptrs = append(ptrs, &reqs[i])
+	}
+	return s.repo.BatchUpsertTx(tx, ptrs, orgID, userID)
 }
 
 func (s *service) Update(id string, req models.Patient, userID, orgID string) (*models.Patient, error) {

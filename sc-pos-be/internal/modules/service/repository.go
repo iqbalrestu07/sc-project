@@ -289,6 +289,102 @@ func (r *Repository) UpsertTx(tx *sql.Tx, service *models.Service, orgID, userID
 	return upsertService(tx, service, orgID, userID)
 }
 
+// BatchUpsertTx inserts/updates multiple services in a SINGLE query.
+// Returns (createdCount, updatedCount, error).
+func (r *Repository) BatchUpsertTx(tx *sql.Tx, services []*models.Service, orgID, userID string) (int, int, error) {
+	n := len(services)
+	if n == 0 {
+		return 0, 0, nil
+	}
+
+	const colsPerRow = 22
+	var placeholders strings.Builder
+	placeholders.Grow(n * colsPerRow * 6)
+	args := make([]interface{}, 0, n*colsPerRow)
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			placeholders.WriteByte(',')
+		}
+		placeholders.WriteByte('(')
+		for j := 0; j < colsPerRow; j++ {
+			if j > 0 {
+				placeholders.WriteByte(',')
+			}
+			fmt.Fprintf(&placeholders, "$%d", i*colsPerRow+j+1)
+		}
+		placeholders.WriteByte(')')
+
+		s := services[i]
+		var createdByVal interface{}
+		if s.CreatedBy != nil && *s.CreatedBy != "" {
+			createdByVal = *s.CreatedBy
+		} else if userID != "" {
+			createdByVal = userID
+		}
+		args = append(args,
+			s.ID, s.Name, s.CategoryID, s.Description,
+			s.DurationMinutes, s.BasePrice,
+			s.DoctorCommissionType, s.DoctorCommissionValue,
+			s.TherapistCommissionType, s.TherapistCommissionValue,
+			s.DoctorOfferingCommissionType, s.DoctorOfferingCommissionValue,
+			s.TherapistOfferingCommissionType, s.TherapistOfferingCommissionValue,
+			s.OfferingPrice,
+			s.RequiresDoctor, s.IsActive,
+			s.CreatedAt, s.UpdatedAt, nullableString(orgID), createdByVal, nullableString(userID),
+		)
+	}
+
+	query := `
+		INSERT INTO services (
+			id, name, category_id, description, duration_minutes, base_price,
+			doctor_commission_type, doctor_commission_value,
+			therapist_commission_type, therapist_commission_value,
+			doctor_offering_commission_type, doctor_offering_commission_value,
+			therapist_offering_commission_type, therapist_offering_commission_value,
+			offering_price,
+			requires_doctor, is_active, created_at, updated_at,
+			organization_id, created_by, updated_by
+		)
+		VALUES ` + placeholders.String() + `
+		ON CONFLICT (organization_id, LOWER(name))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true
+		DO UPDATE SET
+			category_id    = COALESCE(EXCLUDED.category_id, services.category_id),
+			description    = COALESCE(EXCLUDED.description, services.description),
+			duration_minutes = COALESCE(EXCLUDED.duration_minutes, services.duration_minutes),
+			base_price     = EXCLUDED.base_price,
+			doctor_commission_type  = EXCLUDED.doctor_commission_type,
+			doctor_commission_value = EXCLUDED.doctor_commission_value,
+			therapist_commission_type  = EXCLUDED.therapist_commission_type,
+			therapist_commission_value = EXCLUDED.therapist_commission_value,
+			offering_price = COALESCE(EXCLUDED.offering_price, services.offering_price),
+			requires_doctor = EXCLUDED.requires_doctor,
+			updated_by     = EXCLUDED.updated_by,
+			updated_at     = NOW()
+		RETURNING (xmax = 0) AS inserted
+	`
+
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to batch upsert services: %w", err)
+	}
+	defer rows.Close()
+
+	created, updated := 0, 0
+	for rows.Next() {
+		var inserted bool
+		if err := rows.Scan(&inserted); err != nil {
+			return created, updated, err
+		}
+		if inserted {
+			created++
+		} else {
+			updated++
+		}
+	}
+	return created, updated, rows.Err()
+}
+
 func (r *Repository) Update(id string, service *models.Service, orgID string) error {
 	var updatedByVal interface{}
 	if service.UpdatedBy != nil && *service.UpdatedBy != "" {

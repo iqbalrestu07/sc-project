@@ -3,6 +3,7 @@ package patient
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/lib/pq"
 	"github.com/sc-pos/backend/internal/database"
@@ -210,6 +211,100 @@ func (r *Repository) Upsert(patient *models.Patient, orgID, userID string) (bool
 // This allows bulk import to wrap all upserts in 1 transaction (1 WAL fsync at COMMIT).
 func (r *Repository) UpsertTx(tx *sql.Tx, patient *models.Patient, orgID, userID string) (bool, error) {
 	return upsertPatient(tx, patient, orgID, userID)
+}
+
+// BatchUpsertTx inserts/updates multiple patients in a SINGLE query.
+// This is critical for high-latency connections (SSH tunnel ~179ms RTT):
+//
+//	277 rows × 1 round-trip each = 277 round-trips = ~50 seconds
+//	277 rows × 50 per batch     = 6 round-trips   = ~1 second
+//
+// Returns (createdCount, updatedCount, error).
+func (r *Repository) BatchUpsertTx(tx *sql.Tx, patients []*models.Patient, orgID, userID string) (int, int, error) {
+	n := len(patients)
+	if n == 0 {
+		return 0, 0, nil
+	}
+
+	const colsPerRow = 22
+	// Build: VALUES ($1,$2,...,$22), ($23,$24,...,$44), ...
+	var placeholders strings.Builder
+	placeholders.Grow(n * colsPerRow * 6) // ~"$123," per param
+	args := make([]interface{}, 0, n*colsPerRow)
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			placeholders.WriteByte(',')
+		}
+		placeholders.WriteByte('(')
+		for j := 0; j < colsPerRow; j++ {
+			if j > 0 {
+				placeholders.WriteByte(',')
+			}
+			fmt.Fprintf(&placeholders, "$%d", i*colsPerRow+j+1)
+		}
+		placeholders.WriteByte(')')
+
+		p := patients[i]
+		if p.CreatedBy == nil || *p.CreatedBy == "" {
+			if userID != "" {
+				p.CreatedBy = &userID
+			}
+		}
+		args = append(args,
+			p.ID, p.PatientCode, p.FullName, p.PhotoURL,
+			p.DateOfBirth, p.Gender, p.Phone, p.WhatsApp,
+			p.Email, p.Address, p.AllergyHistory,
+			p.MedicalConditions, p.SkinType, p.Notes,
+			pq.Array(p.Tags), p.IsActive, p.ReminderOptIn,
+			p.CreatedBy, p.CreatedAt, p.UpdatedAt,
+			nullableString(orgID), nullableString(userID),
+		)
+	}
+
+	query := `
+		INSERT INTO patients (id, patient_code, full_name, photo_url, date_of_birth,
+		                     gender, phone, whatsapp, email, address, allergy_history,
+		                     medical_conditions, skin_type, notes, tags, is_active,
+		                     reminder_opt_in, created_by, created_at, updated_at,
+		                     organization_id, updated_by)
+		VALUES ` + placeholders.String() + `
+		ON CONFLICT (organization_id, LOWER(full_name), COALESCE(phone, ''))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true
+		DO UPDATE SET
+			full_name        = EXCLUDED.full_name,
+			photo_url        = COALESCE(EXCLUDED.photo_url, patients.photo_url),
+			phone            = COALESCE(EXCLUDED.phone, patients.phone),
+			whatsapp         = COALESCE(EXCLUDED.whatsapp, patients.whatsapp),
+			email            = COALESCE(EXCLUDED.email, patients.email),
+			address          = COALESCE(EXCLUDED.address, patients.address),
+			allergy_history  = COALESCE(EXCLUDED.allergy_history, patients.allergy_history),
+			medical_conditions = COALESCE(EXCLUDED.medical_conditions, patients.medical_conditions),
+			skin_type        = COALESCE(EXCLUDED.skin_type, patients.skin_type),
+			notes            = COALESCE(EXCLUDED.notes, patients.notes),
+			updated_by       = EXCLUDED.updated_by,
+			updated_at       = NOW()
+		RETURNING (xmax = 0) AS inserted
+	`
+
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to batch upsert patients: %w", err)
+	}
+	defer rows.Close()
+
+	created, updated := 0, 0
+	for rows.Next() {
+		var inserted bool
+		if err := rows.Scan(&inserted); err != nil {
+			return created, updated, err
+		}
+		if inserted {
+			created++
+		} else {
+			updated++
+		}
+	}
+	return created, updated, rows.Err()
 }
 
 func (r *Repository) Update(id string, patient *models.Patient, orgID string) error {

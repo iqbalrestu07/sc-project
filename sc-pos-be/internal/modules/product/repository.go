@@ -290,6 +290,99 @@ func (r *Repository) UpsertTx(tx *sql.Tx, product *models.Product, orgID, userID
 	return upsertProduct(tx, product, orgID, userID)
 }
 
+// BatchUpsertTx inserts/updates multiple products in a SINGLE query.
+// Returns (createdCount, updatedCount, error).
+func (r *Repository) BatchUpsertTx(tx *sql.Tx, products []*models.Product, orgID, userID string) (int, int, error) {
+	n := len(products)
+	if n == 0 {
+		return 0, 0, nil
+	}
+
+	const colsPerRow = 27
+	var placeholders strings.Builder
+	placeholders.Grow(n * colsPerRow * 6)
+	args := make([]interface{}, 0, n*colsPerRow)
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			placeholders.WriteByte(',')
+		}
+		placeholders.WriteByte('(')
+		for j := 0; j < colsPerRow; j++ {
+			if j > 0 {
+				placeholders.WriteByte(',')
+			}
+			fmt.Fprintf(&placeholders, "$%d", i*colsPerRow+j+1)
+		}
+		placeholders.WriteByte(')')
+
+		p := products[i]
+		var createdByVal interface{}
+		if p.CreatedBy != nil && *p.CreatedBy != "" {
+			createdByVal = *p.CreatedBy
+		} else if userID != "" {
+			createdByVal = userID
+		}
+		args = append(args,
+			p.ID, p.Name, p.Category, p.Sku, p.Supplier,
+			p.PurchasePrice, p.SellingPrice, p.CurrentStock,
+			p.MinimumStock, p.Unit, p.ExpiryDate, p.IsActive,
+			p.IsConsumable, p.ConsumableCategory,
+			p.DoctorCommissionType, p.DoctorCommissionValue,
+			p.TherapistCommissionType, p.TherapistCommissionValue,
+			p.DoctorOfferingCommissionType, p.DoctorOfferingCommissionValue,
+			p.TherapistOfferingCommissionType, p.TherapistOfferingCommissionValue,
+			p.CreatedAt, p.UpdatedAt, nullableString(orgID), createdByVal, nullableString(userID),
+		)
+	}
+
+	query := `
+		INSERT INTO products (
+			id, name, category, sku, supplier, purchase_price, selling_price,
+			current_stock, minimum_stock, unit, expiry_date, is_active,
+			is_consumable, consumable_category,
+			doctor_commission_type, doctor_commission_value,
+			therapist_commission_type, therapist_commission_value,
+			doctor_offering_commission_type, doctor_offering_commission_value,
+			therapist_offering_commission_type, therapist_offering_commission_value,
+			created_at, updated_at, organization_id, created_by, updated_by
+		)
+		VALUES ` + placeholders.String() + `
+		ON CONFLICT (organization_id, LOWER(name))
+			WHERE deleted_at IS NULL AND COALESCE(is_active, true) = true
+		DO UPDATE SET
+			category          = COALESCE(EXCLUDED.category, products.category),
+			sku               = COALESCE(EXCLUDED.sku, products.sku),
+			supplier          = COALESCE(EXCLUDED.supplier, products.supplier),
+			purchase_price    = COALESCE(EXCLUDED.purchase_price, products.purchase_price),
+			selling_price     = COALESCE(EXCLUDED.selling_price, products.selling_price),
+			is_consumable     = EXCLUDED.is_consumable,
+			consumable_category = COALESCE(EXCLUDED.consumable_category, products.consumable_category),
+			updated_by       = EXCLUDED.updated_by,
+			updated_at       = NOW()
+		RETURNING (xmax = 0) AS inserted
+	`
+
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to batch upsert products: %w", err)
+	}
+	defer rows.Close()
+
+	created, updated := 0, 0
+	for rows.Next() {
+		var inserted bool
+		if err := rows.Scan(&inserted); err != nil {
+			return created, updated, err
+		}
+		if inserted {
+			created++
+		} else {
+			updated++
+		}
+	}
+	return created, updated, rows.Err()
+}
+
 func (r *Repository) Update(id string, product *models.Product, orgID string) error {
 	var updatedByVal interface{}
 	if product.UpdatedBy != nil && *product.UpdatedBy != "" {

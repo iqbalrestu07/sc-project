@@ -22,6 +22,7 @@ type Service interface {
 	Update(id string, req models.Service, orgID, userID string) (*models.Service, error)
 	Upsert(req models.Service, orgID, userID string) (bool, error)
 	UpsertTx(tx *sql.Tx, req models.Service, orgID, userID string) (bool, error)
+	BatchUpsertTx(tx *sql.Tx, reqs []models.Service, orgID, userID string) (int, int, error)
 	UpsertByName(req models.Service, orgID, userID string) (*models.Service, error)
 	Delete(id, orgID, userID string) error
 	ListCategories(orgID string) ([]models.ServiceCategory, error)
@@ -107,6 +108,25 @@ func (s *service) UpsertTx(tx *sql.Tx, req models.Service, orgID, userID string)
 	req.UpdatedAt = now
 	applyServiceDefaults(&req)
 	return s.repo.UpsertTx(tx, &req, orgID, userID)
+}
+
+// BatchUpsertTx inserts/updates multiple services in a single query.
+// Returns (createdCount, updatedCount, error).
+func (s *service) BatchUpsertTx(tx *sql.Tx, reqs []models.Service, orgID, userID string) (int, int, error) {
+	now := time.Now()
+	ptrs := make([]*models.Service, 0, len(reqs))
+	for i := range reqs {
+		reqs[i].ID = uuid.New().String()
+		reqs[i].IsActive = true
+		if userID != "" {
+			reqs[i].CreatedBy = &userID
+		}
+		reqs[i].CreatedAt = now
+		reqs[i].UpdatedAt = now
+		applyServiceDefaults(&reqs[i])
+		ptrs = append(ptrs, &reqs[i])
+	}
+	return s.repo.BatchUpsertTx(tx, ptrs, orgID, userID)
 }
 
 func (s *service) Update(id string, req models.Service, orgID, userID string) (*models.Service, error) {
