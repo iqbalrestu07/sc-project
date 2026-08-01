@@ -3,6 +3,8 @@
 > **SC-Project** adalah sistem manajemen klinik kecantikan (aesthetic clinic) berbasis **multi-tenant SaaS** dengan **RBAC granular**.  
 > Monorepo terdiri dari backend Go (`sc-pos-be`) dan frontend React (`shasi`).
 
+> **⚠️ Aturan untuk AI Agent:** Update dokumentasi setelah perubahan **vital** (endpoint baru, tabel/kolom DB, module, page/hook, business workflow, auth/RBAC). Tidak perlu update untuk bug fix kecil, refactor internal, atau perubahan styling. Lihat detail di [`AGENTS.md`](../AGENTS.md) section "Aturan Dokumentasi untuk AI Agent".
+
 ---
 
 ## 📁 Daftar Dokumen

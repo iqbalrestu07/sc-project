@@ -5,6 +5,42 @@
 
 ---
 
+## ⚠️ Aturan Dokumentasi untuk AI Agent
+
+> **WAJIB BACA sebelum mulai dan sebelum selesai task.**
+
+### Kapan WAJIB update dokumentasi
+
+Update `AGENTS.md` dan file relevan di `docs/` setelah melakukan perubahan **vital** berikut:
+
+| Jenis Perubahan                                        | File yang Harus Diupdate                                        |
+| ------------------------------------------------------ | --------------------------------------------------------------- |
+| Tambah/hapus **endpoint API** baru                     | `AGENTS.md` (route table) + `docs/API_REFERENCE.md`             |
+| Tambah/hapus **tabel database** atau **kolom penting** | `AGENTS.md` (schema section) + `docs/DATABASE_SCHEMA.md`        |
+| Tambah/hapus **module backend**                        | `AGENTS.md` (struktur direktori) + `docs/BACKEND_STRUCTURE.md`  |
+| Tambah/hapus **page/komponen/hook frontend** utama     | `AGENTS.md` (struktur direktori) + `docs/FRONTEND_STRUCTURE.md` |
+| Ubah **business workflow** (alur proses bisnis)        | `docs/FEATURES_AND_PROCESSES.md`                                |
+| Ubah **auth/middleware/RBAC**                          | `AGENTS.md` + `docs/INTEGRATION_GUIDE.md`                       |
+| Migrasi **tipe data** (mis. VARCHAR→UUID)              | `AGENTS.md` + `docs/DATABASE_SCHEMA.md`                         |
+| Tambah **index database** baru                         | `docs/DATABASE_SCHEMA.md`                                       |
+
+### Kapan TIDAK perlu update dokumentasi
+
+- Bug fix kecil yang tidak mengubah API/schema/workflow
+- Refactor internal yang tidak mengubah interface publik
+- Perubahan styling/CSS/UI minor
+- Perubahan konfigurasi lokal (`.env` values, dll)
+- Penambahan komentar kode
+
+### Cara update
+
+1. Update bagian **relevan saja** — jangan rewrite seluruh file
+2. Ubah tanggal `_Last updated_` di file yang diupdate ke tanggal hari ini
+3. Jika menambah fitur baru yang punya business workflow, update `docs/FEATURES_AND_PROCESSES.md`
+4. Jika ragu apakah perubahan "vital" atau tidak, **update saja** — lebih aman daripada dokumentasi stale
+
+---
+
 ## 📚 Dokumen Referensi Detail
 
 > File-file berikut di `docs/` berisi dokumentasi lebih lengkap dan terstruktur.
