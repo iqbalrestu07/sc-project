@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useTodayQueue, useUpdateAppointmentStatus } from "@/hooks/useVisitNotes";
-import { useCancelAppointment } from "@/hooks/useAppointments";
+import { useAppointments } from "@/hooks/useAppointments";
 import { apiClient } from "@/integrations/api/client";
 import { format } from "date-fns";
 import { Users, Clock, CheckCircle2, Play, ArrowRight, CheckCircle, XCircle } from "lucide-react";
@@ -31,7 +31,7 @@ export default function QueuePage() {
   const navigate = useNavigate();
   const { data: queue, isLoading } = useTodayQueue();
   const updateStatus = useUpdateAppointmentStatus();
-  const cancelAppointment = useCancelAppointment();
+  const { cancelAppointment } = useAppointments();
   const [loadingTxFor, setLoadingTxFor] = useState<string | null>(null);
   // Map of appointment_id → transaction payment status
   const [paidAppointments, setPaidAppointments] = useState<Set<string>>(new Set());
