@@ -68,7 +68,18 @@ class ApiClient {
                 const originalRequest = error.config as any;
 
                 // Handle 401 Unauthorized - try to refresh token
-                if (error.response?.status === 401 && !originalRequest._retry) {
+                // Skip refresh logic for the refresh endpoint itself to avoid
+                // a hang when the refresh token is also expired — without this
+                // guard, the /auth/refresh 401 re-enters the interceptor while
+                // isRefreshing is still true, gets queued in failedQueue, and
+                // the outer await never resolves (so the redirect never fires).
+                const isRefreshRequest =
+                    originalRequest?.url?.includes("/auth/refresh");
+                if (
+                    error.response?.status === 401 &&
+                    !originalRequest._retry &&
+                    !isRefreshRequest
+                ) {
                     if (this.isRefreshing) {
                         // Queue request while refreshing
                         return new Promise((onSuccess, onFail) => {
