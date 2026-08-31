@@ -1,16 +1,19 @@
 package cms
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/sc-pos/backend/internal/storage"
+)
 
 func RegisterPublicRoutes(router gin.IRouter) {
-	handler := NewModule()
+	handler := NewModule(nil)
 
 	router.GET("/cms/pages", handler.ListPages)
 	router.GET("/cms/pages/:pageId", handler.GetPage)
 }
 
-func RegisterRoutes(router gin.IRouter, admin gin.HandlerFunc) {
-	handler := NewModule()
+func RegisterRoutes(router gin.IRouter, admin gin.HandlerFunc, store storage.Storage) {
+	handler := NewModule(store)
 
 	router.POST("/cms/pages", admin, handler.CreatePage)
 	router.PUT("/cms/pages/:pageId", admin, handler.UpdatePage)

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 )
@@ -10,6 +11,7 @@ type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	JWT      JWTConfig
+	Storage  StorageConfig
 }
 
 type ServerConfig struct {
@@ -32,6 +34,23 @@ type JWTConfig struct {
 	RefreshExpiryHours int
 }
 
+// StorageConfig controls where uploaded files (CMS images, clinic logo/favicon)
+// are persisted. Provider "local" (default) saves to disk; "supabase" uploads
+// to Supabase S3-compatible storage.
+type StorageConfig struct {
+	Provider  string // "local" | "supabase"
+	UploadDir string // local: root upload directory
+	BaseURL   string // local: public base URL for constructing file URLs
+
+	// S3 settings (used when Provider = "supabase")
+	S3Bucket         string
+	S3Endpoint       string // e.g. https://<ref>.storage.supabase.co/storage/v1/s3
+	S3Region         string
+	S3AccessKey      string
+	S3SecretKey      string
+	S3ForcePathStyle bool
+}
+
 func Load() *Config {
 	return &Config{
 		Server: ServerConfig{
@@ -51,14 +70,27 @@ func Load() *Config {
 			ExpiryHours:        getEnvInt("JWT_EXPIRY_HOURS", 24),
 			RefreshExpiryHours: getEnvInt("JWT_REFRESH_EXPIRY_HOURS", 168),
 		},
+		Storage: StorageConfig{
+			Provider:         getEnv("STORAGE_PROVIDER", "local"),
+			UploadDir:        getEnv("UPLOAD_DIR", "uploads"),
+			BaseURL:          getEnv("BASE_URL", ""),
+			S3Bucket:         getEnv("S3_BUCKET", ""),
+			S3Endpoint:       getEnv("S3_ENDPOINT", ""),
+			S3Region:         getEnv("S3_REGION", "ap-southeast-1"),
+			S3AccessKey:      getEnv("S3_ACCESS_KEY", ""),
+			S3SecretKey:      getEnv("S3_SECRET_KEY", ""),
+			S3ForcePathStyle: getEnvBool("S3_FORCE_PATH_STYLE", true),
+		},
 	}
 }
 
 func (c *DatabaseConfig) DSN() string {
+	// URL-encode user and password so special characters like %, @, !, ?
+	// in the password don't break the connection string parsing.
 	return fmt.Sprintf(
 		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		c.User,
-		c.Password,
+		url.QueryEscape(c.User),
+		url.QueryEscape(c.Password),
 		c.Host,
 		c.Port,
 		c.DBName,
@@ -76,6 +108,15 @@ func getEnv(key, defaultValue string) string {
 func getEnvInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if parsed, err := strconv.Atoi(value); err == nil {
+			return parsed
+		}
+	}
+	return defaultValue
+}
+
+func getEnvBool(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if parsed, err := strconv.ParseBool(value); err == nil {
 			return parsed
 		}
 	}

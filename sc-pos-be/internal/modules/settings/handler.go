@@ -5,28 +5,28 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sc-pos/backend/internal/models"
 	orgModule "github.com/sc-pos/backend/internal/modules/organization"
+	"github.com/sc-pos/backend/internal/storage"
 	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Handler struct {
 	service    Service
 	orgService orgModule.Service
+	storage    storage.Storage
 }
 
-func NewHandler(service Service, orgService orgModule.Service) *Handler {
-	return &Handler{service: service, orgService: orgService}
+func NewHandler(service Service, orgService orgModule.Service, store storage.Storage) *Handler {
+	return &Handler{service: service, orgService: orgService, storage: store}
 }
 
-func NewModule() *Handler {
-	return NewHandler(NewService(NewRepository()), orgModule.NewService(orgModule.NewRepository()))
+func NewModule(store storage.Storage) *Handler {
+	return NewHandler(NewService(NewRepository()), orgModule.NewService(orgModule.NewRepository()), store)
 }
 
 func (h *Handler) GetClinic(c *gin.Context) {
@@ -57,8 +57,8 @@ func (h *Handler) UpdateClinic(c *gin.Context) {
 
 // UploadLogo handles multipart upload for the organization's logo OR favicon.
 // The asset kind is selected via the `type` form field ("logo" or "favicon";
-// defaults to "logo"). The uploaded file is stored under ./uploads/brand/ and
-// the resulting public URL is persisted on the clinic_settings row.
+// defaults to "logo"). The file is stored via the configured Storage provider
+// and the resulting public URL is persisted on the clinic_settings row.
 func (h *Handler) UploadLogo(c *gin.Context) {
 	const maxSize = 5 << 20 // 5 MB
 	if err := c.Request.ParseMultipartForm(maxSize); err != nil {
@@ -101,39 +101,17 @@ func (h *Handler) UploadLogo(c *gin.Context) {
 		return
 	}
 
-	uploadDir := "uploads/brand"
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to create upload directory")
-		return
-	}
-
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if ext == "" {
 		ext = ".png"
 	}
-	filename := fmt.Sprintf("%d-%s%s", time.Now().UnixMilli(), utils.NewUUID()[:8], ext)
-	dest := filepath.Join(uploadDir, filename)
+	filename := storage.GenerateFilename(ext)
 
-	out, err := os.Create(dest)
+	publicURL, err := h.storage.Upload(c.Request.Context(), "brand", filename, file, contentType)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to save file")
 		return
 	}
-	defer out.Close()
-	if _, err := io.Copy(out, file); err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to write file")
-		return
-	}
-
-	baseURL := os.Getenv("BASE_URL")
-	if baseURL == "" {
-		scheme := "http"
-		if c.Request.TLS != nil {
-			scheme = "https"
-		}
-		baseURL = fmt.Sprintf("%s://%s", scheme, c.Request.Host)
-	}
-	publicURL := fmt.Sprintf("%s/%s/%s", strings.TrimRight(baseURL, "/"), uploadDir, filename)
 
 	orgID := c.GetString("org_id")
 	settings, err := h.service.UpdateBrandAsset(orgID, field, publicURL)

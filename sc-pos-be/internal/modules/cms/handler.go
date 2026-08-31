@@ -5,27 +5,27 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	orgModule "github.com/sc-pos/backend/internal/modules/organization"
+	"github.com/sc-pos/backend/internal/storage"
 	"github.com/sc-pos/backend/internal/utils"
 )
 
 type Handler struct {
 	service    Service
 	orgService orgModule.Service
+	storage    storage.Storage
 }
 
-func NewHandler(service Service, orgService orgModule.Service) *Handler {
-	return &Handler{service: service, orgService: orgService}
+func NewHandler(service Service, orgService orgModule.Service, store storage.Storage) *Handler {
+	return &Handler{service: service, orgService: orgService, storage: store}
 }
 
-func NewModule() *Handler {
-	return NewHandler(NewService(NewRepository()), orgModule.NewService(orgModule.NewRepository()))
+func NewModule(store storage.Storage) *Handler {
+	return NewHandler(NewService(NewRepository()), orgModule.NewService(orgModule.NewRepository()), store)
 }
 
 func (h *Handler) ListPages(c *gin.Context) {
@@ -115,12 +115,11 @@ func (h *Handler) UpdatePage(c *gin.Context) {
 	utils.SuccessResponseWithMessage(c, http.StatusOK, "CMS page updated successfully", page)
 }
 
-// UploadImage handles multipart file upload and saves to ./uploads/cms/ directory.
-// Returns the public URL of the uploaded file.
+// UploadImage handles multipart file upload and saves via the configured
+// Storage provider (local disk or Supabase S3). Returns the public URL.
 func (h *Handler) UploadImage(c *gin.Context) {
 	const maxSize = 10 << 20 // 10 MB
 	if err := c.Request.ParseMultipartForm(maxSize); err != nil {
-		fmt.Println("max size", maxSize, err)
 		utils.ErrorResponse(c, http.StatusBadRequest, "file too large or invalid multipart form")
 		return
 	}
@@ -146,52 +145,26 @@ func (h *Handler) UploadImage(c *gin.Context) {
 		seeker.Seek(0, io.SeekStart)
 	}
 
-	// Determine upload directory — use UPLOAD_DIR env or default to ./uploads/cms
-	uploadDir := os.Getenv("UPLOAD_DIR")
-	if uploadDir == "" {
-		uploadDir = "uploads/cms"
-	}
-	folder := c.PostForm("folder")
-	if folder != "" {
-		cleanFolder := filepath.Clean(folder)
-		if filepath.IsAbs(cleanFolder) || cleanFolder == ".." || strings.HasPrefix(cleanFolder, ".."+string(filepath.Separator)) {
+	// Determine sub-folder within the storage root
+	folder := "cms"
+	userFolder := c.PostForm("folder")
+	if userFolder != "" {
+		cleanFolder, err := storage.SanitizeFolder(userFolder)
+		if err != nil {
 			utils.ErrorResponse(c, http.StatusBadRequest, "invalid upload folder")
 			return
 		}
-		uploadDir = filepath.Join(uploadDir, cleanFolder)
-	}
-
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to create upload directory")
-		return
+		folder = filepath.Join(folder, cleanFolder)
 	}
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if ext == "" {
-		ext = ".jpg"
-	}
-	filename := fmt.Sprintf("%d-%s%s", time.Now().UnixMilli(), utils.NewUUID()[:8], ext)
-	dest := filepath.Join(uploadDir, filename)
+	filename := storage.GenerateFilename(ext)
 
-	out, err := os.Create(dest)
+	publicURL, err := h.storage.Upload(c.Request.Context(), folder, filename, file, contentType)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to save file")
 		return
 	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, file); err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to write file")
-		return
-	}
-
-	// Build public URL
-	baseURL := os.Getenv("BASE_URL")
-	if baseURL == "" {
-		scheme := "http"
-		baseURL = fmt.Sprintf("%s://%s", scheme, c.Request.Host)
-	}
-	publicURL := fmt.Sprintf("%s/%s/%s", strings.TrimRight(baseURL, "/"), uploadDir, filename)
 
 	utils.SuccessResponse(c, http.StatusCreated, gin.H{"url": publicURL})
 }

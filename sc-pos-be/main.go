@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -13,6 +14,7 @@ import (
 	authmodule "github.com/sc-pos/backend/internal/modules/auth"
 	"github.com/sc-pos/backend/internal/modules/whatsapp"
 	"github.com/sc-pos/backend/internal/routes"
+	"github.com/sc-pos/backend/internal/storage"
 )
 
 func main() {
@@ -48,14 +50,25 @@ func main() {
 	appointment.StartReminderJob()
 	defer appointment.StopReminderJob()
 
+	// Initialize storage provider (local disk or Supabase S3)
+	store, err := storage.NewFromConfig(context.Background(), cfg.Storage)
+	if err != nil {
+		log.Fatalf("Failed to initialize storage: %v", err)
+	}
+	storageProvider := cfg.Storage.Provider
+	if storageProvider == "" {
+		storageProvider = "local"
+	}
+	fmt.Printf("📦 Storage provider: %s\n", storageProvider)
+
 	// Create Gin router
 	router := gin.Default()
 
-	// Serve uploaded files as static assets
+	// Serve uploaded files as static assets (only relevant for local storage)
 	router.Static("/uploads", "./uploads")
 
 	// Setup routes
-	routes.SetupRoutes(router)
+	routes.SetupRoutes(router, store)
 
 	// Start server
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)

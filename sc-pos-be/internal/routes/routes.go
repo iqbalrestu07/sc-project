@@ -24,9 +24,10 @@ import (
 	"github.com/sc-pos/backend/internal/modules/transaction"
 	"github.com/sc-pos/backend/internal/modules/visit_note"
 	"github.com/sc-pos/backend/internal/modules/whatsapp"
+	"github.com/sc-pos/backend/internal/storage"
 )
 
-func SetupRoutes(router *gin.Engine) {
+func SetupRoutes(router *gin.Engine, store storage.Storage) {
 	// Apply CORS middleware globally
 	router.Use(middleware.CORSMiddleware())
 
@@ -130,13 +131,13 @@ func SetupRoutes(router *gin.Engine) {
 		commission.RegisterRoutes(protectedAPI, canReadComm, canWriteComm)
 
 		// ── Settings ──────────────────────────────────────────────────────
-		settings.RegisterRoutes(protectedAPI, canWriteSettings)
+		settings.RegisterRoutes(protectedAPI, canWriteSettings, store)
 
 		// ── Dashboard ─────────────────────────────────────────────────────
 		dashboard.RegisterRoutes(protectedAPI, canReadReports)
 
 		// ── CMS ───────────────────────────────────────────────────────────
-		cms.RegisterRoutes(protectedAPI, canWriteCMS)
+		cms.RegisterRoutes(protectedAPI, canWriteCMS, store)
 
 		// ── Stock movements ───────────────────────────────────────────────
 		stock.RegisterRoutes(protectedAPI, adminOnly)

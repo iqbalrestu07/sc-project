@@ -1,9 +1,12 @@
 package settings
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/sc-pos/backend/internal/storage"
+)
 
-func RegisterRoutes(router gin.IRouter, admin gin.HandlerFunc) {
-	handler := NewModule()
+func RegisterRoutes(router gin.IRouter, admin gin.HandlerFunc, store storage.Storage) {
+	handler := NewModule(store)
 
 	router.GET("/settings/clinic", handler.GetClinic)
 	router.PUT("/settings/clinic", admin, handler.UpdateClinic)
@@ -15,6 +18,6 @@ func RegisterRoutes(router gin.IRouter, admin gin.HandlerFunc) {
 
 // RegisterPublicRoutes mounts unauthenticated endpoints for public-facing pages.
 func RegisterPublicRoutes(router gin.IRouter) {
-	handler := NewModule()
+	handler := NewModule(nil)
 	router.GET("/public/clinic-info", handler.PublicClinicInfo)
 }
