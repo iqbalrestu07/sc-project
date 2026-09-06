@@ -168,3 +168,25 @@ func (h *Handler) UploadImage(c *gin.Context) {
 
 	utils.SuccessResponse(c, http.StatusCreated, gin.H{"url": publicURL})
 }
+
+// DeleteImage removes a file from storage by its public URL.
+func (h *Handler) DeleteImage(c *gin.Context) {
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.URL == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "url is required")
+		return
+	}
+
+	if err := h.storage.DeleteByURL(c.Request.Context(), req.URL); err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to delete file")
+		return
+	}
+
+	utils.SuccessResponseWithMessage(c, http.StatusOK, "file deleted successfully", nil)
+}

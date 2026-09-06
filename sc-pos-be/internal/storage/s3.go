@@ -82,3 +82,33 @@ func (s *S3Storage) Upload(ctx context.Context, folder, filename string, reader 
 	publicURL = strings.TrimRight(publicURL, "/") + "/" + s.bucket + "/" + key
 	return publicURL, nil
 }
+
+// DeleteByURL removes an object from S3 by parsing its public URL.
+// It extracts the object key from the URL path and calls DeleteObject.
+// Returns nil if the URL doesn't match this storage provider's endpoint.
+func (s *S3Storage) DeleteByURL(ctx context.Context, publicURL string) error {
+	// Expected URL format:
+	//   https://<ref>.supabase.co/storage/v1/object/public/<bucket>/<key>
+	// We need to extract <key> from the path.
+	publicPrefix := strings.Replace(s.endpoint, "/storage/v1/s3", "/storage/v1/object/public", 1)
+	publicPrefix = strings.TrimRight(publicPrefix, "/") + "/" + s.bucket + "/"
+
+	if !strings.HasPrefix(publicURL, publicPrefix) {
+		// URL doesn't belong to this storage provider — ignore silently
+		return nil
+	}
+
+	key := strings.TrimPrefix(publicURL, publicPrefix)
+	if key == "" {
+		return nil
+	}
+
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete from S3: %w", err)
+	}
+	return nil
+}

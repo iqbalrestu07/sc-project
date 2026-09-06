@@ -17,6 +17,11 @@ type Storage interface {
 	// Upload saves a file under the given folder (e.g. "cms", "brand") and
 	// returns the public URL for accessing it.
 	Upload(ctx context.Context, folder, filename string, reader io.Reader, contentType string) (string, error)
+
+	// DeleteByURL removes the file that was previously uploaded and is
+	// referenced by the given public URL. It is a no-op if the URL does not
+	// belong to this storage provider (e.g. external URL).
+	DeleteByURL(ctx context.Context, publicURL string) error
 }
 
 // GenerateFilename produces a unique filename using a timestamp + short UUID.

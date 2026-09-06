@@ -12,8 +12,8 @@ import (
 // LocalStorage saves files to a local directory and builds public URLs
 // using baseURL as the prefix.
 type LocalStorage struct {
-	rootDir  string // e.g. "uploads"
-	baseURL  string // e.g. "http://localhost:8080"
+	rootDir string // e.g. "uploads"
+	baseURL string // e.g. "http://localhost:8080"
 }
 
 // NewLocalStorage creates a LocalStorage. rootDir is the on-disk directory,
@@ -46,4 +46,21 @@ func (s *LocalStorage) Upload(_ context.Context, folder, filename string, reader
 	relPath := filepath.Join(s.rootDir, folder, filename)
 	publicURL := fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL, "/"), filepath.ToSlash(relPath))
 	return publicURL, nil
+}
+
+// DeleteByURL removes a file from local disk by parsing its public URL.
+// Returns nil if the URL doesn't match this storage provider's baseURL.
+func (s *LocalStorage) DeleteByURL(_ context.Context, publicURL string) error {
+	prefix := strings.TrimRight(s.baseURL, "/") + "/"
+	if !strings.HasPrefix(publicURL, prefix) {
+		return nil
+	}
+
+	relPath := strings.TrimPrefix(publicURL, prefix)
+	absPath := filepath.FromSlash(relPath)
+
+	if err := os.Remove(absPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to delete file: %w", err)
+	}
+	return nil
 }

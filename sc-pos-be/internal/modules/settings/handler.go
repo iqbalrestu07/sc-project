@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path/filepath"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -116,10 +116,32 @@ func (h *Handler) UploadLogo(c *gin.Context) {
 	}
 
 	orgID := c.GetString("org_id")
+
+	// Get current settings to check for existing asset URL (for cleanup)
+	currentSettings, _ := h.service.GetClinic(orgID)
+	var oldURL string
+	if currentSettings != nil {
+		switch field {
+		case "logo_url":
+			if currentSettings.LogoURL != nil {
+				oldURL = *currentSettings.LogoURL
+			}
+		case "favicon_url":
+			if currentSettings.FaviconURL != nil {
+				oldURL = *currentSettings.FaviconURL
+			}
+		}
+	}
+
 	settings, err := h.service.UpdateBrandAsset(orgID, field, publicURL)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	// Delete old asset from storage (best-effort, don't fail the request)
+	if oldURL != "" {
+		_ = h.storage.DeleteByURL(c.Request.Context(), oldURL)
 	}
 
 	utils.SuccessResponseWithMessage(c, http.StatusCreated,
@@ -176,7 +198,7 @@ func (h *Handler) PublicClinicInfo(c *gin.Context) {
 // based on the requested orgSlug in the path, and returns the raw HTML string.
 func (h *Handler) SEORender(c *gin.Context) {
 	reqPath := c.Query("path")
-	
+
 	// Default meta tags
 	title := "Shasi Beauty Care"
 	desc := "Selamat datang di Shasi Beauty Care."
@@ -205,14 +227,22 @@ func (h *Handler) SEORender(c *gin.Context) {
 	org, err := h.orgService.ResolvePublicOrganization(orgSlug)
 	if err == nil {
 		if s, err := h.service.GetClinicPublic(org.ID); err == nil && s != nil {
-			if s.ClinicName != nil && *s.ClinicName != "" { title = *s.ClinicName }
-			if s.Address != nil && *s.Address != "" { desc = *s.Address } else if s.ClinicName != nil { desc = "Selamat datang di " + *s.ClinicName }
-			if s.LogoURL != nil && *s.LogoURL != "" { logo = *s.LogoURL }
+			if s.ClinicName != nil && *s.ClinicName != "" {
+				title = *s.ClinicName
+			}
+			if s.Address != nil && *s.Address != "" {
+				desc = *s.Address
+			} else if s.ClinicName != nil {
+				desc = "Selamat datang di " + *s.ClinicName
+			}
+			if s.LogoURL != nil && *s.LogoURL != "" {
+				logo = *s.LogoURL
+			}
 		}
 	}
 
 	// Fetch index.html from Frontend
-	
+
 	frontendURL := os.Getenv("FRONTEND_INTERNAL_URL")
 	if frontendURL == "" {
 		frontendURL = "http://localhost:5173" // fallback
@@ -236,13 +266,13 @@ func (h *Handler) SEORender(c *gin.Context) {
 	// We replace <title>...</title>
 	html = replaceRegex(html, `<title>.*?</title>`, fmt.Sprintf("<title>%s</title>", title))
 	html = replaceRegex(html, `<meta name="description" content="[^"]*">`, fmt.Sprintf(`<meta name="description" content="%s">`, desc))
-	
+
 	// OpenGraph
 	html = replaceRegex(html, `<meta property="og:title" content="[^"]*" />`, fmt.Sprintf(`<meta property="og:title" content="%s" />`, title))
 	html = replaceRegex(html, `<meta property="og:description" content="[^"]*" />`, fmt.Sprintf(`<meta property="og:description" content="%s" />`, desc))
 	html = replaceRegex(html, `<meta property="og:image" content="[^"]*" />`, fmt.Sprintf(`<meta property="og:image" content="%s" />`, logo))
 	html = replaceRegex(html, `<meta property="og:image:alt" content="[^"]*" />`, fmt.Sprintf(`<meta property="og:image:alt" content="%s" />`, title))
-	
+
 	// Twitter
 	html = replaceRegex(html, `<meta name="twitter:title" content="[^"]*" />`, fmt.Sprintf(`<meta name="twitter:title" content="%s" />`, title))
 	html = replaceRegex(html, `<meta name="twitter:description" content="[^"]*" />`, fmt.Sprintf(`<meta name="twitter:description" content="%s" />`, desc))
@@ -253,7 +283,7 @@ func (h *Handler) SEORender(c *gin.Context) {
 }
 
 func replaceRegex(html, pattern, replacement string) string {
-	
+
 	re := regexp.MustCompile(pattern)
 	if re.MatchString(html) {
 		return re.ReplaceAllString(html, replacement)

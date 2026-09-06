@@ -18,4 +18,5 @@ func RegisterRoutes(router gin.IRouter, admin gin.HandlerFunc, store storage.Sto
 	router.POST("/cms/pages", admin, handler.CreatePage)
 	router.PUT("/cms/pages/:pageId", admin, handler.UpdatePage)
 	router.POST("/cms/upload-image", admin, handler.UploadImage)
+	router.DELETE("/cms/upload-image", admin, handler.DeleteImage)
 }
