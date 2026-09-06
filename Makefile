@@ -173,3 +173,18 @@ help: ## Tampilkan daftar semua perintah yang tersedia
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make \033[36m<target>\033[0m\n\n"} \
 		/^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2 } \
 		/^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
+
+# ============================================================================
+# TESTING COMMANDS
+# ============================================================================
+.PHONY: test-e2e test-e2e-ui
+
+## test-e2e: Menjalankan Playwright E2E tests (headless)
+test-e2e:
+	@echo "$(COLOR_BLUE)🚀 Menjalankan E2E test (headless)...$(COLOR_RESET)"
+	@cd $(FE_DIR) && npx playwright test
+
+## test-e2e-ui: Menjalankan Playwright E2E tests dengan antarmuka (UI)
+test-e2e-ui:
+	@echo "$(COLOR_BLUE)🚀 Menjalankan E2E test dengan UI...$(COLOR_RESET)"
+	@cd $(FE_DIR) && npx playwright test --ui
