@@ -14,9 +14,24 @@ export function PromotionsSection() {
   const { data: promotions } = useCmsPromotions();
   const { data: contact } = useCmsContact();
 
-  if (!promotions || promotions.length === 0) return null;
-
+  
   const whatsappUrl = buildWhatsAppUrl(contact?.whatsapp_number);
+
+  if (!promotions || promotions.length === 0) {
+    return (
+      <section id="promotions" className="py-20 relative overflow-hidden" style={{ background: "transparent" }}>
+        <div className="container mx-auto px-4 relative z-10 text-center">
+          <span className="text-sm font-semibold uppercase tracking-[0.2em]" style={{ color: GOLD }}>✦ Promosi & Penawaran ✦</span>
+          <h2 className="text-3xl font-bold mt-3 mb-6" style={{ color: MAROON }}>Promo Spesial Shasi</h2>
+          <div className="flex items-center justify-center mt-3 mb-10">
+            <div className="h-0.5 w-20" style={{ background: `linear-gradient(to right, transparent, ${GOLD}, transparent)` }} />
+          </div>
+          <p className="text-gray-500 italic">Saat ini belum ada promosi aktif. Hubungi kami untuk penawaran menarik lainnya!</p>
+        </div>
+      </section>
+    );
+  }
+
 
   return (
     <section

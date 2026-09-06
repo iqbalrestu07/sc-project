@@ -1,6 +1,7 @@
 import { useCmsAbout } from "@/hooks/useCmsData";
 import { CheckCircle2, Target, Eye, Heart } from "lucide-react";
 import { motion } from "framer-motion";
+import { RevealText } from "@/components/ui/RevealText";
 
 const MAROON = "#6B0F1A";
 const MAROON_LIGHT = "#8B1A2A";
@@ -59,7 +60,7 @@ export function AboutSection() {
             className="text-3xl md:text-4xl font-bold mt-3 mb-0"
             style={{ color: MAROON }}
           >
-            {about?.title || "Tentang Shasi Beauty Care"}
+            <RevealText text={about?.title || "Tentang Shasi Beauty Care"} />
           </h2>
           {/* Gold underline */}
           <div className="flex items-center justify-center mt-3">

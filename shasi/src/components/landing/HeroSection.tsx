@@ -5,6 +5,7 @@ import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
 import { getLandingMode } from "@/config/landingMode";
 import { motion, useScroll, useTransform } from "framer-motion";
+import { Magnetic } from "@/components/ui/Magnetic";
 
 // Lazy-load 3D scene only when needed (code splitting)
 const Hero3DScene = lazy(() => import("./Hero3DScene"));
@@ -278,7 +279,7 @@ export function HeroSection() {
 
         {/* CTA Buttons */}
         <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-4 justify-center">
-          <motion.a
+          <Magnetic><motion.a
             whileHover={{ scale: 1.05, boxShadow: `0 4px 30px rgba(201, 168, 76, 0.6)` }}
             whileTap={{ scale: 0.95 }}
             href={whatsappUrl}
@@ -295,9 +296,9 @@ export function HeroSection() {
             <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12" />
             <Calendar className="h-5 w-5 relative z-10" />
             <span className="relative z-10">{hero?.cta_primary_text || "Buat Janji"}</span>
-          </motion.a>
+          </motion.a></Magnetic>
 
-          <motion.a
+          <Magnetic><motion.a
             whileHover={{ scale: 1.05, backgroundColor: "rgba(201, 168, 76, 0.15)" }}
             whileTap={{ scale: 0.95 }}
             href={whatsappUrl}
@@ -313,7 +314,7 @@ export function HeroSection() {
           >
             <MessageCircle className="h-5 w-5" />
             {hero?.cta_secondary_text || "Chat via WhatsApp"}
-          </motion.a>
+          </motion.a></Magnetic>
         </motion.div>
 
         {/* Trust badges */}
