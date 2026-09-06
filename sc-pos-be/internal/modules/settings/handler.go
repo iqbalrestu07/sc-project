@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"os"
+	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -167,4 +169,94 @@ func (h *Handler) PublicClinicInfo(c *gin.Context) {
 		"logo_url":       s.LogoURL,
 		"favicon_url":    s.FaviconURL,
 	})
+}
+
+// SEORender intercepts Nginx SPA fallback to inject SSR meta tags for OpenGraph.
+// It fetches index.html from FRONTEND_INTERNAL_URL, modifies <title> and <meta>
+// based on the requested orgSlug in the path, and returns the raw HTML string.
+func (h *Handler) SEORender(c *gin.Context) {
+	reqPath := c.Query("path")
+	
+	// Default meta tags
+	title := "Shasi Beauty Care"
+	desc := "Selamat datang di Shasi Beauty Care."
+	logo := "https://shasi-beauty.com/logo.png"
+
+	// Parse orgSlug from path
+	// Example paths: "/", "/klinik-budi", "/admin/login"
+	parts := strings.Split(strings.Trim(reqPath, "/"), "/")
+	orgSlug := ""
+	if len(parts) > 0 && parts[0] != "" {
+		// Ignore reserved routes that aren't org landing pages
+		reserved := map[string]bool{
+			"api": true, "uploads": true, "admin": true, "dashboard": true,
+			"patients": true, "onboarding": true, "queue": true, "services": true,
+			"products": true, "categories": true, "pos": true, "transactions": true,
+			"commissions": true, "staff": true, "members": true, "messaging": true,
+			"rbac": true, "cms": true, "settings": true, "stock-opname": true,
+			"consumable-items": true, "import-excel": true, "reports": true,
+		}
+		if !reserved[parts[0]] {
+			orgSlug = parts[0]
+		}
+	}
+
+	// Resolve the organization (fallback to default if empty or not found)
+	org, err := h.orgService.ResolvePublicOrganization(orgSlug)
+	if err == nil {
+		if s, err := h.service.GetClinicPublic(org.ID); err == nil && s != nil {
+			if s.ClinicName != nil && *s.ClinicName != "" { title = *s.ClinicName }
+			if s.Address != nil && *s.Address != "" { desc = *s.Address } else if s.ClinicName != nil { desc = "Selamat datang di " + *s.ClinicName }
+			if s.LogoURL != nil && *s.LogoURL != "" { logo = *s.LogoURL }
+		}
+	}
+
+	// Fetch index.html from Frontend
+	
+	frontendURL := os.Getenv("FRONTEND_INTERNAL_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:5173" // fallback
+	}
+
+	resp, err := http.Get(frontendURL + "/index.html")
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to load SPA template: "+err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	htmlBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to read SPA template")
+		return
+	}
+	html := string(htmlBytes)
+
+	// Inject Meta Tags (Replace basic defaults found in index.html)
+	// We replace <title>...</title>
+	html = replaceRegex(html, `<title>.*?</title>`, fmt.Sprintf("<title>%s</title>", title))
+	html = replaceRegex(html, `<meta name="description" content="[^"]*">`, fmt.Sprintf(`<meta name="description" content="%s">`, desc))
+	
+	// OpenGraph
+	html = replaceRegex(html, `<meta property="og:title" content="[^"]*" />`, fmt.Sprintf(`<meta property="og:title" content="%s" />`, title))
+	html = replaceRegex(html, `<meta property="og:description" content="[^"]*" />`, fmt.Sprintf(`<meta property="og:description" content="%s" />`, desc))
+	html = replaceRegex(html, `<meta property="og:image" content="[^"]*" />`, fmt.Sprintf(`<meta property="og:image" content="%s" />`, logo))
+	html = replaceRegex(html, `<meta property="og:image:alt" content="[^"]*" />`, fmt.Sprintf(`<meta property="og:image:alt" content="%s" />`, title))
+	
+	// Twitter
+	html = replaceRegex(html, `<meta name="twitter:title" content="[^"]*" />`, fmt.Sprintf(`<meta name="twitter:title" content="%s" />`, title))
+	html = replaceRegex(html, `<meta name="twitter:description" content="[^"]*" />`, fmt.Sprintf(`<meta name="twitter:description" content="%s" />`, desc))
+	html = replaceRegex(html, `<meta name="twitter:image" content="[^"]*" />`, fmt.Sprintf(`<meta name="twitter:image" content="%s" />`, logo))
+	html = replaceRegex(html, `<meta name="twitter:image:alt" content="[^"]*" />`, fmt.Sprintf(`<meta name="twitter:image:alt" content="%s" />`, title))
+
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+}
+
+func replaceRegex(html, pattern, replacement string) string {
+	
+	re := regexp.MustCompile(pattern)
+	if re.MatchString(html) {
+		return re.ReplaceAllString(html, replacement)
+	}
+	return html
 }

@@ -20,4 +20,5 @@ func RegisterRoutes(router gin.IRouter, admin gin.HandlerFunc, store storage.Sto
 func RegisterPublicRoutes(router gin.IRouter) {
 	handler := NewModule(nil)
 	router.GET("/public/clinic-info", handler.PublicClinicInfo)
+	router.GET("/seo-render", handler.SEORender)
 }

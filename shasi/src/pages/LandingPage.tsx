@@ -14,6 +14,7 @@ import {
 } from "@/components/landing";
 import { usePublicClinicInfo } from "@/hooks/usePublicClinicInfo";
 import { useDynamicFavicon } from "@/hooks/useDynamicFavicon";
+import { useDynamicSEO } from "@/hooks/useDynamicSEO";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
 import { getLandingMode } from "@/config/landingMode";
 
@@ -23,6 +24,12 @@ const Full3DScene = lazy(() => import("@/components/landing/Full3DScene"));
 export default function LandingPage() {
   const { data: clinicInfo } = usePublicClinicInfo();
   useDynamicFavicon(clinicInfo?.favicon_url);
+  useDynamicSEO({
+    title: clinicInfo?.clinic_name || "Shasi Beauty Care",
+    description: clinicInfo?.address || "Selamat datang di klinik kecantikan kami.",
+    image: clinicInfo?.logo_url,
+    url: window.location.href,
+  });
   const { supports3D } = useDeviceCapability();
 
   // Determine which 3D mode to use:

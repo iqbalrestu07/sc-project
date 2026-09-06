@@ -12,6 +12,8 @@ services:
     environment:
       SERVER_HOST: "0.0.0.0"
       SERVER_PORT: "8080"
+      GIN_MODE: "release"
+      TZ: "Asia/Jakarta"
       # ── Database (Supabase) ───────────────────────────────────────────
       DB_HOST: ${DB_HOST:-db.xtgitbuwmrsdwdmmbmdl.supabase.co}
       DB_PORT: ${DB_PORT:-5432}
@@ -26,6 +28,7 @@ services:
       # ── Public URLs ───────────────────────────────────────────────────
       BASE_URL: ${BACKEND_BASE_URL:-http://localhost:8080}
       UPLOAD_DIR: uploads
+      FRONTEND_INTERNAL_URL: "http://frontend"
       DEFAULT_PUBLIC_ORG_SLUG: ${DEFAULT_PUBLIC_ORG_SLUG:-}
       # ── Storage (local | supabase) ────────────────────────────────────
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
